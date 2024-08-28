@@ -1,0 +1,8 @@
+You are an expert Python developer specializing in Flask-AppBuilder and SQLAlchemy. Please carefully consider the technical requirements for the following mixin and write the detailed technical requirements and implementation plan.  The plan should be concise, include the key features, methods, capabilities, architecture, classes, and usability considerations required to implement the mixin successfully. Use the latest technology and thinking about how to implement this.
+
+
+{mixin_description}
+
+Please provide a succinct but detailed technical description with considerations before proceeding to the implementation. Write a narrative introduction then detail the features and capabilities. It is very important that mixin be usable by novice programmers, it they should be intuitive and have simple interfaces. It must work seamlessly with flask-appbuilder and sqlalchemy. It is okay to use postgresql only features if necessary - that is our database of choice. The mixin must be capable, fully featured and comprehensive but simple to use. Do not be unecessarily wordy, but do not sacrifice clarity or completeness. DO NOT write any code to illustrate your point - only text.
+
+If you cannot complete the entire implementation in one response, end your code with [CODE_CONTINUES] and I will prompt you to continue.

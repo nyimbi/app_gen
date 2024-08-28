@@ -9,79 +9,161 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="beef659a-f4de-45e7-80c5-ef056e8b7ba6" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.idea/csv-editor.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/doc/List_of_mixins_to_to_dev.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/doc/PlaceMixin_todo.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/doc/todo.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/gen_models.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/gen_views.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/mixins/Tree_usage.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/mixins/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/mixins/_sample_use.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/mixins/audit-log-mixin.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/mixins/base_mixin.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/mixins/cache-mixin.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/mixins/doc_mixin.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/mixins/encryption-mixin.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/mixins/full-text-search-mixin.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/mixins/generate_init_script.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/mixins/import-export-mixin.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/mixins/notification_system.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/mixins/place_mixin.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/mixins/project_mixin.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/mixins/slug-mixin.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/mixins/soft-delete-mixin.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/mixins/statemachine_mixin.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/mixins/tree_mixin.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/mixins/versioning-mixin.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/old/PlaceMixin.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/old/PlaceMixin_usage_example.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/old/doc_mixin.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/old/doc_mixin1.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/old/nmodel_mixins.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/old/old_gen_models copy.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/old/place_mixin.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/old/place_mixin2.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/old/place_mixin3.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/old/place_mixin4.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/old/place_mixin5.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/old/sqlalchemy-2-additional-mixins.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/old/sqlalchemy-2-additional-mixins1.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/old/sqlalchemy-2-additional-mixins2.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/old/util-mixins1.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/old/utils copy.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/old/utils.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/templates/add.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/templates/gamification.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/templates/print_view.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/n_src/templates/review.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/appgen.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/appgen.iml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/n_src/doc/view_mixins.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/n_src/generate-init-script.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/n_src/mixins/approval_workflow_mixin.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/n_src/mixins/archive_mixin.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/n_src/mixins/audit_log_mixin.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/n_src/mixins/cache_mixin.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/n_src/mixins/commentable_mixin.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/n_src/mixins/currency_mixin.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/n_src/mixins/encryption_mixin.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/n_src/mixins/full_text_search-mixin.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/n_src/mixins/geo_location_mixin.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/n_src/mixins/import_export_mixin.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/n_src/mixins/internationalization_mixin.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/n_src/mixins/metadata_mixin.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/n_src/mixins/multi_tenancy_mixin.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/n_src/mixins/polymorphic_mixin.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/n_src/mixins/rate_limit_mixin.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/n_src/mixins/replication_mixin.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/n_src/mixins/scheduling_mixin.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/n_src/mixins/searchable_mixin.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/n_src/mixins/slug_mixin.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/n_src/mixins/soft_delete_mixin.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/n_src/mixins/version_control_mixin.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/n_src/mixins/versioning_mixin.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/n_src/mixins/workflow_mixin.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/n_src/z__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/n_src/z_generate_init_script.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test copy/.gitignore" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test copy/README.rst" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test copy/agent_data_insert.sql" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test copy/agent_pop.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test copy/app/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test copy/app/apis.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test copy/app/gql.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test copy/app/model_mixins.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test copy/app/models.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test copy/app/sec.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test copy/app/sec_forms.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test copy/app/sec_views.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test copy/app/templates/404.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test copy/app/translations/pt/LC_MESSAGES/messages.po" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test copy/app/view_mixins.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test copy/app/views.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test copy/babel/babel.cfg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test copy/config.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test copy/config.py.tpl" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test copy/data/coutry.sql" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test copy/data/states.sql" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test copy/do.sh" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test copy/pos_data_insert.sql" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test copy/pos_ins.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test copy/run.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test copy/user_ext.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test copy/user_ext_data_insert.sql" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test/.gitignore" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test/Makefile" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test/README.rst" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test/agent_data_insert.sql" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test/agent_pop.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test/app/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test/app/apis.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test/app/gql.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test/app/model_mixins.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test/app/models.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test/app/sec.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test/app/sec_forms.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test/app/sec_views.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test/app/templates/404.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test/app/translations/pt/LC_MESSAGES/messages.po" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test/app/view_mixins.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test/app/views.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test/babel/babel.cfg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test/config.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test/config.py.tpl" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test/data/coutry.sql" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test/data/states.sql" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test/do.sh" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test/pos_data_insert.sql" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test/pos_ins.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test/roles_export_20240125T120239.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test/roles_export_20240125T135850.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test/run.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test/user_ext.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/apg_test/user_ext_data_insert.sql" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/auplat/.gitignore" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/auplat/README.rst" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/auplat/app/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/auplat/app/models.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/auplat/app/templates/404.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/auplat/app/translations/pt/LC_MESSAGES/messages.po" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/auplat/app/views.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/auplat/babel/babel.cfg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/auplat/config.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/auplat/run.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/geoparser-0.1.8.tar" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/geoparser-0.1.8/LICENSE" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/geoparser-0.1.8/PKG-INFO" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/geoparser-0.1.8/README.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/geoparser-0.1.8/geoparser/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/geoparser-0.1.8/geoparser/__main__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/geoparser-0.1.8/geoparser/constants.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/geoparser-0.1.8/geoparser/gazetteer.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/geoparser-0.1.8/geoparser/geodoc.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/geoparser-0.1.8/geoparser/geonames.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/geoparser-0.1.8/geoparser/geoparser.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/geoparser-0.1.8/geoparser/geospan.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/geoparser-0.1.8/geoparser/tests/static/a.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/geoparser-0.1.8/geoparser/tests/static/b.zip" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/geoparser-0.1.8/geoparser/tests/test_gazetteer.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/geoparser-0.1.8/geoparser/tests/test_geonames.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/geoparser-0.1.8/geoparser/tests/utils.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/geoparser-0.1.8/geoparser/trainer.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/geoparser-0.1.8/pyproject.toml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/gisl-1.0.1.tar" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/gisl-1.0.1/GISL/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/gisl-1.0.1/GISL/gisl.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/gisl-1.0.1/GISL/gisl_libinfo.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/gisl-1.0.1/LICENSE" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/gisl-1.0.1/PKG-INFO" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/gisl-1.0.1/setup.cfg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/gisl-1.0.1/setup.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/test_app/.gitignore" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/test_app/README.rst" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/test_app/app/1.sql" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/test_app/app/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/test_app/app/api.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/test_app/app/custom_types.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/test_app/app/gql.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/test_app/app/index.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/test_app/app/mixins.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/test_app/app/models.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/test_app/app/old-models.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/test_app/app/old-views.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/test_app/app/static/auda_logo.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/test_app/app/templates/404.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/test_app/app/templates/my_index.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/test_app/app/translations/pt/LC_MESSAGES/messages.po" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/test_app/app/views.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/test_app/babel/babel.cfg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/test_app/config.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/test_app/push_to_linode.sh" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ref/test_app/run.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/n_src/PlaceMixin.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/n_src/PlaceMixin_todo.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/n_src/PlaceMixin_usage_example.py" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/n_src/db_utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/n_src/db_utils.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/n_src/gamification.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/n_src/gen_model4.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/n_src/nmodel_mixins.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/n_src/old/gen_views2.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/n_src/old_gen_models.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/n_src/place_mixin.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/n_src/place_mixin2.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/n_src/place_mixin3.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/n_src/place_mixin4.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/n_src/place_mixin5.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/n_src/price_mixin.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/n_src/print_view.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/n_src/review.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/n_src/sqlalchemy-2-additional-mixins.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/n_src/sqlalchemy-2-additional-mixins1.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/n_src/sqlalchemy-2-additional-mixins2.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/n_src/todo.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/n_src/utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/n_src/utils.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/py_templates/model_mixins.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/py_templates/model_mixins.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/n_src/gen/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/n_src/gen/models.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/n_src/mixins/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/n_src/mixins/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/n_src/mixins/audit-log-mixin.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/n_src/mixins/cache-mixin.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/n_src/mixins/encryption-mixin.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/n_src/mixins/full-text-search-mixin.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/n_src/mixins/generate_init_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/n_src/mixins/generate_init_script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/n_src/mixins/import-export-mixin.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/n_src/mixins/slug-mixin.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/n_src/mixins/soft-delete-mixin.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/n_src/mixins/versioning-mixin.py" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

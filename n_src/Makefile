@@ -27,9 +27,10 @@ code:
 
 test:
     # python test1.py  # Uncomment if you want to run the test
+	# https://pypi.org/project/geoparser/
 
 cpf:
-	cp apis.py gql.py models.py views.py view_mixins.py model_mixins.py sec.py sec_forms.py sec_views.py __init__.py  ../tmp/apg_test/app
+	cp apis.py gql.py models.py views.py view_mixins.py model_mixins.py sec.py sec_forms.py sec_views.py __init__.py  /Users/nyimbiodero/src/pjs/kj/kuja/app/blueprints/org
 
 cpl:
 	scp apis.py gql.py models.py views.py view_mixins.py model_mixins.py sec.py sec_forms.py sec_views.py __init__.py nyimbi@139.162.203.216:/home/nyimbi/terra/src/terra/app

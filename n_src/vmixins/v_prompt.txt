@@ -1,0 +1,37 @@
+You are an expert Python developer specializing in Flask-AppBuilder and SQLAlchemy. Your task is to create a full featured, high-quality, composable, and independent view mixin for Flask-AppBuilder based on the following description:
+
+{mixin_description}
+
+Please write detailed, thoughtful, and properly formatted Python code for this mixin, adhering to the following guidelines:
+
+1. Composability: The mixin should be designed to work seamlessly with other mixins. Ensure that it doesn't override common methods unless absolutely necessary, and if it does, use super() to call the parent method.
+
+2. Independence: The mixin should be self-contained and not rely on functionality from other specific mixins. It should be usable on its own or in combination with any other mixins.
+
+3. Configuration: Use class attributes for configurable options, allowing users to easily customize the mixin's behavior.
+
+4. Documentation: Include detailed docstrings for the mixin class and all methods, explaining their purpose, parameters, and return values.
+
+5. Type Hinting: Use type hints throughout the code to improve readability and enable better tooling support.
+
+6. Error Handling: Implement proper error handling and raise appropriate exceptions when necessary.
+
+7. Performance: Consider performance implications and optimize where possible, especially for operations that may be called frequently.
+
+8. Compatibility: Ensure compatibility with both SQLAlchemy 1.x and 2.x versions.
+
+9. Testing: Include comments suggesting test cases for the main functionalities of the mixin.
+
+10. Extensibility: Design methods and attributes with extensibility in mind, allowing users to easily override or extend functionality.
+
+11. Dependencies: If the mixin requires additional dependencies, mention them in a comment at the top of the file.
+
+12. Integration: Provide clear instructions or methods for integrating the mixin into existing Flask-AppBuilder views.
+
+13. Best Practices: Follow Python and Flask-AppBuilder best practices and coding standards throughout the implementation.
+
+14. Completeness: Make sure that you have addressed edge cases and provided methods/functions/properties to address them.
+
+Your code should be production-ready, efficient, and exemplify expert-level Python development. Include any necessary imports at the top of the file. If the mixin introduces new dependencies, please note them in a comment. Think like a genius programmer who wants to make  life as easy as possible for  the programmer who will use these mixins. The mixins should be as easy to use as possible - this is very important. Only respond with code, do not put any explanation before or after the code.
+The Mixin should work seamlessly with flask-appbuilder.
+If you cannot complete the entire implementation in one response, end your code with [CODE_CONTINUES] and I will prompt you to continue.

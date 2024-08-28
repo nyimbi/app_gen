@@ -1,0 +1,23 @@
+# Anthropic API Configuration
+anthropic_api_key: "sk-ant-api03-your-api-key-here"
+
+# Rate Limiting Configuration
+rate_limit: 10  # Number of API calls allowed
+rate_period: 60  # Time period in seconds for the rate limit
+
+# Model Configuration
+model_name: "claude-3-5-sonnet-20240620"
+max_tokens: 8192
+temperature: 0
+
+# File Paths
+blueprints_list_file: "blueprints_list.txt"
+output_directory: "generated_blueprints"
+
+# Logging Configuration
+log_level: "INFO"
+log_file: "blueprint_generation.log"
+
+# Additional Settings
+create_test_files: true
+use_async: true

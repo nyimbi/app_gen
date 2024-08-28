@@ -1,0 +1,64 @@
+- name: UserManagement
+  description: A blueprint for managing user accounts, including registration, authentication, and profile management.
+  features:
+    - User registration
+    - Login/Logout
+    - Password reset
+    - Profile editing
+  database: PostgreSQL
+  authentication: JWT
+  api: true
+
+- name: BlogSystem
+  description: A blueprint for a simple blog system with posts, comments, and tags.
+  features:
+    - Create, read, update, delete blog posts
+    - Commenting system
+    - Tagging system
+    - Search functionality
+  database: MySQL
+  caching: Redis
+  api: true
+
+- name: EcommerceProduct
+  description: A blueprint for managing products in an e-commerce system.
+  features:
+    - Product catalog management
+    - Inventory tracking
+    - Product categories and attributes
+    - Product search and filtering
+  database: PostgreSQL
+  caching: Redis
+  api: true
+
+- name: CustomerSupport
+  description: A blueprint for a customer support ticket system.
+  features:
+    - Ticket creation and management
+    - Ticket assignment to support agents
+    - Ticket status tracking
+    - Knowledge base integration
+  database: PostgreSQL
+  api: true
+
+- name: Analytics
+  description: A blueprint for a data analytics dashboard.
+  features:
+    - Data visualization
+    - Custom report generation
+    - Data export functionality
+    - Real-time data updates
+  database: ClickHouse
+  api: true
+
+- name: FileManagement
+  description: A blueprint for a file management system with version control.
+  features:
+    - File upload and download
+    - File versioning
+    - File sharing and permissions
+    - File search functionality
+  database: PostgreSQL
+  storage: S3
+  api: true
+
