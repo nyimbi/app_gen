@@ -36,6 +36,7 @@ functions from 'oheaders.py' in the same directory.
 """
 
 import inflect
+from typing import List, Dict, Any, Tuple
 from sqlalchemy import (
     create_engine, inspect, MetaData, Table, Column, ForeignKey,
     CheckConstraint, PrimaryKeyConstraint, UniqueConstraint, Index,
@@ -53,16 +54,26 @@ from db_utils import map_pgsql_datatypes, get_display_column
 p = inflect.engine()
 Base = declarative_base()
 
-# Set the indentation to 4 spaces
+# Constants
 INDENT = "    "
+AB_PREFIX = 'ab_'
 
 # Track processed relationships to detect circular dependencies
-processed_relationships = set()
+processed_relationships: set = set()
 
 
-def gen_models(metadata, inspector):
-    """Main function to generate model code."""
-    model_code = []
+def gen_models(metadata: MetaData, inspector: Any) -> List[str]:
+    """
+    Main function to generate model code.
+
+    Args:
+        metadata (MetaData): SQLAlchemy metadata object.
+        inspector (Any): SQLAlchemy inspector object.
+
+    Returns:
+        List[str]: Generated model code as a list of strings.
+    """
+    model_code: List[str] = []
 
     # Generate header, domains, and enums
     model_code.extend(gen_model_header())
@@ -73,9 +84,9 @@ def gen_models(metadata, inspector):
     relationship_info = prepare_relationship_info(metadata, inspector)
 
     # Generate regular tables and collect reverse relationships
-    reverse_relationships = {}
+    reverse_relationships: Dict[str, List[str]] = {}
     for table_name in inspector.get_table_names():
-        if table_name.startswith('ab_'):
+        if table_name.startswith(AB_PREFIX):
             continue
         if not is_association_table(table_name, inspector):
             table = metadata.tables[table_name]
@@ -85,7 +96,7 @@ def gen_models(metadata, inspector):
 
     # Add reverse relationships to the appropriate tables
     for table_name, relationships in reverse_relationships.items():
-        if table_name.startswith('ab_'):
+        if table_name.startswith(AB_PREFIX):
             continue
         table_index = next(
             i for i, line in enumerate(model_code) if line.startswith(f"class {snake_to_pascal(table_name)}("))
@@ -101,14 +112,14 @@ def gen_models(metadata, inspector):
 
     # Generate association tables
     for table_name in inspector.get_table_names():
-        if table_name.startswith('ab_'):
+        if table_name.startswith(AB_PREFIX):
             continue
         if is_association_table(table_name, inspector):
             model_code.extend(gen_association_table(table_name, metadata, inspector))
 
     # Update related tables for associations
     for table_name in inspector.get_table_names():
-        if table_name.startswith('ab_'):
+        if table_name.startswith(AB_PREFIX):
             continue
         if is_association_table(table_name, inspector):
             model_code = update_related_tables_for_association(table_name, metadata, inspector, model_code)
@@ -116,23 +127,20 @@ def gen_models(metadata, inspector):
     return model_code
 
 
-def gen_domains(inspector):
+def gen_domains(inspector: Any) -> List[str]:
     """
     Generate code for database domains.
 
     In PostgreSQL, domains are not directly accessible through SQLAlchemy's inspector.
-    This function now returns an empty list, but you can extend it in the future
-    if you find a way to retrieve domain information.
+    This function returns an empty list, but can be extended in the future
+    if a way to retrieve domain information is found.
 
     Args:
-        inspector (Inspector): SQLAlchemy Inspector object.
+        inspector (Any): SQLAlchemy Inspector object.
 
     Returns:
-        list: An empty list, as domain information is not directly accessible.
+        List[str]: An empty list, as domain information is not directly accessible.
     """
-    # Currently, we can't retrieve domain information directly.
-    # If you need to handle domains, you might need to query the information_schema directly.
-
     print("Note: Domain generation is not implemented for this database.")
     return []
 
@@ -170,8 +178,16 @@ def gen_domains(inspector):
 #     return domain_code
 
 
-def gen_enums(inspector):
-    """Generate code for database enums."""
+def gen_enums(inspector: Any) -> List[str]:
+    """
+    Generate code for database enums.
+
+    Args:
+        inspector (Any): SQLAlchemy Inspector object.
+
+    Returns:
+        List[str]: Generated enum code as a list of strings.
+    """
     enum_code = ['# Enums defined in the database']
     enums = inspector.get_enums()
 
@@ -182,8 +198,16 @@ def gen_enums(inspector):
     return enum_code
 
 
-def gen_enum(enum):
-    """Generate code for a single enum."""
+def gen_enum(enum: Dict[str, Any]) -> List[str]:
+    """
+    Generate code for a single enum.
+
+    Args:
+        enum (Dict[str, Any]): Dictionary containing enum information.
+
+    Returns:
+        List[str]: Generated enum code as a list of strings.
+    """
     enum_code = []
     enum_code.append(f"\nclass {enum['name']}(enum.Enum):")
     for label in enum["labels"]:
