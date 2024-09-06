@@ -145,37 +145,6 @@ def gen_domains(inspector: Any) -> List[str]:
     return []
 
 
-# Remove or comment out the gen_domain function as it's no longer used
-
-# def gen_domain(domain):
-#     """
-#     Generate code for a single domain.
-#
-#     This function is currently not used as we can't retrieve domain information.
-#     """
-#     pass
-
-
-# def gen_domain(domain):
-#     """Generate code for a single domain."""
-#     domain_code = []
-#     domain_name = domain["name"]
-#     base_type = domain["type"].compile()
-#     BaseType = map_pgsql_datatypes(base_type.lower())
-#
-#     domain_code.append(f"\nclass {domain_name}({BaseType}):")
-#
-#     if domain["default"]:
-#         domain_code.append(f"{INDENT}default = {domain['default']}")
-#
-#     if not domain["nullable"]:
-#         domain_code.append(f"{INDENT}not_null = True")
-#
-#     for constraint in domain.get("constraints", []):
-#         domain_code.append(f"{INDENT}# Constraint: {constraint['name']}")
-#         domain_code.append(f"{INDENT}check = '{constraint['check']}'")
-#
-#     return domain_code
 
 
 def gen_enums(inspector: Any) -> List[str]:
@@ -339,7 +308,6 @@ def gen_tables(metadata, inspector, relationship_info, association_tables):
             table_code.extend(gen_table(table, inspector, relationship_info))
     return table_code
 
-
 def gen_table(table, inspector, relationship_info):
     """Generate code for a single table, including all constraints, indexes, and comments."""
     table_code = []
@@ -371,6 +339,38 @@ def gen_table(table, inspector, relationship_info):
 
     table_code.append("\n")
     return table_code, reverse_relationships
+
+# def gen_table(table, inspector, relationship_info):
+#     """Generate code for a single table, including all constraints, indexes, and comments."""
+#     table_code = []
+#     table_name = table.name
+#     columns = inspector.get_columns(table_name)
+#     pk_constraint = inspector.get_pk_constraint(table_name)
+#     fks = inspector.get_foreign_keys(table_name)
+#     uqs = inspector.get_unique_constraints(table_name)
+#     indexes = inspector.get_indexes(table_name)
+#     table_comment = inspector.get_table_comment(table_name)
+
+#     table_class = snake_to_pascal(table_name)
+#     table_code.append(f"class {table_class}(Model):")
+#     table_code.append(f'{INDENT}__tablename__ = "{table_name}"')
+#     table_code.extend(gen_table_args(pk_constraint, uqs, indexes, table_comment))
+
+#     table_code.extend(gen_columns(columns, pk_constraint, fks, uqs, table_class))
+
+#     reverse_relationships = []
+#     for fk in fks:
+#         local_rel, reverse_rel = gen_relationship(fk, table_name, table_class, inspector, relationship_info)
+#         if local_rel and isinstance(local_rel, list) and local_rel:
+#             table_code.extend(local_rel)
+#         if reverse_rel and isinstance(reverse_rel, list) and reverse_rel:
+#             reverse_relationships.extend(reverse_rel)
+
+#     table_code.extend(gen_check_constraints(inspector, table_name))
+#     table_code.extend(gen_repr_method(columns, pk_constraint))
+
+#     table_code.append("\n")
+#     return table_code, reverse_relationships
 
 
 def gen_columns(columns, pk_constraint, fks, uqs, table_class):
@@ -452,7 +452,7 @@ def gen_relationship(fk, table_name, table_class, inspector, relationship_info):
     cardinality = relationship_info[table_name].get(referred_table, 'many-to-one')
 
     # Handle naming for the relationship
-    local_relationship_name = determine_relationship_name(fk_cols)
+    local_relationship_name = determine_relationship_name(fk_cols, table_name, referred_table)
     remote_relationship_name = determine_remote_relationship_name(cardinality, table_name, referred_table)
 
     # Handle many-to-many relationships
@@ -498,19 +498,94 @@ def gen_relationship(fk, table_name, table_class, inspector, relationship_info):
     return relationship_code, reverse_relationship_code
 
 
-def determine_relationship_name(fk_cols):
+# def gen_relationship(fk, table_name, table_class, inspector, relationship_info):
+#     """Generate code for relationships, handling both sides of the relationship."""
+#     relationship_code = []
+#     reverse_relationship_code = []
+
+#     fk_cols = fk["constrained_columns"]
+#     referred_table = fk["referred_table"]
+#     referred_columns = fk["referred_columns"]
+#     referred_class = snake_to_pascal(referred_table)
+
+#     # Check for circular relationships
+#     relationship_key = (table_name, referred_table)
+#     if relationship_key in processed_relationships:
+#         return relationship_code, reverse_relationship_code  # Avoid circular relationship
+
+#     # Determine relationship type
+#     cardinality = relationship_info[table_name].get(referred_table, 'many-to-one')
+
+#     # Handle naming for the relationship
+#     local_relationship_name = determine_relationship_name(fk_cols)
+#     remote_relationship_name = determine_remote_relationship_name(cardinality, table_name, referred_table)
+
+#     # Handle many-to-many relationships
+#     if cardinality == 'many-to-many':
+#         association_table = find_association_table(table_name, referred_table, inspector)
+#         if association_table:
+#             relationship_code.append(
+#                 f"{INDENT}{p.plural(referred_table)} = relationship('{referred_class}', "
+#                 f"secondary='{association_table}', back_populates='{remote_relationship_name}')"
+#             )
+#             # Record this relationship as processed
+#             processed_relationships.add(relationship_key)
+#             return relationship_code, reverse_relationship_code
+
+#     # Generate relationship for the current table
+#     relationship_args = [f"'{referred_class}'", f"back_populates='{remote_relationship_name}'"]
+
+#     if cardinality == 'many-to-one':
+#         relationship_args.append("lazy='joined'")
+#     elif cardinality == 'one-to-many':
+#         relationship_args.append("lazy='selectin'")
+
+#     if table_class == referred_class:  # self-referential
+#         relationship_args.append(f"remote_side=[{', '.join([f'{referred_class}.{col}' for col in referred_columns])}]")
+
+#     relationship_str = ', '.join(relationship_args)
+#     relationship_code.append(f"{INDENT}{local_relationship_name} = relationship({relationship_str})")
+
+#     # Generate the reverse relationship (to be added to the referred table)
+#     reverse_relationship_args = [f"'{table_class}'", f"back_populates='{local_relationship_name}'"]
+
+#     if cardinality == 'one-to-many':
+#         reverse_relationship_args.append("lazy='selectin'")
+#     elif cardinality == 'many-to-one':
+#         reverse_relationship_args.append("lazy='joined'")
+
+#     reverse_relationship_str = ', '.join(reverse_relationship_args)
+#     reverse_relationship_code.append(f"{remote_relationship_name} = relationship({reverse_relationship_str})")
+
+#     # Record this relationship as processed
+#     processed_relationships.add(relationship_key)
+
+#     return relationship_code, reverse_relationship_code
+
+def determine_relationship_name(fk_cols, table_name, referred_table):
     """Determine the relationship name based on foreign key columns."""
-    local_relationship_name = fk_cols[0]
-    if local_relationship_name.endswith('_id_fk'):
-        local_relationship_name = local_relationship_name[:-7]
-    return local_relationship_name
+    base_name = fk_cols[0].replace('_id', '').replace('_fk', '')
+
+    # If the base name is the same as the referred table, use it as is
+    if base_name == referred_table:
+        return base_name
+
+    # Otherwise, combine the base name with the referred table name
+    return f"{base_name}_{referred_table}"
+
+# def determine_relationship_name(fk_cols):
+#     """Determine the relationship name based on foreign key columns."""
+#     local_relationship_name = fk_cols[0]
+#     if local_relationship_name.endswith('_id_fk'):
+#         local_relationship_name = local_relationship_name[:-6]
+#     return local_relationship_name
 
 
 def determine_remote_relationship_name(cardinality, table_name, referred_table):
     """Determine the remote relationship name based on cardinality."""
     if cardinality in ['one-to-many', 'many-to-many']:
         return p.plural(table_name)
-    return table_name
+    return f"{table_name}_{referred_table}"
 
 
 def gen_table_args(pk_constraint, uqs, indexes, table_comment):

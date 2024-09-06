@@ -807,10 +807,11 @@ def generate_form_fields(table: Any, metadata: Any) -> str:
                 f"    '{column.name}' : SelectField('{column.name.capitalize()}', choices={enum_choices}, validators=[validators.DataRequired()]),"
             )
         elif isinstance(column.type, ForeignKey):
-            related_model = column.foreign_keys[0].column.table.name.capitalize()
-            relationship_field = column.name.replace('_id', '')
+            related_table = column.foreign_keys[0].column.table
+            related_model = snake_to_pascal(related_table.name)
+            relationship_field = determine_relationship_name([column.name], table.name, related_table.name)
             form_fields.append(
-                f"    '{relationship_field}': QuerySelectField('{relationship_field.capitalize()}', query_factory=lambda: db.session.query({related_model}), widget=Select2Widget(), allow_blank=True),"
+                            f"    '{relationship_field}': QuerySelectField('{relationship_field.capitalize()}', query_factory=lambda: db.session.query({related_model}), widget=Select2Widget(), allow_blank=True),"
             )
 
     # Handle many-to-many relationships
@@ -818,9 +819,11 @@ def generate_form_fields(table: Any, metadata: Any) -> str:
         if is_association_table(related_table) and table.name in [
             fk.column.table.name for fk in related_table.foreign_keys
         ]:
-            related_model = related_table_name.capitalize()
+            other_table = [fk.column.table for fk in related_table.foreign_keys if fk.column.table.name != table.name][0]
+            related_model = snake_to_pascal(other_table.name)
+            field_name = determine_remote_relationship_name('many-to-many', table.name, other_table.name)
             form_fields.append(
-                f"    '{related_table_name}s': QuerySelectMultipleField('{related_model}s', query_factory=lambda: db.session.query({related_model}), widget=Select2ManyWidget()),"
+                f"    '{field_name}': QuerySelectMultipleField('{field_name.capitalize()}', query_factory=lambda: db.session.query({related_model}), widget=Select2ManyWidget()),"
             )
 
     if not form_fields:
@@ -829,41 +832,52 @@ def generate_form_fields(table: Any, metadata: Any) -> str:
     return "\n".join(form_fields)
 
 
-# def generate_form_fields(table: Any) -> str:
-#     """Generate form fields with appropriate widgets based on column types."""
-#     form_fields = []
-#     for column in table.columns:
-#         if column.name == 'id':
-#             continue
-#         if isinstance(column.type, String):
-#             if 'password' in column.name:
-#                 form_fields.append(f"    '{column.name}': StringField('{column.name.capitalize()}', widget=BS3PasswordFieldWidget()),")
-#             else:
-#                 form_fields.append(f"    '{column.name}':  StringField('{column.name.capitalize()}', widget=BS3TextFieldWidget()),")
-#         elif isinstance(column.type, Text):
-#             form_fields.append(f"    '{column.name}' : TextAreaField('{column.name.capitalize()}', widget=BS3TextFieldWidget()),")
-#         elif isinstance(column.type, Boolean):
-#             form_fields.append(f"    '{column.name}' : BooleanField('{column.name.capitalize()}'),")
-#         elif isinstance(column.type, Integer):
-#             form_fields.append(f"    '{column.name}' : IntegerField('{column.name.capitalize()}'),")
-#         elif isinstance(column.type, Float):
-#             form_fields.append(f"    '{column.name}' : FloatField('{column.name.capitalize()}'),")
-#         elif isinstance(column.type, Numeric):
-#             form_fields.append(f"    '{column.name}' : DecimalField('{column.name.capitalize()}'),")
-#         elif isinstance(column.type, Date):
-#             form_fields.append(f"    '{column.name}' : DateField('{column.name.capitalize()}', widget=DatePickerWidget()),")
-#         elif isinstance(column.type, DateTime):
-#             form_fields.append(f"    '{column.name}' : DateTimeField('{column.name.capitalize()}', widget=DateTimePickerWidget()),")
-#         elif isinstance(column.type, Time):
-#             form_fields.append(f"    '{column.name}' : TimeField('{column.name.capitalize()}'),")
-#         elif isinstance(column.type, Enum):
-#             enum_choices = [(choice, choice) for choice in column.type.enums]
-#             form_fields.append(f"    '{column.name}' : SelectField('{column.name.capitalize()}', choices={enum_choices}),")
-#         elif isinstance(column.type, ForeignKey):
-#             related_model = column.foreign_keys[0].column.table.name
-#             form_fields.append(f"    {column.name.replace('_id', '')} : QuerySelectField('{column.name.capitalize()}', query_factory=lambda: db.session.query({related_model.capitalize()}), widget=Select2Widget())")
-#     return "\n".join(form_fields)
 
+
+# def generate_relationship_fields(table: Table, metadata: Any) -> str:
+#     """
+#     Generate relationship fields using Select2 widgets for foreign key fields.
+
+#     :param table: SQLAlchemy Table object
+#     :param metadata: SQLAlchemy MetaData object
+#     :return: String containing the generated relationship fields
+#     """
+#     relationship_fields = []
+
+#     # Handle one-to-many and many-to-one relationships
+#     for fk in table.foreign_keys:
+#         related_table = fk.column.table
+#         related_model = snake_to_pascal(related_table.name)  # Use consistent PascalCase conversion
+#         field_name = fk.parent.name.replace('_id', '')
+
+#         relationship_fields.append(
+#             f"    '{field_name}': QuerySelectField('{field_name.capitalize()}', "
+#             f"query_factory=lambda: db.session.query({related_model}), "
+#             f"widget=Select2Widget(), "
+#             f"allow_blank=True),"
+#         )
+
+#     # Check for many-to-many relationships
+#     for other_table in metadata.tables.values():
+#         if is_association_table(other_table):
+#             # Check if this table is referenced in the association table
+#             foreign_keys = [fk for fk in other_table.foreign_keys if fk.column.table == table]
+#             if foreign_keys:
+#                 # Identify the other related table in the many-to-many relationship
+#                 other_related_table = [fk.column.table for fk in other_table.foreign_keys if fk.column.table != table][0]
+#                 related_model = snake_to_pascal(other_related_table.name)
+#                 field_name = f"{snake_to_pascal(other_related_table.name).lower()}s"  # Pluralize the relationship field name
+
+#                 relationship_fields.append(
+#                     f"    '{field_name}': QuerySelectMultipleField('{field_name.capitalize()}', "
+#                     f"query_factory=lambda: db.session.query({related_model}), "
+#                     f"widget=Select2ManyWidget()),"
+#                 )
+
+#     if not relationship_fields:
+#         return "    # No relationship fields found"
+
+#     return "\n".join(relationship_fields)
 
 def generate_relationship_fields(table: Table, metadata: Any) -> str:
     """
@@ -878,8 +892,8 @@ def generate_relationship_fields(table: Table, metadata: Any) -> str:
     # Handle one-to-many and many-to-one relationships
     for fk in table.foreign_keys:
         related_table = fk.column.table
-        related_model = snake_to_pascal(related_table.name)  # Use consistent PascalCase conversion
-        field_name = fk.parent.name.replace('_id', '')
+        related_model = snake_to_pascal(related_table.name)
+        field_name = determine_relationship_name([fk.parent.name], table.name, related_table.name)
 
         relationship_fields.append(
             f"    '{field_name}': QuerySelectField('{field_name.capitalize()}', "
@@ -897,7 +911,7 @@ def generate_relationship_fields(table: Table, metadata: Any) -> str:
                 # Identify the other related table in the many-to-many relationship
                 other_related_table = [fk.column.table for fk in other_table.foreign_keys if fk.column.table != table][0]
                 related_model = snake_to_pascal(other_related_table.name)
-                field_name = f"{snake_to_pascal(other_related_table.name).lower()}s"  # Pluralize the relationship field name
+                field_name = determine_remote_relationship_name('many-to-many', table.name, other_related_table.name)
 
                 relationship_fields.append(
                     f"    '{field_name}': QuerySelectMultipleField('{field_name.capitalize()}', "
@@ -910,47 +924,22 @@ def generate_relationship_fields(table: Table, metadata: Any) -> str:
 
     return "\n".join(relationship_fields)
 
+def determine_relationship_name(fk_cols, table_name, referred_table):
+    """Determine the relationship name based on foreign key columns."""
+    base_name = fk_cols[0].replace('_id', '').replace('_fk', '')
 
-# def generate_relationship_fields(table: Table, metadata: Any) -> str:
-#     """
-#     Generate relationship fields using Select2 widgets for foreign key fields.
-#
-#     :param table: SQLAlchemy Table object
-#     :param metadata: SQLAlchemy MetaData object
-#     :return: String containing the generated relationship fields
-#     """
-#     relationship_fields = []
-#
-#     for fk in table.foreign_keys:
-#         related_table = fk.column.table
-#         related_model = related_table.name.capitalize()
-#         field_name = fk.parent.name.replace('_id_fk', '')
-#
-#         relationship_fields.append(
-#             f"    {field_name} = QuerySelectField('{field_name.capitalize()}', "
-#             f"query_factory=lambda: db.session.query({related_model}), "
-#             f"widget=Select2Widget(), "
-#             f"allow_blank=True)"
-#         )
-#
-#     # Check for many-to-many relationships
-#     for table_name, other_table in metadata.tables.items():
-#         if is_association_table(other_table):
-#             if table.name in [fk.column.table.name for fk in other_table.foreign_keys]:
-#                 other_table_name = [fk.column.table.name for fk in other_table.foreign_keys if fk.column.table.name != table.name][0]
-#                 related_model = other_table_name.capitalize()
-#                 field_name = f"{other_table_name.lower()}s"
-#
-#                 relationship_fields.append(
-#                     f"    {field_name} = QuerySelectMultipleField('{field_name.capitalize()}', "
-#                     f"query_factory=lambda: db.session.query({related_model}), "
-#                     f"widget=Select2ManyWidget())"
-#                 )
-#
-#     if not relationship_fields:
-#         return "    # No relationship fields found"
-#
-#     return "\n,".join(relationship_fields)
+    # If the base name is the same as the referred table, use it as is
+    if base_name == referred_table:
+        return base_name
+
+    # Otherwise, combine the base name with the referred table name
+    return f"{base_name}_{referred_table}"
+
+def determine_remote_relationship_name(cardinality, table_name, referred_table):
+    """Determine the remote relationship name based on cardinality."""
+    if cardinality in ['one-to-many', 'many-to-many']:
+        return p.plural(table_name)
+    return f"{table_name}_{referred_table}"
 
 def is_association_table(table: Table) -> bool:
     """
@@ -1102,5 +1091,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
