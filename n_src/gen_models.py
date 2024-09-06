@@ -601,7 +601,8 @@ def process_default_value(column_name, column_type, default):
 
     # Handle auto-increment columns explicitly
     if column_name == 'id' and default and 'nextval' in default.lower():
-        return "autoincrement=True"
+        # return "autoincrement=True"
+        return None
 
     if isinstance(default, str):
         default_lower = default.lower()
@@ -613,6 +614,10 @@ def process_default_value(column_name, column_type, default):
             return 'True'
         elif default_lower == 'false':
             return 'False'
+        elif '::timestamp' in default_lower:
+            return 'func.now()'
+        elif 'current_timestamp' in default_lower:
+            return 'func.now()'
         elif default_lower.startswith("'") and default_lower.endswith("'"):
             # For simple string literals
             return default
