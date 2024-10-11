@@ -1,0 +1,31 @@
+{% extends "appbuilder/base.html" %}
+
+{% block content %}
+<div class="panel panel-primary">
+    <div class="panel-heading">
+        <h3 class="panel-title">{{ _('Wizard') }} - {{ step_description }}</h3>
+    </div>
+    <div class="panel-body">
+        <div class="progress">
+            <div class="progress-bar" role="progressbar" aria-valuenow="{{ progress }}" aria-valuemin="0" aria-valuemax="100" style="width: {{ progress }}%;">
+                {{ progress|round|int }}%
+            </div>
+        </div>
+        <form method="post" enctype="multipart/form-data">
+            {{ form.hidden_tag() }}
+            {% for field in form %}
+                {% if field.type != 'CSRFTokenField' %}
+                <div class="form-group">
+                    {{ field.label }}
+                    {{ field(class="form-control") }}
+                </div>
+                {% endif %}
+            {% endfor %}
+            <button type="submit" class="btn btn-primary">{{ _('Next') }}</button>
+            {% if current_step > 1 %}
+            <a href="{{ url_for(request.endpoint, step=current_step-1) }}" class="btn btn-default">{{ _('Previous') }}</a>
+            {% endif %}
+        </form>
+    </div>
+</div>
+{% endblock %}

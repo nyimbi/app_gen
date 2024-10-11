@@ -1,8 +1,6 @@
 import re
 from marshmallow import fields
 from sqlalchemy import create_engine, inspect, MetaData, FetchedValue
-# from sqlalchemy.orm import relationship, DeclarativeBase, mapped_column, Mapped, sessionmaker
-# from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import (
     Enum, ForeignKey, ARRAY, JSON, PickleType, LargeBinary, Boolean, Date, DateTime, Float, Integer, Interval, Numeric,
     SmallInteger,
@@ -81,7 +79,7 @@ def map_pgsql_datatypes(pg_type: str) -> str:
         return 'Boolean'
     elif pg_type in ('real', 'float4'):
         return 'Float'
-    elif pg_type in ('double precision', 'float8'):
+    elif pg_type in ('double_precision', 'float8', 'double precision'):
         return 'Float'
     elif pg_type in ('numeric', 'decimal'):
         return 'Numeric'
@@ -404,26 +402,3 @@ def get_display_column(columns):
         return primary_keys[0], False
 
     return columns[0]['name'], False
-
-# def topological_sort(graph):
-#     """
-#     superceded by:
-#     for table in metadata.sorted_tables:
-#     :param graph:
-#     :return:
-#     """
-#     sorted_list = []
-#     visited = set()
-#
-#     def dfs(node):
-#         visited.add(node)
-#         for neighbor in graph.get(node, []):
-#             if neighbor not in visited:
-#                 dfs(neighbor)
-#         sorted_list.append(node)
-#
-#     for node in graph:
-#         if node not in visited:
-#             dfs(node)
-#
-#     return sorted_list

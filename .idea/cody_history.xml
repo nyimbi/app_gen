@@ -166,6 +166,52 @@
                   </llm>
                 </llm>
               </chat>
+              <chat>
+                <internalId value="d37b8e3e-9c16-4f03-954f-4eccf0d2e750" />
+                <llm>
+                  <llm>
+                    <model value="ollama/cnmoro/hermes3-8b:q4_k_m" />
+                    <provider value="Ollama" />
+                    <tags>
+                      <list>
+                        <option value="local" />
+                        <option value="ollama" />
+                        <option value="experimental" />
+                      </list>
+                    </tags>
+                    <title value="hermes3 8b:q4_k_m" />
+                    <usage>
+                      <list>
+                        <option value="chat" />
+                        <option value="edit" />
+                      </list>
+                    </usage>
+                  </llm>
+                </llm>
+              </chat>
+              <chat>
+                <internalId value="934738d6-dc8e-49f5-9600-d4a270a3595a" />
+                <llm>
+                  <llm>
+                    <model value="ollama/cnmoro/hermes3-8b:q4_k_m" />
+                    <provider value="Ollama" />
+                    <tags>
+                      <list>
+                        <option value="local" />
+                        <option value="ollama" />
+                        <option value="experimental" />
+                      </list>
+                    </tags>
+                    <title value="hermes3 8b:q4_k_m" />
+                    <usage>
+                      <list>
+                        <option value="chat" />
+                        <option value="edit" />
+                      </list>
+                    </usage>
+                  </llm>
+                </llm>
+              </chat>
             </list>
           </chats>
           <defaultLlm>

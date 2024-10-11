@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ model_name }} Data</title>
+    <style>
+        table, th, td {
+            border: 1px solid black;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 5px;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+<h1>{{ model_name }} Data</h1>
+<table>
+    <tr>
+        {% for column_name in column_names %}
+        <th>{{ column_name }}</th>
+        {% endfor %}
+    </tr>
+    {% for item in items %}
+    <tr>
+        {% for column_name in column_names %}
+        <td>{{ getattr(item, column_name) }}</td>
+        {% endfor %}
+    </tr>
+    {% endfor %}
+</table>
+</body>
+</html>

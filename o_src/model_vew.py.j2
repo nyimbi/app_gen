@@ -1,0 +1,73 @@
+# model_view.py.j2
+
+{% if not single_file %}
+from flask_appbuilder import ModelView
+from flask_appbuilder.models.sqla.interface import SQLAInterface
+from flask_appbuilder.actions import action
+from flask_appbuilder.fieldwidgets import *
+from flask_appbuilder.forms import DynamicForm
+from wtforms import validators
+from . import appbuilder, db
+from .models import {{ table_name }}
+{% endif %}
+
+class {{ table_name }}View(ModelView):
+    datamodel = SQLAInterface({{ table_name }})
+    
+    list_columns = {{ list_columns }}
+
+    {% for field, props in form_fields.items() %}
+    {{ field }} = {{ props['widget'] }}
+    {% if props['validators'] %}
+    {{ field }}_validators = [{% for validator in props['validators'] %}{{ validator }}{% if not loop.last %}, {% endif %}{% endfor %}]
+    {% endif %}
+    {% endfor %}
+
+    add_form = edit_form = show_form = DynamicForm
+
+    {% for rel in relationships %}
+    @action("related_{{ rel.referred_table }}", "Related {{ rel.referred_table|capitalize }}", "Do you really want to view related {{ rel.referred_table }}?", "fa-link")
+    def related_{{ rel.referred_table }}(self, item):
+        related_view = appbuilder.get_view('{{ rel.referred_table|capitalize }}View')
+        return redirect(url_for(f"{related_view}.list", _flt_0_{{ rel.referred_column }}=item.{{ rel.constrained_column }}))
+    {% endfor %}
+
+{% if not single_file %}
+appbuilder.add_view(
+    {{ table_name }}View,
+    "{{ table_name }}",
+    icon="fa-folder-open-o",
+    category="Data"
+)
+{% endif %}
+
+# main_app.py.j2
+
+from flask import Flask
+from flask_appbuilder import AppBuilder, SQLA
+{% if single_file %}
+from .views import *
+{% else %}
+{% for view in views %}
+from .{{ view[:-3] }} import *
+{% endfor %}
+{% endif %}
+
+app = Flask(__name__)
+app.config.from_object('config')
+db = SQLA(app)
+appbuilder = AppBuilder(app, db.session)
+
+{% if single_file %}
+# Register views
+{% for table_name in table_names %}
+appbuilder.add_view(
+    {{ table_name }}View,
+    "{{ table_name }}",
+    icon="fa-folder-open-o",
+    category="Data"
+)
+{% endfor %}
+{% endif %}
+
+db.create_all()

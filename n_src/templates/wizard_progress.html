@@ -1,0 +1,63 @@
+<div class="wizard-progress">
+    <ul class="nav nav-pills nav-justified">
+        {% for step in range(1, total_steps + 1) %}
+        <li class="nav-item">
+            <a class="nav-link {% if step == current_step %}active{% elif step < current_step %}completed{% endif %}"
+               {% if step < current_step %}href="{{ url_for(request.endpoint, step=step) }}"{% endif %}>
+                <span class="step-number">{{ step }}</span>
+                <span class="step-title">{{ step_titles[step-1] if step_titles else 'Step ' + step|string }}</span>
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+
+<style>
+    .wizard-progress {
+        margin-bottom: 30px;
+    }
+    .wizard-progress .nav-pills {
+        background-color: #f8f9fa;
+        border-radius: 5px;
+        padding: 10px;
+    }
+    .wizard-progress .nav-link {
+        border-radius: 30px;
+        padding: 10px;
+        margin: 0 5px;
+        color: #6c757d;
+        position: relative;
+    }
+    .wizard-progress .nav-link.active {
+        background-color: #007bff;
+        color: #fff;
+    }
+    .wizard-progress .nav-link.completed {
+        background-color: #28a745;
+        color: #fff;
+    }
+    .wizard-progress .step-number {
+        display: inline-block;
+        width: 30px;
+        height: 30px;
+        line-height: 30px;
+        border-radius: 50%;
+        background-color: #6c757d;
+        color: #fff;
+        text-align: center;
+        margin-right: 10px;
+    }
+    .wizard-progress .nav-link.active .step-number,
+    .wizard-progress .nav-link.completed .step-number {
+        background-color: #fff;
+        color: #007bff;
+    }
+    .wizard-progress .step-title {
+        display: none;
+    }
+    @media (min-width: 768px) {
+        .wizard-progress .step-title {
+            display: inline;
+        }
+    }
+</style>

@@ -1,0 +1,25 @@
+<!-- templates/my_model_edit.html -->
+
+{% extends "appbuilder/general/model/edit_cascade.html" %}
+{% block form %}
+<div class="container-fluid">
+    <ul class="nav nav-tabs" role="tablist">
+        {% for tab_id, tab in self.tab_info.items() %}
+        <li role="presentation" class="nav-item">
+            <a href="#{{ tab_id }}" class="nav-link{% if loop.first %} active{% endif %}" aria-controls="{{ tab_id }}"
+               role="tab" data-toggle="tab">{{ _(tab.title) }}</a>
+        </li>
+        {% endfor %}
+    </ul>
+    <div class="tab-content">
+        {% for tab_id, tab in self.tab_info.items() %}
+        <div role="tabpanel" class="tab-pane{% if loop.first %} active{% endif %}" id="{{ tab_id }}">
+            <br>
+            {% for field_name in tab.fields %}
+            {{ render_field(form[field_name]) }}
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

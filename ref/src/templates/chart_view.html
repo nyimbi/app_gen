@@ -1,0 +1,9 @@
+{% extends "appbuilder/form.html" %}
+{% block content %}
+<form method="POST" action="{{ url_for('.this_form_post') }}">
+    {{ form.csrf_token }}
+    {{ form_widget(form.table, cols=12) }}
+    {{ form_widget(form.x_axis, cols=12) }}
+    {{ form_widget(form.y_axis, cols=12) }}
+    {{ form_widget(form.submit, cols=12) }}
+</form>

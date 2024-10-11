@@ -1,0 +1,58 @@
+{% extends "appbuilder/base.html" %}
+{% block content %}
+{% if show_title %}
+<h2>{{ title }}</h2>
+{% endif %}
+{% if show_menu %}
+<div class="btn-group" role="group">
+    <a href="{{ url_for('.change_layout') }}" class="btn btn-default">Change Layout</a>
+    <a href="{{ url_for('.custom_view') }}" class="btn btn-default">Custom View</a>
+</div>
+{% endif %}
+{% if search_enabled %}
+<div class="row">
+    <div class="col-md-4">
+        <input type="text" id="search" class="form-control" placeholder="Search...">
+    </div>
+</div>
+{% endif %}
+<div class="row">
+    <div class="col-md-6">
+        {% for view in views[::2] %}
+        <div class="panel panel-default">
+            <div class="panel-heading">{{ view.title }}</div>
+            <div class="panel-body">
+                {{ view.render_template('list.html') | safe }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="col-md-6">
+        {% for view in views[1::2] %}
+        <div class="panel panel-default">
+            <div class="panel-heading">{{ view.title }}</div>
+            <div class="panel-body">
+                {{ view.render_template('list.html') | safe }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block tail_js %}
+{{ super() }}
+<script>
+$(document).ready(function() {
+    {% if search_enabled %}
+    $('#search').on('keyup', function() {
+        var value = $(this).val().toLowerCase();
+        $('.panel-body table tbody tr').filter(function() {
+            $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1)
+        });
+    });
+    {% endif %}
+});
+</script>
+{% endblock %}
+

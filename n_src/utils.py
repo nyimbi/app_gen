@@ -1,9 +1,74 @@
-
 import sqlalchemy.types as types
 import logging
+import inflect
+import math
 
 # Set up logging configuration
 logging.basicConfig(level=logging.ERROR)
+
+def get_class_name(table_name, p):
+    """
+    Generate a class name from a table name.
+
+    :param table_name: The name of the table
+    :param p: The inflect engine
+    :return: A capitalized, singular form of the table name
+    """
+    return ''.join([(p.singular_noun(part) or part).capitalize() for part in table_name.split('_')])
+
+def is_association_table(table_name, inspector):
+    """Improved detection of association tables.
+    Check if a table is likely an association table.
+
+    An association table typically has the following characteristics:
+    0. The name ends in _assoc (our formal convention)
+    1. Has at least two foreign keys
+    2. May have additional columns for metadata (e.g., creation date, status)
+    3. Usually has a relatively small number of columns compared to regular entity tables
+    4. The name often follows a pattern like 'table1_table2' or 'table1_to_table2'
+
+    Args:
+            table_name (str): Name of the table to check
+            inspector (sa.engine.reflection.Inspector): SQLAlchemy Inspector object
+
+        Returns:
+            bool: True if the table is likely an association table, False otherwise
+    """
+    if table_name.endswith("_assoc"):
+        return True
+
+    fks = inspector.get_foreign_keys(table_name)
+    columns = inspector.get_columns(table_name)
+
+    if len(fks) < 2:
+        return False
+
+    non_fk_columns = [col for col in columns if col['name'] not in
+                      [c for fk in fks for c in fk['constrained_columns']]]
+
+    # Allow for id, timestamps, and a couple of additional metadata columns
+    allowed_extra = ['id', 'created_at', 'updated_at', 'created_by', 'updated_by']
+    extra_columns = [col for col in non_fk_columns if col['name'] not in allowed_extra]
+
+   # Check if the table name follows the pattern 'table1_table2' or 'table1_to_table2'
+    name_parts = table_name.split('_')
+    if len(name_parts) >= 2 and (name_parts[-1] in fks[0]['referred_table'] or name_parts[-1] in fks[1]['referred_table']):
+        return True
+
+    return len(extra_columns) <= 2
+
+# def get_class_name(table_name, p):
+#     """
+#     Generate a class name from a table name.
+
+#     :param table_name: The name of the table
+#     :param p: The inflect engine
+#     :return: A capitalized, singular form of the table name
+#     """
+#     singular = p.singular_noun(table_name)
+#     return snake_to_pascal(table_name)
+#     # return (singular or table_name).capitalize()
+
 
 def write_file(filename: str, list_of_strings: list[str]) -> None:
     """
@@ -63,7 +128,7 @@ def capitalize_words(words: list[str]) -> str:
     return ''.join(word.capitalize() for word in words)
 
 
-def snake_to_pascal(string: str) -> str:
+def snake_to_pascal(string: str, p=None) -> str:
     """
     Converts a snake_case string to PascalCase.
 
@@ -203,4 +268,3 @@ def pascal_to_words(string):
 
     # Capitalize the first letter of each word
     return ' '.join(word.capitalize() for word in words.split())
-

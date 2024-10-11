@@ -1,0 +1,42 @@
+{% extends 'appbuilder/base.html' %}
+
+{% block content %}
+<div id="network-graph"></div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+<script type="text/javascript">
+    var nodes = {{ nodes | tojson }};
+    var edges = {{ edges | tojson }};
+    var container = document.getElementById('network-graph');
+    var data = { nodes: nodes, edges: edges };
+    var options = {
+      nodes: {
+        shape: 'box',
+        font: {
+          size: 18,
+        },
+        borderWidth: 2,
+        chosen: {
+          node: function(values, id, selected, hovering) {
+            values.borderWidth = selected || hovering ? 4 : 2;
+            values.color = selected || hovering ? {background: '#ffff99'} : {background: '#ffffff'};
+            values.shadow = selected ? true : false;
+            return values;
+          },
+        },
+      },
+      edges: {
+        arrows: {
+          to: {
+            enabled: true,
+            scaleFactor: 0.5,
+          },
+        },
+      },
+    };
+    var network = new vis.Network(container, data, options);
+</script>
+{% endblock %}

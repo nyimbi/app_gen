@@ -1,0 +1,172 @@
+{#
+This template includes:
+    1. Basic view configuration (titles, route base)
+    2. List view configuration (columns, widgets, filters)
+    3. Show view configuration
+    4. Add and Edit form configurations
+    5. Form field configurations with widgets and validators
+    6. Related views for relationships
+    7. Custom base query
+    8. Pagination settings
+    9. CRUD operation permissions
+    10. Export functionality
+    11. Column exclusions for different operations
+    12. Description columns
+    13. A custom action (toggle_active)
+    14. Custom methods for post-add, post-update, and pre-delete operations
+    15. Method to override the default route base
+    16. A custom API method
+    17. View registration with AppBuilder (for non-single-file mode)
+#}
+
+{% if not single_file %}
+from flask import flash, redirect, url_for
+from flask_appbuilder import ModelView
+from flask_appbuilder.models.sqla.interface import SQLAInterface
+from flask_appbuilder.actions import action
+from flask_appbuilder.security.decorators import has_access
+from flask_babel import lazy_gettext as _
+from . import appbuilder, db
+from .models import {{ table_name|capitalize }}
+{% endif %}
+
+class {{ table_name|capitalize }}ModelView(ModelView):
+    datamodel = SQLAInterface({{ table_name|capitalize }})
+
+    # Basic configuration
+    route_base = "/{{ table_name.lower() }}"
+    list_title = "{{ table_name|capitalize }} List"
+    show_title = "{{ table_name|capitalize }} Details"
+    add_title = "Add {{ table_name|capitalize }}"
+    edit_title = "Edit {{ table_name|capitalize }}"
+
+    # List view configuration
+    list_columns = {{ list_columns }}
+    list_widget = ListWidget
+    label_columns = {
+        {% for column in columns %}
+        "{{ column.name }}": _("{{ column.label"),
+        {% endfor %}
+    }
+    search_columns = {{ list_columns }}
+    base_order = ("id", "asc")
+    base_filters = [["id", FilterGreaterThan, 0]]
+
+    # Show view configuration
+    show_columns = {{ list_columns }}
+    show_widget = ShowWidget
+
+    # Add and Edit form configuration
+    add_columns = [
+        {% for column in columns if not column.primary_key %}
+        "{{ column.name }}",
+        {% endfor %}
+    ]
+    edit_columns = [
+        {% for column in columns if not column.primary_key %}
+        "{{ column.name }}",
+        {% endfor %}
+    ]
+    add_widget = FormWidget
+    edit_widget = FormWidget
+
+    # Form field configurations
+    {% for column_name, field_info in form_fields.items() %}
+    {{ column_name }} = {
+        "widget": {{ field_info.widget }},
+        "validators": [{{ field_info.validators|join(', ') }}],
+        "description": _("Enter {{ column_name|replace('_', ' ')|capitalize }}"),
+    }
+    {% endfor %}
+
+    # Related views (for relationships)
+    {% for relationship in relationships %}
+    related_views = [
+        ("{{ relationship.referred_table|capitalize }}ModelView", "{{ relationship.constrained_column }}"),
+    ]
+    {% endfor %}
+
+    # Custom queries
+    base_query = db.session.query({{ table_name|capitalize }}).filter({{ table_name|capitalize }}.active == True)
+
+    # Pagination settings
+    page_size = 20
+    can_set_page_size = True
+
+    # CRUD operation permissions
+    can_create = True
+    can_edit = True
+    can_delete = True
+    can_show = True
+
+    # Export functionality
+    can_export = True
+    export_types = ["csv", "json", "yaml", "xlsx"]
+
+    # Additional view options
+    search_exclude_columns = ["password", "secret_key"]
+    add_exclude_columns = ["created_at", "updated_at"]
+    edit_exclude_columns = ["created_at", "updated_at"]
+    show_exclude_columns = []
+    description_columns = {
+        {% for column in columns %}
+        "{{ column.name }}": _("Description for {{ column.name }}"),
+        {% endfor %}
+    }
+
+    # Custom actions
+    @action("toggle_active", "Toggle Active", "Are you sure you want to toggle the active status?", "fa-check")
+    def toggle_active(self, items):
+        for item in items:
+            item.active = not item.active
+            db.session.add(item)
+        db.session.commit()
+        flash("Toggled active status for selected items", "success")
+        return redirect(self.get_redirect())
+
+    # Custom methods
+    @has_access
+    def post_add(self, item):
+        """
+        Perform actions after an item is added.
+        """
+        # Custom logic here
+        pass
+
+    @has_access
+    def post_update(self, item):
+        """
+        Perform actions after an item is updated.
+        """
+        # Custom logic here
+        pass
+
+    @has_access
+    def pre_delete(self, item):
+        """
+        Perform actions before an item is deleted.
+        """
+        # Custom logic here
+        pass
+
+    # Override default route base
+    @classmethod
+    def set_route_base(cls, app, route_base):
+        cls.route_base = route_base
+
+    # Custom API methods
+    @has_access
+    @expose("/api/custom_method", methods=["GET"])
+    def custom_api_method(self):
+        # Custom API logic here
+        pass
+
+{% if not single_file %}
+appbuilder.add_view(
+    {{ table_name|capitalize }}ModelView,
+    "{{ table_name|capitalize }}",
+    icon="fa-folder-open-o",
+    category="Master Data",
+    category_icon="fa-database"
+)
+{% endif %}

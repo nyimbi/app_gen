@@ -1,0 +1,366 @@
+{% extends "appbuilder/base.html" %} {% import 'appbuilder/general/lib.html' as
+lib %} {% block content %}
+<div class="container-fluid">
+    <h2>{{ list_title }}</h2>
+
+    {# Layout Controls #}
+    <div class="layout-controls mb-3">
+        <div class="btn-group" role="group" aria-label="Layout Options">
+            {% for layout_key, layout_name in layout_options.items() %}
+            <a
+                href="{{ url_for('.change_layout', layout=layout_key) }}"
+                class="btn btn-outline-primary {% if layout == layout_key %}active{% endif %}"
+            >
+                {{ layout_name }}
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+
+    {# Search Bar #}
+    <div class="search-bar mb-3">
+        <input
+            type="text"
+            id="global-search"
+            class="form-control"
+            placeholder="Search across all views..."
+        />
+    </div>
+
+    {# Multiple View Content #}
+    <div class="multiple-view-content">
+        {% if layout == 'tabs' %}
+        <ul class="nav nav-tabs" id="myTab" role="tablist">
+            {% for view in views %}
+            <li class="nav-item" role="presentation">
+                <button
+                    class="nav-link {% if loop.first %}active{% endif %}"
+                    id="tab-{{ view.__class__.__name__ }}"
+                    data-bs-toggle="tab"
+                    data-bs-target="#content-{{ view.__class__.__name__ }}"
+                    type="button"
+                    role="tab"
+                    aria-controls="content-{{ view.__class__.__name__ }}"
+                    aria-selected="{% if loop.first %}true{% else %}false{% endif %}"
+                >
+                    {{ view.list_title }}
+                </button>
+            </li>
+            {% endfor %}
+        </ul>
+        <div class="tab-content" id="myTabContent">
+            {% for view in views %}
+            <div
+                class="tab-pane fade {% if loop.first %}show active{% endif %}"
+                id="content-{{ view.__class__.__name__ }}"
+                role="tabpanel"
+                aria-labelledby="tab-{{ view.__class__.__name__ }}"
+            >
+                <div
+                    class="view-content"
+                    data-view="{{ view.__class__.__name__ }}"
+                >
+                    {# Content will be loaded dynamically #}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        {% elif layout == 'accordion' %}
+        <div class="accordion" id="viewAccordion">
+            {% for view in views %}
+            <div class="accordion-item">
+                <h2
+                    class="accordion-header"
+                    id="heading-{{ view.__class__.__name__ }}"
+                >
+                    <button
+                        class="accordion-button {% if not loop.first %}collapsed{% endif %}"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#collapse-{{ view.__class__.__name__ }}"
+                        aria-expanded="{% if loop.first %}true{% else %}false{% endif %}"
+                        aria-controls="collapse-{{ view.__class__.__name__ }}"
+                    >
+                        {{ view.list_title }}
+                    </button>
+                </h2>
+                <div
+                    id="collapse-{{ view.__class__.__name__ }}"
+                    class="accordion-collapse collapse {% if loop.first %}show{% endif %}"
+                    aria-labelledby="heading-{{ view.__class__.__name__ }}"
+                    data-bs-parent="#viewAccordion"
+                >
+                    <div class="accordion-body">
+                        <div
+                            class="view-content"
+                            data-view="{{ view.__class__.__name__ }}"
+                        >
+                            {# Content will be loaded dynamically #}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        {% elif layout == 'grid' %}
+        <div class="row">
+            {% for view in views %}
+            <div class="col-md-6 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title">{{ view.list_title }}</h5>
+                    </div>
+                    <div class="card-body">
+                        <div
+                            class="view-content"
+                            data-view="{{ view.__class__.__name__ }}"
+                        >
+                            {# Content will be loaded dynamically #}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        {% elif layout == 'list' %}
+        <div class="list-group">
+            {% for view in views %}
+            <div class="list-group-item">
+                <h5 class="mb-1">{{ view.list_title }}</h5>
+                <div
+                    class="view-content"
+                    data-view="{{ view.__class__.__name__ }}"
+                >
+                    {# Content will be loaded dynamically #}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        {% elif layout == 'cards' %}
+        <div class="row">
+            {% for view in views %}
+            <div class="col-md-4 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title">{{ view.list_title }}</h5>
+                    </div>
+                    <div class="card-body">
+                        <div
+                            class="view-content"
+                            data-view="{{ view.__class__.__name__ }}"
+                        >
+                            {# Content will be loaded dynamically #}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        {% elif layout == 'sidebar' %}
+        <div class="row">
+            <div class="col-md-3">
+                <div class="list-group" id="list-tab" role="tablist">
+                    {% for view in views %}
+                    <a
+                        class="list-group-item list-group-item-action {% if loop.first %}active{% endif %}"
+                        id="list-{{ view.__class__.__name__ }}-list"
+                        data-bs-toggle="list"
+                        href="#list-{{ view.__class__.__name__ }}"
+                        role="tab"
+                        aria-controls="{{ view.__class__.__name__ }}"
+                        >{{ view.list_title }}</a
+                    >
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="col-md-9">
+                <div class="tab-content" id="nav-tabContent">
+                    {% for view in views %}
+                    <div
+                        class="tab-pane fade {% if loop.first %}show active{% endif %}"
+                        id="list-{{ view.__class__.__name__ }}"
+                        role="tabpanel"
+                        aria-labelledby="list-{{ view.__class__.__name__ }}-list"
+                    >
+                        <div
+                            class="view-content"
+                            data-view="{{ view.__class__.__name__ }}"
+                        >
+                            {# Content will be loaded dynamically #}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        {% elif layout == 'split' %}
+        <div class="row">
+            <div class="col-md-6">
+                <h3>{{ views[0].list_title }}</h3>
+                <div
+                    class="view-content"
+                    data-view="{{ views[0].__class__.__name__ }}"
+                >
+                    {# Content will be loaded dynamically #}
+                </div>
+            </div>
+            <div class="col-md-6">
+                <h3>{{ views[1].list_title }}</h3>
+                <div
+                    class="view-content"
+                    data-view="{{ views[1].__class__.__name__ }}"
+                >
+                    {# Content will be loaded dynamically #}
+                </div>
+            </div>
+        </div>
+
+        {% elif layout == 'wizard' %}
+        <div class="wizard">
+            <ul class="nav nav-tabs" role="tablist">
+                {% for view in views %}
+                <li class="nav-item" role="presentation">
+                    <button
+                        class="nav-link {% if loop.first %}active{% endif %}"
+                        id="step{{ loop.index }}-tab"
+                        data-bs-toggle="tab"
+                        data-bs-target="#step{{ loop.index }}"
+                        type="button"
+                        role="tab"
+                        aria-controls="step{{ loop.index }}"
+                        aria-selected="{% if loop.first %}true{% else %}false{% endif %}"
+                    >
+                        Step {{ loop.index }}
+                    </button>
+                </li>
+                {% endfor %}
+            </ul>
+            <div class="tab-content">
+                {% for view in views %}
+                <div
+                    class="tab-pane fade {% if loop.first %}show active{% endif %}"
+                    id="step{{ loop.index }}"
+                    role="tabpanel"
+                    aria-labelledby="step{{ loop.index }}-tab"
+                >
+                    <h3>{{ view.list_title }}</h3>
+                    <div
+                        class="view-content"
+                        data-view="{{ view.__class__.__name__ }}"
+                    >
+                        {# Content will be loaded dynamically #}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{# Relationships Visualization #}
+<div id="relationships-graph" class="mt-4"></div>
+
+{% endblock %} {% block scripts %} {{ super() }}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/vis-network.min.js"></script>
+<script>
+    // Function to load view content
+    function loadViewContent(viewName) {
+        fetch(`/api/data/${viewName}`)
+            .then(response => response.json())
+            .then(data => {
+                const viewContent = document.querySelector(`.view-content[data-view="${viewName}"]`);
+                if (data.data && data.data.length > 0) {
+                    viewContent.innerHTML = `
+                        <table class="table">
+                            <thead>
+                                <tr>${Object.keys(data.data[0]).map(key => `<th>${key}</th>`).join('')}</tr>
+                            </thead>
+                            <tbody>
+                                ${data.data.map(item => `
+                                    <tr>${Object.values(item).map(value => `<td>${value}</td>`).join('')}</tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                        <nav aria-label="Page navigation">
+                            <ul class="pagination">
+                                ${Array.from({length: data.pages}, (_, i) => i + 1).map(page => `
+                                    <li class="page-item ${page === data.page ? 'active' : ''}">
+                                        <a class="page-link" href="#" onclick="loadViewContent('${viewName}', ${page})">${page}</a>
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        </nav>
+                    `;
+                } else {
+                    viewContent.innerHTML = '<p>No data available</p>';
+                }
+            });
+    }
+
+    // Load content for all views
+    document.querySelectorAll('.view-content').forEach(viewContent => {
+        const viewName = viewContent.dataset.view;
+        loadViewContent(viewName);
+    });
+
+    // Global search functionality
+    document.getElementById('global-search').addEventListener('input', function(e) {
+        const searchTerm = e.target.value;
+        if (searchTerm.length > 2) {
+            fetch(`/api/search?q=${searchTerm}`)
+                .then(response => response.json())
+                .then(data => {
+                    Object.entries(data).forEach(([viewName, results]) => {
+                        const viewContent = document.querySelector(`.view-content[data-view="${viewName}"]`);
+                        if (results && results.length > 0) {
+                            viewContent.innerHTML = `
+                                <table class="table">
+                                    <thead>
+                                        <tr>${Object.keys(results[0]).map(key => `<th>${key}</th>`).join('')}</tr>
+                                    </thead>
+                                    <tbody>
+                                        ${results.map(item => `
+                                            <tr>${Object.values(item).map(value => `<td>${value}</td>`).join('')}</tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            `;
+                        } else {
+                            viewContent.innerHTML = '<p>No results found</p>';
+                        }
+                    });
+                });
+        }
+    });
+
+    // Relationships visualization
+    const relationships = {{ relationships|safe }};
+    const nodes = new vis.DataSet();
+    const edges = new vis.DataSet();
+
+    relationships.forEach(rel => {
+        if (!nodes.get(rel.from)) {
+            nodes.add({id: rel.from, label: rel.from});
+        }
+        if (!nodes.get(rel.to)) {
+            nodes.add({id: rel.to, label: rel.to});
+        }
+        edges.add({from: rel.from, to: rel.to, label: `${rel.from_col} -> ${rel.to_col}`});
+    });
+
+    const container = document.getElementById('relationships-graph');
+    const data = {
+        nodes: nodes,
+        edges: edges
+    };
+    const options = {};
+    const network = new vis.Network(container, data, options);
+</script>
+{% endblock %}

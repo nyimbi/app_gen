@@ -1,0 +1,9 @@
+to the flask-appbuilder app/__init__.py add the following line
+from flask_graphql import GraphQLView
+
+Add flask-talisman to add https to Flask 
+from flask_talisman import flask_talisman
+then:
+app = Flask(__name__)
+Talisman(app)
+

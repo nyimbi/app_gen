@@ -1,0 +1,19 @@
+{% extends 'appbuilder/base.html' %}
+
+{% block content %}
+    <div id="app">
+        <vuerd></vuerd>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vuerd/dist/vuerd.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/vuerd/dist/vuerd.css" rel="stylesheet">
+    <script>
+        new Vue({
+            el: '#app',
+            components: {
+                Vuerd: vuerd.default
+            },
+            template: '<Vuerd></Vuerd>'
+        });
+    </script>
+{% endblock %}

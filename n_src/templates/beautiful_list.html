@@ -1,0 +1,46 @@
+{% extends "appbuilder/general/model/list.html" %}
+
+{% block list_header %}
+<div class="panel panel-primary">
+    <div class="panel-heading">
+        <h3 class="panel-title">{{ title }}</h3>
+    </div>
+    <div class="panel-body">
+        {{ super() }}
+    </div>
+</div>
+{% endblock %}
+
+{% block list %}
+<div class="table-responsive">
+    <table class="table table-hover table-bordered">
+        {{ super() }}
+    </table>
+</div>
+{% endblock %}
+
+{% block add_button %}
+<a href="{{ url_for(modelview_name + '.add') }}" class="btn btn-sm btn-primary" data-toggle="tooltip" rel="tooltip" title="{{ _('Add a new record') }}">
+    <i class="fa fa-plus"></i> {{ _('Add') }}
+</a>
+{% endblock %}
+
+{% block list_actions %}
+<div class="btn-group">
+    {{ super() }}
+    <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown">
+        {{ _('More Actions') }} <span class="caret"></span>
+    </button>
+    <ul class="dropdown-menu" role="menu">
+        <li><a href="{{ url_for(modelview_name + '.action_post', name='export_csv') }}">
+            <i class="fa fa-file-excel-o"></i> {{ _('Export CSV') }}
+        </a></li>
+        <li><a href="{{ url_for(modelview_name + '.action_post', name='print') }}">
+            <i class="fa fa-print"></i> {{ _('Print') }}
+        </a></li>
+        <li><a href="{{ url_for(modelview_name + '.action_post', name='bookmark') }}">
+            <i class="fa fa-bookmark"></i> {{ _('Bookmark') }}
+        </a></li>
+    </ul>
+</div>
+{% endblock %}

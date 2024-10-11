@@ -1,0 +1,16 @@
+click
+Flask
+graphene
+SQLAlchemy_Utils==0.36.8
+SQLAlchemy
+pydbml
+sqlparse
+Flask_AppBuilder
+inflection
+geopy
+geoalchemy2
+blinkpy
+SQLAlchemy_Searchable
+humanize
+psycopg2
+sqlalchemy_continuum

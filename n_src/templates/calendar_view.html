@@ -1,0 +1,97 @@
+{% extends "appbuilder/base.html" %}
+{% block content %}
+<link href='https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/3.10.2/fullcalendar.min.css' rel='stylesheet' />
+<script src='https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js'></script>
+<script src='https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/3.10.2/fullcalendar.min.js'></script>
+
+<h2>{{ title }}</h2>
+
+{{ widgets.date_field_form()|safe }}
+
+<div id='calendar'></div>
+
+<script>
+$(document).ready(function() {
+    var currentDateField = '{{ default_date_field }}';
+
+    $('#calendar').fullCalendar({
+        header: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'month,agendaWeek,agendaDay'
+        },
+        events: function(start, end, timezone, callback) {
+            $.ajax({
+                url: '{{ url_for(".calendar_events") }}',
+                data: {
+                    start: start.format(),
+                    end: end.format(),
+                    date_field: currentDateField
+                },
+                success: function(data) {
+                    callback(data);
+                }
+            });
+        },
+        eventClick: function(event) {
+            if (event.url) {
+                window.open(event.url);
+                return false;
+            }
+        }
+    });
+
+    $('#date_field').change(function() {
+        currentDateField = $(this).val();
+        $('#calendar').fullCalendar('refetchEvents');
+    });
+
+    // Fetch and display today's events
+    $.ajax({
+        url: '{{ url_for(".calendar_today_events") }}',
+        data: { date_field: currentDateField },
+        success: function(data) {
+            var eventsList = $('<ul>');
+            data.forEach(function(event) {
+                eventsList.append($('<li>').append($('<a>').attr('href', event.url).text(event.title)));
+            });
+            $('#today-events').html(eventsList);
+        }
+    });
+
+    // Fetch and display month summary
+    function updateMonthSummary() {
+        var date = $('#calendar').fullCalendar('getDate');
+        $.ajax({
+            url: '{{ url_for(".calendar_month_summary") }}',
+            data: {
+                year: date.year(),
+                month: date.month() + 1,
+                date_field: currentDateField
+            },
+            success: function(data) {
+                $('#month-summary').text('Total events this month: ' + data.events_count);
+            }
+        });
+    }
+
+    $('#calendar').on('viewRender', function() {
+        updateMonthSummary();
+    });
+
+    updateMonthSummary();
+});
+</script>
+
+<div>
+    <h3>Today's Events</h3>
+    <div id="today-events"></div>
+</div>
+
+<div>
+    <h3>Month Summary</h3>
+    <div id="month-summary"></div>
+</div>
+
+{% endblock %}
+

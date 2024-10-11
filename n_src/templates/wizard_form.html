@@ -1,0 +1,65 @@
+{% extends "appbuilder/base.html" %}
+{% import "appbuilder/general/lib.html" as lib %}
+
+{% block content %}
+<div class="container">
+    <h2>{{ form_title }}</h2>
+
+    {% if show_progress %}
+    <div class="progress mb-3">
+        <div class="progress-bar" role="progressbar" style="width: {{ (current_step / total_steps) * 100 }}%;" aria-valuenow="{{ current_step }}" aria-valuemin="0" aria-valuemax="{{ total_steps }}">
+            Step {{ current_step }} of {{ total_steps }}
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data">
+        {{ form.hidden_tag() }}
+        
+        {% for field in form %}
+            {% if field.type != 'CSRFTokenField' %}
+                <div class="form-group">
+                    {{ field.label }}
+                    {{ field(class='form-control') }}
+                    {% for error in field.errors %}
+                        <span class="text-danger">{{ error }}</span>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endfor %}
+
+        <div class="form-group mt-4">
+            {% if allow_previous %}
+                <button type="submit" name="action" value="previous" class="btn btn-secondary">Previous</button>
+            {% endif %}
+            
+            {% if is_last_step %}
+                <button type="submit" name="action" value="finish" class="btn btn-primary">Finish</button>
+            {% else %}
+                <button type="submit" name="action" value="next" class="btn btn-primary">Next</button>
+            {% endif %}
+
+            {% if is_optional_step %}
+                <button type="submit" name="action" value="skip" class="btn btn-outline-secondary">Skip</button>
+            {% endif %}
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block tail_js %}
+{{ super() }}
+<script>
+    // Add any custom JavaScript for the wizard form here
+    $(document).ready(function() {
+        // Example: Initialize select2 for dropdown fields
+        $('select').select2();
+
+        // Example: Initialize datepicker for date fields
+        $('.datepicker').datepicker({
+            format: 'yyyy-mm-dd',
+            autoclose: true
+        });
+    });
+</script>
+{% endblock %}

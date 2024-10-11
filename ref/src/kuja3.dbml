@@ -1,0 +1,1392 @@
+Project Kuja {
+  database_type: 'PostgreSQL'
+  Note: '''
+    (c) Nyimbi Odero, 2024, nyimbi@gmail.com, MIT Licensed
+    Implement: PostgreSQL + PostGIS for waypoints + pgrouting for OSPF
+    
+    
+    Conventions:
+      Identifier keys need to end or be id, _id
+      Foreign keys need to end if _id_fkey, _id_fk
+      Association Tables need to end in _map, _link, _assoc
+
+    Principal Entities
+    X Accounting: GL + Accounts
+    X People: Orgs, People
+    X Calendar + Reminders
+    X Document Management, Scanning, OCR
+    X Association Membership Management
+    X Customer Relationship Management
+    
+    People are organized into orgs. Orgs may have sub-orgs
+    For each org we generate a website/profile page
+    producs have product classes.
+    orgs may have products
+    each org may price products differntly
+    orgs may accept, reject quotes
+    orgs may issue invoices
+    invoices can be paid in full or in part
+    invoices are posted to the orgs GL
+    Can track Quotes, Sales Orders, Purchase Orders, Invoices, Inventory Orders
+    We can receive funds and loan them to orgs
+    Lesson planning + Content Management System
+
+
+    TODO
+    - Rating Engine
+    - Adaptive Learning
+    '''
+ }
+
+
+//Enumerations 
+enum t_sdgs {
+  No_Poverty [Note: '1: No Poverty']
+  Zero_Hunger [Note: '2: Zero Hunger']
+  Good_Health_And_Wellbeing [Note: '3: Good Health And Well-Being']
+  Quality_Education [Note: '4: Quality Education']
+  Gender_Equality [Note: '5: Gender Equality']
+  Clean_Water_And_Sanitation [Note: '6: Clean Water And Sanitation']
+  Affordable_And_Clean_Energy [Note: '7: Affordable And Clean Energy']
+  Decent_Work_And_Economic_Growth [Note: '8: Decent Work And Economic Growth']
+  Industry_Innovation_And_Infrastructure [Note: '9: Industry Innovation And Infrastructure']
+  Reduced_Inequality [Note: '10: Reduced Inequality']
+  Sustainable_Cities_And_Communities [Note: '11: Sustainable Cities And Communities']
+  Responsible_Consumption_And_Production [Note: '12: Responsible Consumption And Production']
+  Climate_Action [Note: '13: Climate Action']
+  Life_Below_Water [Note: '14: Life Below Water']
+  Life_On_Land [Note: '15: Life On Land']
+  Peace_Justice_And_Strong_Institutions [Note: '16: Peace, Justice And Strong Institutions']
+  Partnerships_For_The_Goals [Note: '17: Partnerships For The Goals']
+ }
+
+enum t_climate_category {
+  Adaptation [Note: 'Adaptation']
+  Coastal_Zones [Note: 'Coastal Zones']
+  Disaster_Preparedness [Note: 'Disaster Preparedness']
+  Food_Security [Note: 'Food Security']
+  Health [Note: 'Health']
+  Water [Note: 'Water']
+  Climate_Justice [Note: 'Climate Justice']
+  Gender_Equality [Note: 'Gender Equality']
+  Human_Rights [Note: 'Human Rights']
+  Vulnerable_Communities [Note: 'Vulnerable Communities']
+  Mitigation [Note: 'Mitigation']
+  Agriculture [Note: 'Agriculture']
+  Energy [Note: 'Energy']
+  Forests [Note: 'Forests']
+  Industry [Note: 'Industry']
+  Waste [Note: 'Waste']
+ }
+
+enum t_admin_level {
+  Continent     [note: 'The highest geographical level, divides the world into large land masses.']
+  Region        [note: 'A geographic area larger than a single country but smaller than a continent.']
+  Supranational [note: 'Above the national level, often representing a group of countries.']
+  Country       [note: 'A sovereign nation recognized by international law.']
+  Federal       [note: 'Relating to a system of government where multiple states form a unity but remain independent in internal affairs.']
+  State         [note: 'A political entity within a country, can have its own government.']
+  LGA           [note: 'Local Government Area, an administrative division within a country.']
+  Ward          [note: 'A subdivision of a larger administrative area, often related to urban settings.']
+  Province      [note: 'A territory governed as a unit within a country or empire.']
+  County        [note: 'A geographic and administrative division within a state or province.']
+  District      [note: 'A type of administrative division that can exist in various countries.']
+  Location      [note: 'Smaller than a district, can refer to a specific area within a district or city.']
+  Sub_location  [note: 'Smaller than a location, can refer to a specific area within a district or city.']
+  Canton        [note: 'A type of administrative division found in some countries, like Switzerland.']
+  Municipality  [note: 'A city or town that has its own local government.']
+  Town          [note: 'Smaller than a city but larger than a village, usually has its own local government.']
+  Village       [note: 'A small community or group of houses in a rural area.']
+  Neighborhood  [note: 'A localized community within a larger city, town, or suburb.']
+  Borough       [note: 'An administrative division in various English-speaking countries, often a self-governing township.']
+  Suburb        [note: 'An outlying district of a city, often residential.']
+  Zone          [note: 'A segment of area separated for a particular purpose, could be residential, industrial, etc.']
+ }
+
+enum t_person_role {
+  Administrator
+  Owner
+  Programme_manager
+  Programme_officer
+  Store_keeper
+  Consultant
+  Specialist
+  Staff
+  Learner
+  Member
+  Volunteer
+  Donor
+ }
+
+enum t_gender {
+  Male
+  Female
+  Non_Binary
+  Prefer_Not_to_Say
+  Other
+ }
+
+enum t_doc_verification_status {
+  pending_approval     [note: 'Initial status, waiting for approval to proceed.']
+  kyc_submitted        [note: 'Know Your Customer (KYC) documents have been submitted for review.']
+  kyc_approved         [note: 'KYC documents have been approved.']
+  kyc_rejected         [note: 'KYC documents were not approved and need resubmission or clarification.']
+  escalated            [note: 'Requires special or urgent attention, possibly due to issues in verification.']
+  contracted           [note: 'Contract has been finalized and agreed upon.']
+  active               [note: 'Account or contract is in good standing and operational.']
+  suspended            [note: 'Account or contract temporarily disabled due to specific reasons.']
+  inactive             [note: 'Account or contract is not active but not terminated.']
+  contract_terminated  [note: 'Contract has been officially terminated.']
+  docs_expired         [note: 'Documents, like licenses or certificates, have expired.']
+  under_review         [note: 'Account or contract is under administrative or legal review.']
+  locked               [note: 'Account or contract is locked due to security reasons or fraudulent activity.']
+  awaiting_renewal     [note: 'Pending status for accounts or contracts that are up for renewal.']
+  renewal_rejected     [note: 'Renewal application has been rejected.']
+  verification_failed  [note: 'Failed verification checks other than KYC.']
+ }
+
+enum t_org_type {
+  INGO
+  CBO
+  NNGO
+  Individual                          [note: 'A single person not operating as a formal business entity.']
+  Business_Name                       [note: 'An unincorporated business owned by a single individual or multiple individuals.']
+  Sole_Proprietorship                 [note: 'A business structure where the owner and the business are legally considered the same entity.']
+  Partnership                         [note: 'A business structure where two or more individuals manage and operate a business.']
+  Private_Limited_Company             [note: 'A privately-held business entity, owned by shareholders, with liability limited to the value of shares.']
+  Public_Limited_Company              [note: 'A business whose shares are publicly traded and available to the general public, with liability limited to the value of shares.']
+  Public_Company_Limited_by_Guarantee [note: 'A public company where members’ financial liability is limited to a predetermined amount.']
+  Private_Unlimited_Company           [note: 'A privately-held business with no limit on the financial liability of its owners or shareholders.']
+  Public_Unlimited_Company            [note: 'A publicly-held company with no limit on the financial liability of its shareholders.']
+  Cooperative                         [note: 'A member-owned business structure with at least five members, all having equal voting power.']
+  Nonprofit                           [note: 'An organization established for purposes other than generating profit.']
+  Trust                               [note: 'An entity that holds assets for the benefit of certain persons or entities.']
+  Government                          [note: 'A governmental organization or entity.']
+  Franchise                           [note: 'A type of license that a party (franchisee) acquires to allow them to have access to a business’s (franchisor) proprietary knowledge, processes, and trademarks.']
+  Subsidiary                          [note: 'An entity that is completely or partly owned and wholly controlled by another (parent) entity.']
+  Holding_Company                     [note: 'A company that owns the stock of other companies but produces no goods or services itself.']
+  Joint_Venture                       [note: 'A business entity created by two or more parties, generally characterized by shared ownership, shared returns and risks, and shared governance.']
+  Freelancer                          [note: 'An individual who offers services to businesses or clients on a contract or project basis.']
+  Agency                              [note: 'A business that offers a particular kind of service on behalf of other businesses or individuals.']
+  Womens_Group                        [note: 'A community or organization primarily composed of women, focused on issues of interest to women.']
+  Meiti_Allah                         [note: 'A pastoralist association, typically in countries like Nigeria, representing cattle herders.']
+  Informal_Group                      [note: 'A group without formal organizational structure but with a common purpose or interest.']
+  Chama                               [note: 'A micro-savings group commonly found in East Africa, usually consisting of a small number of people who contribute to a communal fund.']
+  Other_Groupings                     [note: 'Any other types of groupings not listed above.']
+  Family                              [note: 'Basic social unit']
+  Clan                                [note: 'Group based on familial lineage']
+  Tribe                               [note: 'Larger group of related clans']
+  Association                         [note: 'Group organized for a common purpose']
+  Club                                [note: 'Social, recreational organization']
+  Consortium                          [note: 'Coalition of organizations for a common purpose']
+  Syndicate                           [note: 'Self-organizing group for specific business']
+  Collective                          [note: 'Collaborative and shared group']
+  Network                             [note: 'Interconnected individuals or organizations']
+  Foundation                          [note: 'Nonprofit for a specific goal']
+  Federation                          [note: 'Unified body of organizations']
+  Chamber_of_Commerce                 [note: 'Local business community association']
+  Guild                               [note: 'Association in trades or crafts']
+  Union                               [note: 'Workers’ organization for mutual goals']
+  Religious_Organization              [note: 'For religious practices and doctrines']
+  Political_Organization              [note: 'For political activities']
+  Alumni_Association                  [note: 'Organization of former students']
+  Affiliate                           [note: 'Connected but not controlled company']
+  Division                            [note: 'Separate business unit of a company']
+  Council                             [note: 'Administrative or advisory body']
+  Task_Force                          [note: 'Unit for a single defined task']
+  Social_Club                         [note: 'For socializing']
+  Charity                             [note: 'Nonprofit for public well-being']
+  Think_Tank                          [note: 'Research and advocacy organization']
+ }
+
+enum t_severity_level {
+  Insignificant [note: 'No impact or a negligible impact that requires no immediate action.']
+  Trivial       [note: 'Minimal impact, requires very little attention.']
+  Low           [note: 'Limited impact, may need attention but not urgent.']
+  Moderate      [note: 'Moderate impact, requires attention but not immediate action.']
+  Significant   [note: 'Important enough to warrant prompt attention.']
+  High          [note: 'High impact, requiring immediate attention and action.']
+  Urgent        [note: 'Immediate action required, failure to act could have severe consequences.']
+  Severe        [note: 'Critical impact, immediate action is crucial to prevent severe consequences.']
+  Extreme       [note: 'Extreme impact with potentially catastrophic results, immediate action is imperative.']
+  Critical      [note: 'Immediate, decisive action required to prevent catastrophic failure.']
+ }
+
+enum t_payment_method {
+  cash                [note: 'Payment made in physical cash.']
+  credit_card         [note: 'Payment made using a credit card.']
+  debit_card          [note: 'Payment made using a debit card.']
+  prepaid_card        [note: 'Prepaid Card']
+  commercial_card     [note: 'Commercial Card']
+  debt                [note: 'Payment deferred, creating a debt.']
+  bank                [note: 'Payment made through a bank, unspecified method.']
+  mobile              [note: 'Payment made through a mobile payment service.']
+  coupon              [note: 'Payment made using a coupon or voucher.']
+  order               [note: 'Payment to be fulfilled upon completing an order.']
+  Withdrawal          [note: 'Funds withdrawn from an account.']
+  fund_wallet         [note: 'Payment made by funding a wallet.']
+  cheque              [note: 'Payment made using a cheque.']
+  bank_transfer       [note: 'Payment made through direct bank transfer.']
+  crypto              [note: 'Payment made using cryptocurrency.']
+  barter              [note: 'Payment made through a barter or exchange of goods/services.']
+  wire_transfer       [note: 'Payment made through wire transfer.']
+  contactless         [note: 'Payment made through contactless technology.']
+  gift_card           [note: 'Payment made using a preloaded gift card.']
+  loyalty_points      [note: 'Payment made using loyalty points.']
+  money_order         [note: 'Payment made using a money order.']
+  escrow              [note: 'Payment held in a third-party account until conditions are met.']
+  installment         [note: 'Payment made in installments over time.']
+  invoice             [note: 'Payment made upon receiving an invoice.']
+  prepaid             [note: 'Payment made in advance, usually for subscriptions or services.']
+  qr_code             [note: 'Payment made by scanning a QR code.']
+  digital_wallet      [note: 'Payment made from a digital or electronic wallet.']
+  automatic_debit     [note: 'Payment made through automatic bank debit.']
+  cash_on_delivery    [note: 'Payment made in cash upon delivery of goods.']
+  postpaid            [note: 'Payment to be made after receiving the service or goods.']
+  third_party         [note: 'Payment processed by a third-party service.']
+  trade_credit        [note: 'Payment deferred as a form of short-term credit.']
+ }
+
+enum t_transaction_status {
+  pending                 [note: 'Transaction is initiated but not yet processed.']
+  authorized              [note: 'Transaction is authorized but not yet captured.']
+  completed               [note: 'Transaction is successfully completed.']
+  failed                  [note: 'Transaction has failed.']
+  cancelled               [note: 'Transaction has been cancelled by the user or system.']
+  refunded                [note: 'Funds have been returned to the payer.']
+  reversed                [note: 'Transaction has been reversed, typically due to a dispute or error.']
+  hold                    [note: 'Transaction is on hold for further review or action.']
+  suspended               [note: 'Transaction is temporarily suspended, usually for investigation.']
+  disputed                [note: 'Transaction is under dispute.']
+  delivered               [note: 'Goods or services have been delivered, but payment may still be pending.']
+  settlement_pending      [note: 'Transaction is awaiting settlement.']
+  settled                 [note: 'Transaction has been settled.']
+  rejected                [note: 'Transaction has been rejected by the gateway or financial institution.']
+  expired                 [note: 'Transaction authorization has expired.']
+  pending_verification    [note: 'Transaction is pending further verification.']
+  hold_for_review         [note: 'Transaction is on hold for manual review.']
+  partially_completed     [note: 'Transaction is partially completed; further action needed for full completion.']
+  partially_refunded      [note: 'Partial funds have been returned to the payer.']
+  partially_reversed      [note: 'Transaction is partially reversed.']
+  completed_with_errors   [note: 'Transaction completed but encountered some errors.']
+  batch_processing        [note: 'Transaction is part of a batch that is being processed.']
+  deferred                [note: 'Transaction is deferred for future processing.']
+  waiting_for_authorization [note: 'Transaction is waiting for authorization from payer or financial institution.']
+  processing              [note: 'Transaction is currently being processed.']
+  pending_funds_availability [note: 'Transaction is pending until funds become available.']
+  pending_review          [note: 'Transaction is pending review from the financial institution.']
+  pending_confirmation    [note: 'Transaction is pending confirmation from an external entity.']
+  waiting_for_settlement  [note: 'Transaction is completed but waiting for final settlement.']
+  pending_reconciliation  [note: 'Transaction is awaiting reconciliation with accounting records.']
+  pending_disbursement    [note: 'Funds are pending disbursement to the payee.']
+  chargeback_initiated    [note: 'A chargeback process has been initiated against the transaction.']
+  chargeback_resolved     [note: 'The chargeback process has been resolved, either in favor or against the merchant.']
+  pending_capture         [note: 'Transaction is authorized and is pending capture of funds.']
+  captured                [note: 'Funds have been successfully captured after authorization.']
+  voided                  [note: 'Transaction has been nullified before completion.']
+  in_queue                [note: 'Transaction is in a processing queue, typically for batch processing.']
+  manual_intervention_required [note: 'Transaction requires manual intervention for completion.']
+  gateway_timeout         [note: 'Transaction could not be completed due to a timeout at the payment gateway.']
+  fraud_alert             [note: 'Transaction has triggered a fraud alert and is under investigation.']
+  under_audit             [note: 'Transaction is currently being audited for compliance or accuracy.']
+  audit_completed         [note: 'Audit process for the transaction is complete.']
+  currency_conversion     [note: 'Transaction involves currency conversion and is pending rate confirmation.']
+  currency_conversion_completed [note: 'Currency conversion for the transaction is complete.']
+  escalated               [note: 'Transaction issue has been escalated for higher-level review or action.']
+  de_escalated            [note: 'Transaction issue has been resolved after escalation.']
+  pending_approval        [note: 'Transaction is pending approval from a supervisory entity.']
+  approved                [note: 'Transaction has received necessary approvals.']
+  declined                [note: 'Transaction has been declined by the payer or financial institution after initial authorization.']
+  re_attempted            [note: 'Transaction has been re-attempted after a failure.']
+  re_scheduled            [note: 'Transaction has been rescheduled for future processing.']
+  insufficient_funds      [note: 'Transaction could not be completed due to insufficient funds.']
+  verification_failed     [note: 'Transaction failed due to verification issues, such as incorrect CVV or OTP.']
+  verification_successful [note: 'Transaction successfully passed all verification checks.']
+  pending_clearance       [note: 'Transaction is pending clearance from the clearing house.']
+  cleared                 [note: 'Transaction has been cleared by the clearing house.']
+  re_initiated            [note: 'Transaction has been re-initiated after being cancelled or failed.']
+  split_transaction       [note: 'Transaction has been split into multiple parts for processing.']
+  consolidated            [note: 'Multiple transactions have been consolidated into one.']
+ }
+
+enum t_doc_status {
+  Not_Started       [note: ' Not started preparing the document']
+  Draft             [note: 'Document is in an initial stage.']
+  In_Progress       [note: 'Document is being actively worked on.']
+  Awaiting_Review   [note: 'Document is complete and is waiting to be reviewed.']
+  Under_Review      [note: 'Document is currently being reviewed.']
+  Review_Completed  [note: 'Review of the document is complete.']
+  Revisions_Needed  [note: 'Document needs revisions after review.']
+  Submitted         [note: 'Document has been submitted for final approval or implementation.']
+  Approved          [note: 'Document is approved.']
+  Partially_Approved [note: 'Document is approved by some, but not all, required parties.']
+  Rejected          [note: 'Document is not approved.']
+  Cancelled         [note: 'Document processing has been canceled.']
+  Archived          [note: 'Document is no longer active but kept for historical reasons.']
+  Published         [note: 'Document is made public.']
+  Suspended         [note: 'Document is temporarily on hold.']
+  Voided            [note: 'Document is null and void.']
+  Completed         [note: 'Document has served its purpose or task is complete.']
+  Expired           [note: 'Document or its relevance has expired.']
+  Renewed           [note: 'Document has been updated and renewed after expiration or period of validity.']
+  Locked            [note:'Document is currently locked for editing by a user or system process.']
+  Merged            [note:'Changes from multiple versions or contributors have been merged.']
+  Rollback          [note:'Document has been reverted to a previous version.']
+  Conflict          [note:'There are conflicting changes in the document that need resolution.']
+  Queued_for_Review [note:'Document is in a queue waiting to be reviewed.']
+  Queued_for_Publish [note:'Document is in a queue waiting to be published.']
+  Deprecated        [note:'Document is outdated but not yet archived.']
+  Unpublished       [note:'Document has been reverted from a Published state.']
+  In_Translation    [note:'Document is currently being translated.']
+  Validation_Failed [note:'Document failed some form of validation.']
+  Validation_Passed [note:'Document successfully passed validation checks.']
+  Digitized         [note:'Physical document has been converted to a digital format.']
+  In_Signature_Process [note:'Document is in the process of being digitally signed.']
+  Signature_Completed [note:'All required digital signatures have been obtained.']
+  Signature_Failed  [note:'Digital signature process failed.']
+  In_Audit          [note:'Document is currently being audited or inspected.']
+  Audit_Completed   [note:'Audit or inspection process is complete.']
+  In_Transit        [note:'Document is being moved from one location to another.']
+  Received          [note:'Document has been received by the intended party.']
+  Sent              [note:'Document has been sent but not necessarily received by the intended party.']
+ }
+
+//Combined Intervals and Recurrence
+enum t_interval {
+  None                [note: 'No recurrence; single event instance.']
+  Per_Second          [note: 'For very high-frequency use-cases, like real-time analytics or monitoring.']
+  Per_Minute          [note: 'For minute-by-minute intervals, used for relatively high-frequency tasks.']
+  Hourly              [note: 'Hourly interval, commonly used for things like hourly rates or metrics.']
+  Daily               [note: 'For daily operations, such as daily reports or aggregations.']
+  Weekly              [note: 'For operations that occur once a week.']
+  Biweekly            [note: 'For operations that happen twice a month or every two weeks.']
+  Monthly             [note: 'For monthly activities, such as billing or reporting.']
+  Bimonthly           [note: 'Recurs every two months; for activities requiring bimonthly attention like strategic reviews.']
+  Quarterly           [note: 'For activities that occur once every three months.']
+  Semi_Annually       [note: 'For operations that happen twice a year.']
+  Annually            [note: 'For yearly activities, like annual reviews or reports.']
+  Custom              [note: 'For user-defined intervals.']
+  Workdays            [note: 'Recurs on workdays only (Mon-Fri); for events related to standard business operations.']
+  Weekends            [note: 'Recurs on weekends only (Sat-Sun); useful for non-business activities.']
+  MONDAY              [note: 'Recurs every Monday; suitable for weekly meetings or tasks falling on this day.']
+  TUESDAY             [note: 'Recurs every Tuesday; suitable for weekly meetings or tasks falling on this day.']
+  WEDNESDAY           [note: 'Recurs every Wednesday; suitable for weekly meetings or tasks falling on this day.']
+  THURSDAY            [note: 'Recurs every Thursday; suitable for weekly meetings or tasks falling on this day.']
+  FRIDAY              [note: 'Recurs every Friday; suitable for weekly meetings or tasks falling on this day.']
+  SATURDAY            [note: 'Recurs every Saturday; useful for non-business activities.']
+  SUNDAY              [note: 'Recurs every Sunday; useful for non-business activities.']
+  FIRST_DAY_MONTH     [note: 'Recurs on the first day of each month; for events like the start of a billing cycle.']
+  LAST_DAY_MONTH      [note: 'Recurs on the last day of each month; suitable for end-of-month reporting.']
+  FIRST_WEEKDAY       [note: 'Recurs on the first weekday of each month; useful for recurring tasks that fall at the start of business months.']
+  LAST_WEEKDAY        [note: 'Recurs on the last weekday of each month; useful for activities wrapping up the business month.']
+  EVERY_X_DAYS        [note: 'Recurs every X days; allows for specifying an arbitrary number of days for the event to recur.']
+  EVERY_X_WEEKS       [note: 'Recurs every X weeks; permits specifying an arbitrary number of weeks for recurring events.']
+  EVERY_X_MONTHS      [note: 'Recurs every X months; permits specifying an arbitrary number of months for recurring events.']
+  EVERY_X_YEARS       [note: 'Recurs every X years; allows for specifying an arbitrary number of years for recurring events.']
+ }
+
+enum t_language_proficiency_level {
+  BASIC [note: 'Basic knowledge, can understand and produce familiar and routine expressions.']
+  INTERMEDIATE [note: 'Can handle most situations while traveling, can produce simple connected text on familiar topics.']
+  ADVANCED [note: 'Can produce clear, detailed text on a range of subjects; can understand the main ideas of complex text.']
+  FLUENT [note: 'Can understand a wide range of demanding texts, and recognize implicit meanings; can express ideas without searching for expressions.']
+  
+  A1 [note: 'Beginner - Can understand and use familiar everyday expressions and very basic phrases aimed at the satisfaction of needs of a concrete type.']
+  A2 [note: 'Elementary - Can understand sentences and frequently used expressions related to areas of most immediate relevance.']
+  B1 [note: 'Intermediate - Can understand the main points of clear standard input on familiar matters regularly encountered in work, school, etc.']
+  B2 [note: 'Upper Intermediate - Can produce clear, detailed text on a wide range of subjects and explain a viewpoint on a topical issue.']
+  C1 [note: 'Advanced - Can understand a wide range of demanding, longer texts, and recognize implicit meaning.']
+  C2 [note: 'Proficient - Can understand with ease virtually everything heard or read.']
+ }
+
+enum t_date_macro{
+  All
+  Today
+  ThisWeek
+  ThisWeekToDate
+  ThisMonth
+  ThisMonthToDate
+  ThisCalendarQuarter
+  ThisCalendarQuarterToDate
+  ThisFiscalQuarter
+  ThisFiscalQuarterToDate
+  ThisCalendarYear
+  ThisCalendarYearToDate
+  ThisFiscalYear
+  ThisFiscalYearToDate
+  Yesterday
+  LastWeek
+  LastWeekToDate
+  LastMonth
+  LastMonthToDate
+  LastCalendarQuarter
+  LastCalendarQuarterToDate
+  LastFiscalQuarter
+  LastFiscalQuarterToDate
+  LastCalendarYear
+  LastCalendarYearToDate
+  LastFiscalYear
+  LastFiscalYearToDate
+  NextWeek
+  NextFourWeeks
+  NextMonth
+  NextCalendarQuarter
+  NextCalendarYear
+  NextFiscalQuarter
+  NextFiscalYear
+ }
+
+
+enum t_entity_type {
+  person [note:'Entity os a person']
+  organization [note: 'entity is an organization']
+}
+
+enum t_organization_status {
+  Active [Note: 'The organization is currently active']
+  Inactive [Note: 'The organization is no longer active']
+  Pending [Note: 'The organization is pending approval']
+  OnHold [Note: 'The organization is on hold']
+  Blocked [Note: 'The organization is blocked']
+  Deleted [Note: 'The organization has been deleted']
+ }
+
+enum t_doc_type {
+  Registration [Note: 'Registration Certificate or Document']
+  Tax_Clearance [Note: 'Tax Clearance Certificate']
+  Income_Tax_Return [Note: 'Income Tax Return']
+  VAT_Return [Note: 'Value Added Tax Return']
+  Financial_Statements [Note: 'Audited Financial Statements']
+  Profit_and_Loss [Note: 'Profit and Loss Statement']
+  Balance_Sheet [Note: 'Balance Sheet']
+  Cash_Flow_Statement [Note: 'Cash Flow Statement']
+  Governance_Structure [Note: 'Organizations Governance Structure']
+  Board_Resolutions [Note: 'Board Meeting Resolutions']
+  Shareholders_Agreement [Note: 'Shareholders Agreement']
+  Operational_License [Note: 'Operational License or Permit']
+  Standard_Operating_Procedures [Note: 'Standard Operating Procedures']
+  Environmental_Impact_Assessment [Note: 'Environmental Impact Assessment']
+  Legal_Entity_Formation [Note: 'Legal Entity Formation Documents']
+  Contractual_Agreements [Note: 'Contracts and Agreements']
+  Permits_and_Licenses [Note: 'Permits and Licenses']
+  Bank_Statement [Note: 'Bank Statement']
+  Proof_of_Funds [Note: 'Proof of Funds']
+  ID_Card [Note: 'Identity Card']
+  Passport [Note: 'Passport']
+  Drivers_License [Note: 'Drivers License']
+  Utility_Bill [Note: 'Utility Bill']
+  Rental_Agreement [Note: 'Rental Agreement']
+  Other [Note: 'Other Document']
+ }
+
+
+enum t_contact_status {
+  New [Note: 'Contact has been created but not yet contacted']
+  Contacted [Note: 'Contact has been contacted at least once']
+  Qualified [Note: 'Contact is qualified as a potential lead']
+  Unqualified [Note: 'Contact is not a potential lead']
+  Customer [Note: 'Contact has become a customer']
+  Inactive [Note: 'Contact is inactive']
+  Blocked [Note: 'Contact has requested not to be contacted']
+  Deleted [Note: 'Contact has been deleted']
+ }
+
+enum t_person_application_status {
+  Submitted [Note: 'Application has been submitted']
+  Pending_Review [Note: 'Application is pending review']
+  Under_Review [Note: 'Application is currently under review']
+  Approved [Note: 'Application has been approved']
+  Rejected [Note: 'Application has been rejected']
+  Withdrawn [Note: 'Application has been withdrawn']
+  On_Hold [Note: 'Application is on hold']
+  Completed [Note: 'Application process is complete']
+ }
+
+enum t_project_status {
+  Initiated [Note: 'Project has been initiated']
+  Planned [Note: 'Project is in the planning phase']
+  In_Progress [Note: 'Project is actively being worked on']
+  Delayed [Note: 'Project is behind schedule']
+  Suspended [Note: 'Project is temporarily suspended']
+  Completed [Note: 'Project is completed']
+  Cancelled [Note: 'Project has been cancelled']
+  Closed [Note: 'Project is closed and archived']
+ }
+
+enum t_grant_status {
+  Submitted [Note: 'Grant application submitted']
+  Pending_Review [Note: 'Grant application under review']
+  Approved [Note: 'Grant approved']
+  Funded [Note: 'Grant funds disbursed']
+  In_Progress [Note: 'Grant activities in progress']
+  Delayed [Note: 'Grant activities delayed']
+  Suspended [Note: 'Grant temporarily suspended']
+  Completed [Note: 'Grant activities completed']
+  Closed [Note: 'Grant closed and archived']
+  Terminated [Note: 'Grant terminated early']
+  Rejected [Note: 'Grant application rejected']
+ }
+
+enum t_social_media_platform {
+  LinkedIn [Note: 'LinkedIn']
+  Facebook [Note: 'Facebook']
+  Twitter [Note: 'Twitter']
+  Instagram [Note: 'Instagram']
+  YouTube [Note: 'YouTube']
+  TikTok [Note: 'TikTok']
+  Pinterest [Note: 'Pinterest']
+  Snapchat [Note: 'Snapchat']
+  Reddit [Note: 'Reddit']
+  WhatsApp [Note: 'WhatsApp']
+  Telegram [Note: 'Telegram']
+  Discord [Note: 'Discord']
+  Other [Note: 'Other social media platform']
+ }
+
+
+enum t_org_hierarchy_type {
+  parent [Note: 'Parent Organization']
+  subsidiary [Note: 'Subsidiary']
+  department [Note: 'Department']
+  division [Note: 'Division']
+  unit [Note: 'Unit']
+  team [Note: 'Team']
+  branch [Note: 'Branch']
+  office [Note: 'Office']
+  location [Note: 'Location']
+  region [Note: 'Region']
+  country [Note: 'Country']
+  global [Note: 'Global']
+  holding_company [Note: 'Holding Company']
+  joint_venture [Note: 'Joint Venture']
+  partnership [Note: 'Partnership']
+  franchise [Note: 'Franchise']
+  affiliate [Note: 'Affiliate']
+  customer [Note: 'Customer']
+  supplier [Note: 'Supplier']
+}
+//Geographic Location information
+//Upload geoname db
+Table geoname {
+    id serial [pk, note: 'Unique identifier for each geoname'] 
+    name varchar(200) [note: 'Local name of the place or location']
+    asciiname varchar(200) [note: 'ASCII version of the name, suitable for URL or systems that dont support unicode']
+    alternatenames text [note: 'Alternative names or variations of the location name, possibly in different languages or scripts']
+    latitude float [note: 'Latitude coordinate of the location']
+    longitude float [note: 'Longitude coordinate of the location']
+    fclass char(1) [note: 'Feature class, represents general type/category of the location e.g. P for populated place, A for administrative division']
+    fcode varchar(10) [note: 'Feature code, more specific than feature class, indicating the exact type of feature']
+    country varchar(2) [note: 'ISO-3166 2-letter country code']
+    cc2 varchar(1000) [note: 'Alternative country codes if the location is near a border']
+    admin1 varchar(20) [note: 'Primary administrative division, e.g., state in the USA, oblast in Russia']
+    admin2 varchar(80) [note: 'Secondary administrative division, e.g., county in the USA']
+    admin3 varchar(20) [note: 'Tertiary administrative division, specific to each country']
+    admin4 varchar(20) [note: 'Quaternary administrative division, specific to each country']
+    population bigint [note: 'Population of the location if applicable']
+    elevation int [note: 'Elevation above sea level in meters']
+    gtopo30 int [note: 'Digital elevation model, indicates the average elevation of 30x30 area in meters']
+    timezone varchar(40) [note: 'The timezone in which the location lies, based on the IANA Time Zone Database']
+    moddate date [note: 'The last date when the record was modified or updated']
+ }
+
+
+Table alternatename {
+    id int [pk, increment, note: 'Unique identifier for each alternate name entry'] 
+    geo_id_fk int [ref: > geoname.id, note: 'Reference to the geoname table; denotes which location this alternate name pertains to']
+    isolanguage varchar(7) [note: 'ISO language code denoting the language of this alternate name, e.g., en for English']
+    alternatename varchar(200) [note: 'The alternate name itself in the specified language']
+    ispreferredname boolean [default: False, note: 'Indicates if this is the preferred name in the associated language']
+    isshortname boolean [default: False, note: 'Indicates if this name is a short version or abbreviation']
+    iscolloquial boolean [default: False, note: 'Indicates if this name is colloquial or informal']
+    ishistoric boolean [default: False, note: 'Indicates if this name is historic and no longer widely in use']
+    name_from varchar(500) [note: 'Used for transliterations; the script or system from which the name was derived']
+    name_to varchar(500) [note: 'Used for transliterations; the script or system to which the name was translated']
+ }
+
+
+Table country {
+    id serial [pk]
+    iso_alpha2 char(2) [unique, not null, note: '2-letter ISO 3166-1 alpha code e.g., US for the United States']
+    iso_alpha3 char(3) [unique, not null, note: '3-letter ISO 3166-1 alpha code e.g., USA for the United States']
+    iso_numeric integer [note: 'ISO 3166-1 numeric code e.g., 840 for the United States']
+    fips_code varchar(3) [note: 'Federal Information Processing Standard code, used by the US government']
+    name varchar(200) [note: 'Full name of the country']
+    capital varchar(200) [note: 'Capital city of the country']
+    areainsqkm float [note: 'Total area of the country in square kilometers']
+    population integer [note: 'Estimated population of the country']
+    continent varchar(2) [note: 'Abbreviation of the continent the country is located in']
+    tld varchar(10) [note: 'Top Level Domain for the country e.g., .us for the United States']
+    currencycode varchar(3) [note: 'ISO code of the country’s currency e.g., USD for US Dollar']
+    currencyname varchar(20) [note: 'Full name of the country’s currency e.g., Dollar for US Dollar']
+    phone varchar(20) [note: 'Country dialing code e.g., +1 for the United States']
+    postalcode varchar(100) [note: 'Template or format of postal codes in the country']
+    postalcoderegex varchar(200) [note: 'Regular expression pattern to validate postal codes']
+    languages varchar(200) [note: 'Commonly spoken languages in the country, represented as ISO codes']
+    geo_id_fk int [ref: > geoname.id, note: 'Reference to geoname table; linking country data with geographical name data']
+    neighbors varchar(50) [note: 'Neighboring countries, usually represented as ISO codes']
+    equivfipscode varchar(3) [note: 'Equivalent FIPS code in cases where it might differ from the primary FIPS code']
+    flag text [note: 'Field to store a link or representation of the country’s flag']
+    Note: 'Country Data needs expansion'
+ }
+
+
+Table admin1codes {
+  id serial [pk]
+  code varchar(11) [note: 'Primary identifier, typically a combination of country code and admin1 code e.g., US.AL for Alabama, United States']
+  countrycode_id_fk integer [ref: > country.id, note: '3-letter ISO 3166-1 alpha code of the country e.g., USA for the United States']
+  admin1_code varchar(10) [note: 'Unique identifier within a country for this first-level administrative division. E.g., AL for Alabama']
+  name varchar(200) [note: 'Local name of the administrative division in the official language']
+  alt_name_english varchar(200) [note: 'Alternative name or translation of the division in English']
+  geo_id_fk int [ref: > geoname.id, note: 'Reference to geoname table; linking administrative division data with geographical name data']
+ Indexes {
+    countrycode_id_fk
+    admin1_code
+    (countrycode_id_fk, admin1_code)
+  }
+ }
+
+
+Table admin2codes {
+  id serial [pk]
+  code varchar(50) [note: 'Primary identifier, typically a combination of country code, admin1 code, and an additional code representing the second-level administrative division e.g., US.AL.001']
+  countrycode_id_fk integer  [ref: > country.id, note: '3-letter ISO 3166-1 alpha code of the country this division belongs to e.g., USA for the United States']
+  admin1_code varchar(11) [ note: 'ref: > admin1codes.admin1_code,Reference to the first-level administrative division. E.g., US.AL for Alabama in the United States']
+  name varchar(200) [note: 'Local name of the second-level administrative division in the official language']
+  alt_name_english varchar(200) [note: 'Alternative name or translation of the division in English']
+  geo_id_fk int [ref: > geoname.id, note: 'Reference to geoname table; linking second-level administrative division data with geographical name data']
+
+  Indexes {
+    code
+    (countrycode_id_fk, admin1_code)
+  }
+ }
+
+Table featurecodes {
+  id serial [pk]
+  code varchar(10) [pk, note: 'Primary identifier for the feature code, typically a combination of class and fcode']
+  fclass varchar(10) [note: 'Class identifier that categorizes the type of geographical feature e.g., P for populated place, T for mountain']
+  fcode varchar(10) [pk, note: 'Specific code within a class that describes the feature in more detail. E.g., within class P, an fcode might specify city, village, etc.']
+  label varchar(100) [note: 'Short label or name for the feature code']
+  description varchar(1000) [note: 'Detailed description of what the feature code represents']
+ }
+
+
+Table languagecodes {
+  id serial [pk]
+  iso_639_3 varchar(10) [note: 'ISO 639-3 code is a three-letter code that represents a specific language uniquely. It offers a comprehensive set of languages.']
+  iso_639_2 varchar(10) [note: 'ISO 639-2 code is a three-letter code, which could be either bibliographic or terminological, representing a set of similar languages.']
+  iso_639_1 varchar(10) [note: 'ISO 639-1 code is a two-letter code. It represents major languages but is not as exhaustive as ISO 639-3.']
+  name varchar(1000) [note: 'The descriptive name of the language in English.']
+ }
+
+
+//Currencies
+Table currency {
+   id serial [pk, increment]
+   name varchar(4)
+   symbol varchar(5)
+   numeric_code varchar(4)
+   full_name varchar(100)
+   // curr_code varchar(3) [not null
+   // decimal_places SMALLINT 
+   // display_symbol varchar(10)
+   // name varchar(50) [not null]
+   //internationalized_name_code varchar(90)
+
+ Indexes {
+   name [unique]
+  }
+ }
+
+Table timezone {
+  id serial [pk]
+  country_code_id_fk integer [ref: > country.id]
+  timezonename varchar(100)
+  comments text
+ }
+
+
+
+Table person {
+  id integer [pk, increment]
+  first_name varchar(150) [not null]
+  middle_name varchar(150)
+  last_name varchar(150) [not null]
+  full_name varchar(150) 
+  nick_name varchar(150)
+
+  headline varchar(220)
+  location varchar(150)
+  summary text
+  email varchar(150) [not null, unique]
+  phone varchar(50)
+  date_of_birth date
+  contacts_id_fk int [ref: > contact.id]
+
+  city varchar(100)
+  state_province varchar(100)
+  postal_code varchar(20)
+  country varchar(100)
+  bio text
+  skills_description text
+  interests text
+  is_volunteer boolean [default: false]
+  is_staff boolean [default: false]
+
+  onboarding_step integer [default: 0]
+  profile_completion integer [default: 0]
+  last_profile_update timestamp
+  points integer [default: 0]
+  level integer [default: 1]
+  social_media_imported boolean [default: false]
+ }
+
+Table contact_type {
+  id serial [pk,increment,  note: 'Unique identifier for the address type.']
+  name varchar(50) [not null, note: 'Name or type of contact method, e.g., Mobile, Email, WhatsApp.']
+  description text [note: 'Brief description about the address type, providing context or usage scenarios.']
+  is_digital boolean [default: True, note: 'Indicates if the contact method is digital or physical.']
+  requires_verification boolean [default: False, note: 'Indicates if the address type typically requires a verification process, e.g., email confirmation.']
+  max_length int [note: 'If applicable, the maximum character length of a value of this address type. Useful for validation.']
+  icon_url varchar(255) [note: 'URL or link to an icon or image representing this address type. Useful for UI/UX purposes.']
+
+  created_at timestamp [default: 'now()', note: 'Timestamp when the address type was added to the system.']
+  updated_at timestamp [default: 'now()', note: 'Timestamp when the address type was last updated.']
+
+  note: ' phone, mobile, email, messaging, whatsapp, viber, instagram, website, etc'
+  Indexes {
+    name [unique, name: 'idx_unique_name']
+  }
+ }
+
+Table contact {
+  id integer [pk, increment, note: 'Unique identifier for the contact.']
+  
+  person_id_fk int [ref: > person.id, note: 'Reference to the individual associated with this contact.']
+  contact_type_id_fk int [ref: > contact_type.id, not null, note: 'Reference to the type of contact.']
+
+  contact varchar(100) [not null, note: 'Actual contact value, e.g., phone number or email address.']
+  priority int [not null, default: 10, note: 'Ordering priority for displaying or using the contact. Lower value indicates higher priority.']
+  best_time_to_contact_start time [note: 'Preferred start time when the individual/organization is available for contact.']
+  best_time_to_contact_end time [note: 'Preferred end time for availability.']
+  active_from_date timestamp [default: `now()`, note: 'Date when this contact became active or relevant.']
+  active_to_date date [note: 'Date when this contact ceases to be active or relevant.']
+  
+  for_business_use boolean [default: False, note: 'Indicates if the contact is primarily for business purposes.']
+  for_personal_use boolean [default: True, note: 'Indicates if the contact is primarily for personal use.']
+  do_not_use boolean [default: False, note: 'Indicates if there are any restrictions or requests not to use this contact.']
+  is_active boolean [default: True, note: 'Indicates if this contact is currently active and usable.']
+  is_blocked boolean [default: False, note: 'Indicates if this contact is blocked, maybe due to spam or other reasons.']
+  is_verified boolean [default: False, note: 'Indicates if this contact has been verified, e.g., via OTP or email confirmation.']
+
+  notes text [note: 'Additional notes or context about the contact.']
+  note:'Agent or person contacts'
+
+  Indexes {
+    (person_id_fk, contact_type_id_fk) [unique, name: 'idx_person_contact']
+    contact [unique, name: 'idx_unique_contact']
+  }
+ }
+
+Table social_media_profile {
+  id serial [pk]
+  person_id_fk integer [ref: > person.id]
+  org_id_fk integer [ref: > organization.id]
+  platform t_social_media_platform [not null]
+  profile_id varchar(100) [not null]
+  access_token varchar(500)
+  refresh_token varchar(500)
+  token_expiry timestamp
+}
+
+Table organization {
+  id serial [pk]
+  name varchar(150) [not null]
+  legal_name varchar(150)
+  org_type t_org_type [not null]
+  status t_organization_status [not null, default: 'Pending']
+  industry varchar(100)
+  website varchar(200)
+  is_verified boolean [default: false]
+  description text
+  mission_statement text
+  size integer
+  revenue decimal(18,2)
+  founded_date date
+  country_of_operation_id_fk integer [ref: >country.id]
+  //parent_organization_id_fk integer [ref: > organization.id]
+  logo varchar(255)
+  social_media_links text
+  tax_id varchar(50)
+  registration_number varchar(50)
+  seeking_funding boolean [not null]
+  providing_funding boolean [not null]
+  authorized_representative boolean [not null]
+  legal_structure varchar(100)
+  compliance_status varchar(100)
+  financial_year_end date
+  last_audit_date date
+  auditor_name varchar(150)
+  phone_number varchar(50)
+  email varchar(100)
+  address varchar(255)
+  city varchar(100)
+  state varchar(100)
+  country varchar(100)
+  postal_code varchar(20)
+
+  board_members text
+  governance_structure text
+  risk_assessment text
+  insurance_coverage boolean
+  compliance_certifications text
+  ethics_policy text
+  sustainability_policy text
+  primary_funding_source text
+  secondary_funding_source text
+
+  main_areas_of_operation text
+  key_programs text
+  beneficiary_info text
+  major_donors text
+  partnerships_affiliations text
+  onboarding_step integer [default: 0]
+  profile_completion integer [default: 0]
+  last_profile_update timestamp
+  associated_people_id_fk integer [ref: > person.id]
+ }
+
+Table organization_documents {
+  id serial [pk]
+  organization_id integer [ref: > organization.id, not null]
+  document_type t_document_type [not null]
+  document_name varchar(150) [not null]
+  document_path varchar(255) [not null]
+  upload_date timestamp [default: `now()`]
+ }
+Table organization_programs {
+  id serial [pk]
+  organization_id integer [ref: > organization.id, not null]
+  program_name varchar(150) [not null]
+  program_description text
+  start_date date
+  end_date date
+  budget decimal(18,2)
+  impact_assessment text
+}
+Table person_organization_claim {
+  id serial [pk]
+  person_id integer [ref: > person.id, not null]
+  organization_id integer [ref: > organization.id, not null]
+  claim_type t_person_role [note: 'e.g., staff, volunteer, board_member']
+  status t_person_application_status [default: 'Pending', note: 'Pending, Approved, Rejected']
+  claim_date timestamp [default: `now()`]
+  review_date timestamp
+}
+
+
+Table organization_hierarchy {
+  id serial [pk, increment]
+  parent_org_id_fk int [ref: > organization.id]
+  child_org_id_fk int [ref: > organization.id]
+  relationship_type t_org_hierarchy_type [note: 'e.g., parent, subsidiary, department']
+  
+ }
+
+Table organization_sdgs {
+  organization_id_fk integer [ref: > organization.id]
+  sdg t_sdgs
+  
+  indexes {
+    (organization_id_fk, sdg) [pk]
+  }
+ }
+
+Table organization_climate_categories {
+  organization_id_fk integer [ref: > organization.id]
+  climate_category t_climate_category
+  
+  indexes {
+    (organization_id_fk, climate_category) [pk]
+  }
+ }
+
+Table organization_profile {
+  id integer [pk, increment]
+  organization_id_fk integer [ref: > organization.id, not null]
+  funding_focus_areas text
+  average_grant_size decimal(18,2)
+  grant_making_process text
+  funding_restrictions text
+  focus_areas text
+  target_beneficiaries text
+  geographic_reach text
+  years_of_operation integer
+  total_beneficiaries_last_year integer
+  annual_budget decimal(18,2)
+  num_employees integer
+  num_volunteers integer
+  last_year_revenue decimal(18,2)
+  last_year_expenditure decimal(18,2)
+ }
+
+
+
+Table organization_contact {
+  id integer [pk, increment]
+  organization_id_fk integer [ref: > organization.id, not null]
+  person_id_fk integer [ref: > person.id]
+  org_email varchar(150)
+  org_phone varchar(50)
+  position varchar(100)
+  department varchar(100)
+  start_date date
+  end_date date
+  is_primary boolean [default: false]
+  status t_contact_status [default: 'New']
+  notes text
+  Note: 'A person at the organization to contact'
+ }
+
+Table contact_application {
+  id integer [pk, increment]
+  person_id_fk integer [ref: > person.id, not null]
+  organization_id_fk integer [ref: > organization.id, not null]
+  position varchar(100)
+  message text
+  application_date timestamp [default: `now()`]
+  status t_contact_status [default: 'New']
+  // reviewed_by integer [ref: > person.id]
+  review_date timestamp
+  review_notes text
+ }
+
+Table organization_verification {
+  id integer [pk, increment]
+  organization_id_fk integer [ref: > organization.id, not null]
+  registration_number varchar(100)
+  registration_date date
+  registering_authority varchar(200)
+  registration_expiry date
+  last_verification_date date
+  verification_status t_doc_verification_status
+  verification_notes text
+  // verified_by integer [ref: > person.id]
+ }
+
+Table document_submission {
+  id integer [pk, increment]
+  organization_id_fk integer [ref: > organization.id, not null]
+  document_type t_doc_type
+  document_name varchar(200)
+  file_path varchar(500)
+  upload_date timestamp [default: `now()`]
+  status t_doc_status
+  next_status t_doc_status
+  review_notes text
+  // reviewed_by integer [ref: > person.id]
+  review_date timestamp
+ }
+
+Table board_member {
+  id integer [pk, increment]
+  organization_id_fk integer [ref: > organization.id, not null]
+  person_id_fk integer [ref: > person.id, not null]
+  position varchar(100)
+  start_date date
+  end_date date
+ }
+
+Table executive_position {
+  id integer [pk, increment]
+  organization_id_fk integer [ref: > organization.id, not null]
+  person_id_fk integer [ref: > person.id, not null]
+  title varchar(100) [not null]
+  start_date date
+  end_date date
+ }
+
+Table organization_award {
+  id integer [pk, increment]
+  organization_id_fk integer [ref: > organization.id, not null]
+  name varchar(200) [not null]
+  awarding_body varchar(200)
+  date_received date
+  description text
+ }
+
+Table grant {
+  id integer [pk, increment]
+  donor_id_fk integer [ref: > organization.id, not null]
+  recipient_id_fk integer [ref: > organization.id, not null]
+  amount decimal(18,2)
+  start_date date
+  end_date date
+  status t_grant_status
+  description text
+ }
+
+Table project {
+  id integer [pk, increment]
+  organization_id_fk integer [ref: > organization.id, not null]
+  name varchar(200) [not null]
+  description text
+  start_date date
+  end_date date
+  budget decimal(18,2)
+  status t_project_status
+  beneficiaries integer
+  outcomes text
+ }
+
+Table project_locations {
+  id serial [pk, increment]
+  project_id_fk integer [ref: > project.id, not null]
+  location_name varchar(255)
+  location_coordinates_id_fk int [ref: > geoname.id, note: 'PostGIS Point geometry for lat/long']
+ }
+Table volunteer_log {
+  id serial [pk, increment]
+  person_id_fk integer [ref: > person.id, not null]
+  organization_id_fk integer [ref: > organization.id, not null]
+  start_date date
+  end_date date
+  hours_contributed integer
+  role varchar(100)
+  skills_used text
+}
+
+Table event {
+  id serial [pk]
+  organization_id_fk integer [ref: > organization.id, not null]
+  name varchar(200) [not null]
+  description text
+  start_datetime timestamp
+  end_datetime timestamp
+  location varchar(200)
+  is_virtual boolean [default: false]
+  max_participants integer
+ }
+
+Table event_registration {
+  id serial [pk]
+  event_id_fk integer [ref: > event.id, not null]
+  person_id_fk integer [ref: > person.id, not null]
+  registration_date timestamp [default: `now()`]
+  attended boolean [default: false]
+ }
+
+
+
+
+
+Table training {
+  id serial [pk]
+  offering_org_id_fk integer [ref: > organization.id, not null]
+  name varchar(200) [not null]
+  description text
+  start_date date
+  end_date date
+  is_certified boolean [default: false]
+ }
+
+Table person_training {
+  id serial [pk]
+  training_id_fk integer [ref: > training.id, not null]
+  person_id_fk integer [ref: > person.id, not null]
+  start_date date
+  completion_date date
+  completed boolean
+  certificate_id varchar(100)
+ }
+
+Table impact {
+  id serial [pk]
+  organization_id_fk integer [ref: > organization.id, not null]
+  project_id_fk integer [ref: > project.id]
+  metric_name varchar(200) [not null]
+  value decimal(18,2)
+  unit varchar(50)
+  date_measured date
+  description text
+ }
+
+Table pj_feedback {
+  id serial [pk]
+  person_id_fk integer [ref: > person.id, not null]
+  organization_id_fk integer [ref: > organization.id, not null]
+  project_id_fk integer [ref: > project.id]
+  rating integer
+  comments text
+  notes text
+  date date
+ }
+
+Table message {
+  id serial [pk]
+  sender_id_fk integer [ref: > person.id, not null]
+  recipient_id_fk integer [ref: > person.id, not null]
+  subject varchar(200)
+  body text
+  sent_date timestamp [default: `now()`]
+  read_date timestamp
+ }
+
+Table notification {
+  id serial [pk]
+  person_id_fk integer [ref: > person.id, not null]
+  message text
+  notification_type varchar(50)
+  created_date timestamp [default: `now()`]
+  read_date timestamp
+ }
+
+Table report {
+  id serial [pk]
+  organization_id_fk integer [ref: > organization.id, not null]
+  title varchar(200) [not null]
+  description text
+  file_path varchar(500)
+  created_date timestamp [default: `now()`]
+  report_type varchar(50)
+ }
+
+Table user_activity {
+  id serial [pk]
+  person_id_fk integer [ref: > person.id, not null]
+  activity_type varchar(50)
+  timestamp timestamp [default: `now()`]
+  details text
+ }
+
+Table tag {
+  id serial [pk]
+  name varchar(50) [not null, unique]
+ }
+
+Table organization_tag {
+  id serial [pk]
+  organization_id_fk integer [ref: > organization.id, not null]
+  tag_id_fk integer [ref: > tag.id, not null]
+ }
+
+Table project_tag {
+  id serial [pk]
+  project_id_fk integer [ref: > project.id, not null]
+  tag_id_fk integer [ref: > tag.id, not null]
+ }
+
+Table organization_badge {
+  id serial [pk]
+  organization_id_fk integer [ref: > organization.id, not null]
+  badge_id_fk integer [ref: > badge.id, not null]
+  date_earned timestamp [default: `now()`]
+ }
+
+Table onboarding_progress {
+  id serial [pk]
+  user_id_fk integer [ref: > person.id, not null]
+  organization_id_fk integer [ref: > organization.id]
+  step integer [default: 1]
+  completed_at timestamp
+ } 
+
+
+//Gamification
+Table user_gamification {
+  id serial [pk]
+  user_id_fk integer [ref: > person.id, not null]
+  points integer [default: 0]
+  level integer [default: 1]
+  last_point_earned timestamp
+  points_to_next_level integer [default: 100]
+ }
+
+Table badge {
+  id serial [pk]
+  name varchar(50) [not null, unique]
+  description varchar(200)
+  criteria varchar(200)
+  icon varchar(100)
+ }
+
+Table person_badge {
+  person_id_fk integer [ref: > person.id]
+  badge_id_fk integer [ref: > badge.id]
+  date_earned timestamp [default: `now()`]
+  
+  indexes {
+    (person_id_fk, badge_id_fk) [pk]
+  }
+ }
+
+Table leaderboard {
+  id serial [pk]
+  person_id_fk integer [ref: > person.id, not null]
+  score integer [default: 0]
+  last_updated timestamp [default: `now()`]
+ }
+
+Table gamification_challenge {
+  id serial [pk]
+  name varchar(100) [not null]
+  description text
+  points_reward integer [default: 0]
+  badge_reward_id_fk integer [ref: > badge.id]
+  start_date timestamp
+  end_date timestamp
+ }
+
+Table user_challenge {
+  id serial [pk]
+  person_id_fk integer [ref: > person.id, not null]
+  challenge_id_fk integer [ref: > gamification_challenge.id, not null]
+  completed boolean [default: false]
+  completion_date timestamp
+ }
+
+Table profile_update_reminder {
+  id serial [pk]
+  person_id_fk integer [ref: > person.id, not null]
+  last_reminder_date timestamp [default: `now()`]
+  reminder_count integer [default: 0]
+  next_reminder_date timestamp
+ }
+
+Table point_earning_activity {
+  id serial [pk]
+  person_id_fk integer [ref: > person.id, not null]
+  activity_type varchar(50) [not null]
+  points_earned integer [default: 0]
+  timestamp timestamp [default: `now()`]
+ }
+// People Profiles
+Table skill_category {
+  id integer [pk]
+  name varchar(100) [not null, unique]
+  description text
+ }
+
+Table skill {
+  id serial [pk]
+  name varchar(100) [not null, unique]
+  skill_category_id_fk integer [ref: > skill_category.id, not null]
+  description text
+ }
+
+Table person_skill {
+  id serial [pk]
+  person_id_fk integer [ref: > person.id, not null]
+  skill_id_fk integer [ref: > skill.id, not null]
+  proficiency_level integer
+  endorsements integer [default: 0]
+ }
+Table person_experience {
+  id serial [pk, increment]
+  person_id_fk integer [ref: > person.id, not null]
+  job_title varchar(150) [not null]
+  company_name varchar(150) [not null]
+  location varchar(150)
+  start_date date [not null]
+  end_date date
+  description text
+  awards text
+ }
+
+Table person_education {
+  id serial [pk, increment]
+  person_id_fk integer [ref: > person.id, not null]
+  school_name varchar(150) [not null]
+  degree varchar(100)
+  field_of_study varchar(100)
+  start_date date [not null]
+  end_date date
+  description text
+ }
+
+Table person_certification {
+  id serial [pk, increment]
+  person_id_fk integer [ref: > person.id, not null]
+  name varchar(150) [not null]
+  issuing_organization varchar(150) [not null]
+  issue_date date [not null]
+  expiration_date date
+  credential_id varchar(100)
+  credential_url varchar(255)
+ }
+
+Table person_project {
+  id serial [pk, increment]
+  person_id_fk integer [ref: > person.id, not null]
+  name varchar(150) [not null]
+  description text
+  start_date date [not null]
+  end_date date
+  project_url varchar(255)
+ }
+
+Table person_language {
+  id serial [pk, increment]
+  person_id_fk integer [ref: > person.id, not null]
+  name varchar(50) [not null]
+  proficiency t_language_proficiency_level [not null, default: 'A1']
+ }
+
+Table person_honor_award {
+  id serial [pk, increment]
+  person_id_fk integer [ref: > person.id, not null]
+  title varchar(150) [not null]
+  issuer varchar(150) [not null]
+  date_received date [not null]
+  description text
+ }
+
+Table person_publication {
+  id serial [pk, increment]
+  person_id_fk integer [ref: > person.id, not null]
+  title varchar(150) [not null]
+  publisher varchar(150) [not null]
+  date date [not null]
+  url varchar(255)
+  description text
+ }
+
+Table person_volunteer_experience {
+  id serial [pk, increment]
+  person_id_fk integer [ref: > person.id, not null]
+  role varchar(150) [not null]
+  organization varchar(150) [not null]
+  cause varchar(150)
+  start_date date [not null]
+  end_date date
+  description text
+ }
+
+Table person_patent {
+  id serial [pk, increment]
+  person_id_fk integer [ref: > person.id, not null]
+  title varchar(150) [not null]
+  patent_office varchar(150) [not null]
+  patent_number varchar(50) [not null]
+  issue_date date [not null]
+  description text
+ }
+
+Table person_course {
+  id serial [pk, increment]
+  person_id_fk integer [ref: > person.id, not null]
+  name varchar(150) [not null]
+  institution varchar(150) [not null]
+  completion_date date [not null]
+  description text
+ }
+
+Table person_organization_membership {
+  id serial [pk, increment]
+  person_id_fk integer [ref: > person.id, not null]
+  organization_name varchar(150) [not null]
+  role varchar(150) [not null]
+  start_date date [not null]
+  end_date date
+  description text
+ }

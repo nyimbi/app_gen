@@ -1,0 +1,18 @@
+{% extends 'appbuilder/general/model/list.html' %}
+
+{% block list_table %}
+    <div class="row">
+    {% for contact in contacts %}
+        <div class="col-md-4">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">{{ contact.name }}</h5>
+                    <h6 class="card-subtitle mb-2 text-muted">{{ contact.company }}</h6>
+                    <p class="card-text">{{ contact.phone }}</p>
+                    <p class="card-text">{{ contact.email }}</p>
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+    </div>
+{% endblock %}
