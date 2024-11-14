@@ -1,0 +1,26 @@
+# main_app.py.j2
+
+from flask import Flask
+from flask_appbuilder import AppBuilder, SQLA
+
+app = Flask(__name__)
+app.config.from_object('config')
+db = SQLA(app)
+appbuilder = AppBuilder(app, db.session)
+
+{% if single_file %}
+from . import views
+{% else %}
+{% for view in views %}
+from . import {{ view }}
+{% endfor %}
+{% endif %}
+
+{% for table_name in table_names %}
+from .models import {{ table_name }}
+{% endfor %}
+
+db.create_all()
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8080, debug=True)

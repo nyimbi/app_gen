@@ -1,0 +1,23 @@
+{% extends "appbuilder/base.html" %}
+
+{% block content %}
+<div class="print-friendly">
+    <h1>{{ title }}</h1>
+    {% for item in items %}
+        <div class="item">
+            {% for col in widgets %}
+                <p><strong>{{ col }}:</strong> {{ item[col] }}</p>
+            {% endfor %}
+        </div>
+        <hr>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block add_tail_js %}
+<script>
+    window.onload = function() {
+        window.print();
+    }
+</script>
+{% endblock %}
