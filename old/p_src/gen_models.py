@@ -668,6 +668,40 @@ def process_default_value(column_name, column_type, default):
 
 
 def analyze_cardinality(table_name, fk, inspector, association_tables):
+    """
+    Analyze and determine the cardinality of a relationship between database tables.
+
+    Examines the structure of foreign key constraints, primary keys, and unique constraints
+    to determine whether a relationship is one-to-one, one-to-many, many-to-one, or
+    many-to-many. Special handling is included for self-referencing tables and
+    association tables used in many-to-many relationships.
+
+    Args:
+        table_name (str): Name of the table containing the foreign key constraint
+        fk (dict): Dictionary containing foreign key constraint information with keys:
+            - referred_table: Name of the referenced table
+            - constrained_columns: List of columns with the foreign key constraint
+            - referred_columns: List of columns being referenced
+        inspector (sqlalchemy.engine.reflection.Inspector): SQLAlchemy inspector object
+            used to examine database metadata
+        association_tables (list): List of table names that are association tables
+
+    Returns:
+        str: The determined cardinality, one of:
+            - 'one-to-one': Both sides have unique constraints
+            - 'one-to-many': Multiple records can reference one parent
+            - 'many-to-one': Multiple records reference one target
+            - 'many-to-many': Relationship through association table
+            - Various self-referencing types (from analyze_self_referencing_relationship)
+
+    Note:
+        The logic prioritizes checks in the following order:
+        1. Self-referencing relationships
+        2. Many-to-many through association tables
+        3. One-to-one based on unique constraints
+        4. Many-to-one based on referred primary keys
+        5. Defaults to one-to-many if no other condition is met
+    """
     referred_table = fk["referred_table"]
     constrained_columns = fk["constrained_columns"]
     referred_columns = fk["referred_columns"]
@@ -682,62 +716,25 @@ def analyze_cardinality(table_name, fk, inspector, association_tables):
 
     # Analyze primary keys and unique constraints
     pk_constraint = inspector.get_pk_constraint(table_name)
-    pk_columns = set(pk_constraint['constrained_columns'])
+    referred_pk = inspector.get_pk_constraint(referred_table)
     unique_constraints = inspector.get_unique_constraints(table_name)
 
-    # One-to-one relationship checks
-    if is_one_to_one_relationship(constrained_columns, pk_columns, unique_constraints):
-        return 'one-to-one'
+    # Check if foreign key is unique
+    fk_cols = set(constrained_columns)
+    is_unique = (
+        fk_cols.issubset(set(pk_constraint['constrained_columns'])) or
+        any(fk_cols.issubset(set(uq['column_names'])) for uq in unique_constraints)
+    )
 
-    # Many-to-one relationship check
-    referred_pk_constraint = inspector.get_pk_constraint(referred_table)
-    referred_pk_columns = set(referred_pk_constraint['constrained_columns'])
-    if set(referred_columns).issubset(referred_pk_columns):
+    if is_unique:
+        return 'one-to-one' if len(fk_cols) == len(referred_pk['constrained_columns']) else 'many-to-one'
+
+    # Check for many-to-one relationship
+    if set(referred_columns).issubset(set(referred_pk['constrained_columns'])):
         return 'many-to-one'
 
     # Default to one-to-many if no other condition is met
     return 'one-to-many'
-
-# def is_association_table(table_name, inspector):
-#     """Improved detection of association tables.
-#     Check if a table is likely an association table.
-
-#     An association table typically has the following characteristics:
-#     0. The name ends in _assoc (our formal convention)
-#     1. Has at least two foreign keys
-#     2. May have additional columns for metadata (e.g., creation date, status)
-#     3. Usually has a relatively small number of columns compared to regular entity tables
-#     4. The name often follows a pattern like 'table1_table2' or 'table1_to_table2'
-
-#     Args:
-#             table_name (str): Name of the table to check
-#             inspector (sa.engine.reflection.Inspector): SQLAlchemy Inspector object
-
-#         Returns:
-#             bool: True if the table is likely an association table, False otherwise
-#     """
-#     if table_name.endswith("_assoc"):
-#         return True
-
-#     fks = inspector.get_foreign_keys(table_name)
-#     columns = inspector.get_columns(table_name)
-
-#     if len(fks) < 2:
-#         return False
-
-#     non_fk_columns = [col for col in columns if col['name'] not in
-#                       [c for fk in fks for c in fk['constrained_columns']]]
-
-#     # Allow for id, timestamps, and a couple of additional metadata columns
-#     allowed_extra = ['id', 'created_at', 'updated_at', 'created_by', 'updated_by']
-#     extra_columns = [col for col in non_fk_columns if col['name'] not in allowed_extra]
-
-#    # Check if the table name follows the pattern 'table1_table2' or 'table1_to_table2'
-#     name_parts = table_name.split('_')
-#     if len(name_parts) >= 2 and (name_parts[-1] in fks[0]['referred_table'] or name_parts[-1] in fks[1]['referred_table']):
-#         return True
-
-#     return len(extra_columns) <= 2
 
 def is_one_to_one_relationship(constrained_columns, pk_columns, unique_constraints):
     """Check if the relationship is one-to-one based on constraints."""

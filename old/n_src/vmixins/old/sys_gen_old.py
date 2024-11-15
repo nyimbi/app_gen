@@ -50,7 +50,6 @@ def generate_mixin_code(mixin_description):
 
     chat = ChatAnthropic(model="claude-3-5-sonnet-20240620",
                          temperature=0,
-                         api_key="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",
                          max_tokens=8192)
     pprompt = prompt.format(mixin_description=mixin_description)
     messages = [(
