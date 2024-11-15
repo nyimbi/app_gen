@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container my-5">
+    <h1 class="mb-4 text-center">{{ title }}</h1>
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <form id="date-column-form" class="form-inline">
+                <label for="date-column" class="form-label me-2">Select Date Column:</label>
+                <select id="date-column" name="date_column" class="form-select">
+                    {% for col in date_columns %}
+                    <option value="{{ col }}" {% if col == default_date_column %}selected{% endif %}>{{ col|capitalize }}</option>
+                    {% endfor %}
+                </select>
+            </form>
+        </div>
+        <div class="col-md-6 text-end">
+            <button id="add-event-btn" class="btn btn-primary">Add Event</button>
+        </div>
+    </div>
+    <div id="calendar"></div>
+    <div class="row mt-5">
+        <div class="col-md-12">
+            <h3 class="mb-4 text-center">Entries Overview</h3>
+            <canvas id="entriesChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Add Event Modal -->
+<div class="modal fade" id="addEventModal" tabindex="-1" aria-labelledby="addEventModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addEventModalLabel">Add New Event</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="add-event-form">
+                    <div class="mb-3">
+                        <label for="event-title" class="form-label">Event Title</label>
+                        <input type="text" class="form-control" id="event-title" name="title" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="event-date" class="form-label">Event Date</label>
+                        <input type="date" class="form-control" id="event-date" name="date" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="event-end-date" class="form-label">End Date (Optional)</label>
+                        <input type="date" class="form-control" id="event-end-date" name="end_date">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" id="save-event-btn" class="btn btn-primary">Save Event</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    $(document).ready(function () {
+        const calendarEl = document.getElementById('calendar');
+        const dateColumnSelect = $('#date-column');
+        const addEventBtn = $('#add-event-btn');
+        const addEventModal = new bootstrap.Modal(document.getElementById('addEventModal'));
+        const entriesChartEl = document.getElementById('entriesChart').getContext('2d');
+
+        function fetchEvents(info, successCallback, failureCallback) {
+            $.ajax({
+                url: '/calendar/events/',
+                data: {
+                    start: moment(info.start).format('YYYY-MM-DD'),
+                    end: moment(info.end).format('YYYY-MM-DD'),
+                    date_column: dateColumnSelect.val()
+                },
+                success: function (data) {
+                    successCallback(data);
+                },
+                error: function () {
+                    failureCallback();
+                }
+            });
+        }
+
+        function fetchEntriesOverview() {
+            $.ajax({
+                url: '/calendar/overview/',
+                data: {
+                    date_column: dateColumnSelect.val()
+                },
+                success: function (data) {
+                    updateEntriesChart(data);
+                },
+                error: function (error) {
+                    console.error('Error fetching entries overview:', error);
+                }
+            });
+        }
+
+        function updateEntriesChart(data) {
+            const labels = data.labels;
+            const dataset = data.dataset;
+
+            new Chart(entriesChartEl, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Number of Entries',
+                        data: dataset,
+                        backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        const calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'dayGridMonth',
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,timeGridWeek,timeGridDay'
+            },
+            events: fetchEvents,
+            editable: false,
+            eventClick: function (info) {
+                window.location.href = info.event.url;
+                info.jsEvent.preventDefault();
+            }
+        });
+
+        calendar.render();
+
+        dateColumnSelect.change(function () {
+            calendar.refetchEvents();
+            fetchEntriesOverview();
+        });
+
+        // Add event button click
+        addEventBtn.click(function () {
+            $('#add-event-form')[0].reset();
+            addEventModal.show();
+        });
+
+        // Save event button click
+        $('#save-event-btn').click(function () {
+            const title = $('#event-title').val();
+            const date = $('#event-date').val();
+            const endDate = $('#event-end-date').val();
+
+            if (title && date) {
+                const eventData = {
+                    title: title,
+                    date: date,
+                    end_date: endDate
+                };
+
+                $.ajax({
+                    url: '/calendar/add_event/',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(eventData),
+                    success: function () {
+                        addEventModal.hide();
+                        calendar.refetchEvents();
+                        fetchEntriesOverview();
+                    },
+                    error: function (error) {
+                        alert('Error adding event: ' + error.responseText);
+                    }
+                });
+            }
+        });
+
+        // Initial load of entries overview
+        fetchEntriesOverview();
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends "appbuilder/base.html" %}
+{% block content %}
+<h1>{{ title }}</h1>
+<form method="post" action="{{ url_for(modelview_name + '.add') }}">
+    {% for field, value in form_data.items() %}
+    <div class="form-group">
+        <label>{{ field }}</label>
+        <input type="text" class="form-control" name="{{ field }}" value="{{ value }}" readonly>
+    </div>
+    {% endfor %}
+    <button type="submit" class="btn btn-primary">Submit</button>
+    <a href="{{ url_for(modelview_name + '.add') }}" class="btn btn-secondary">Edit</a>
+</form>
+{% endblock %}

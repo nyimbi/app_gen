@@ -1,0 +1,10 @@
+flask-mail
+pyotp
+qrcode
+pillow
+sqlalchemy
+flask-appbuilder
+psycopg2-binary
+jinja2
+inflect
+black
