@@ -163,6 +163,7 @@ Author: Nyimbi Odero
 Copyright: 2024 Nyimbi Odero
 License: MIT
 """
+
 from datetime import datetime
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Union
@@ -172,54 +173,66 @@ from model_generator.utils.validation_utils import (
     validate_column_name,
     validate_table_name,
     validate_type,
-    validate_numeric_range
+    validate_numeric_range,
 )
 from model_generator.utils.case_utils import to_snake_case, to_pascal_case
-from model_generator.utils.type_utils import get_sqlalchemy_type_name,
+from model_generator.utils.type_utils import get_sqlalchemy_type_name
 from model_generator.exceptions import ValidationError
+
 
 class DatabaseType(Enum):
     """Supported database types."""
-    POSTGRESQL = 'postgresql'
-    MYSQL = 'mysql'
-    SQLITE = 'sqlite'
-    ORACLE = 'oracle'
-    MSSQL = 'mssql'
+
+    POSTGRESQL = "postgresql"
+    MYSQL = "mysql"
+    SQLITE = "sqlite"
+    ORACLE = "oracle"
+    MSSQL = "mssql"
+
 
 class AutoIncrementType(Enum):
     """Enumeration of auto-increment types."""
+
     NONE = auto()
     IDENTITY = auto()
     SEQUENCE = auto()
     SERIAL = auto()
 
+
 class IndexMethod(Enum):
     """Enumeration of supported index access methods."""
-    BTREE = "btree"      # Default balanced tree
-    HASH = "hash"        # Hash table
-    GIST = "gist"        # Generalized Search Tree
-    GIN = "gin"          # Generalized Inverted Index
-    SPGIST = "spgist"    # Space-partitioned GiST
-    BRIN = "brin"        # Block Range Index
-    BLOOM = "bloom"      # Bloom filter
+
+    BTREE = "btree"  # Default balanced tree
+    HASH = "hash"  # Hash table
+    GIST = "gist"  # Generalized Search Tree
+    GIN = "gin"  # Generalized Inverted Index
+    SPGIST = "spgist"  # Space-partitioned GiST
+    BRIN = "brin"  # Block Range Index
+    BLOOM = "bloom"  # Bloom filter
+
 
 class IndexType(Enum):
     """Enumeration of index types and their characteristics."""
-    NORMAL = "NORMAL"        # Regular index
-    UNIQUE = "UNIQUE"        # Unique constraint index
-    PRIMARY = "PRIMARY"      # Primary key index
-    EXCLUDE = "EXCLUDE"      # Exclusion constraint index
-    PARTIAL = "PARTIAL"      # Partial index with WHERE clause
-    COVERING = "COVERING"    # Index with INCLUDE columns
+
+    NORMAL = "NORMAL"  # Regular index
+    UNIQUE = "UNIQUE"  # Unique constraint index
+    PRIMARY = "PRIMARY"  # Primary key index
+    EXCLUDE = "EXCLUDE"  # Exclusion constraint index
+    PARTIAL = "PARTIAL"  # Partial index with WHERE clause
+    COVERING = "COVERING"  # Index with INCLUDE columns
+
 
 class NullsOrder(Enum):
     """Enumeration of NULL ordering options."""
+
     FIRST = "NULLS FIRST"
     LAST = "NULLS LAST"
     DEFAULT = "DEFAULT"
 
+
 class OnUpdateAction(Enum):
     """Enumeration of possible ON UPDATE actions."""
+
     NO_ACTION = "NO ACTION"
     RESTRICT = "RESTRICT"
     CASCADE = "CASCADE"
@@ -229,16 +242,18 @@ class OnUpdateAction(Enum):
 
 class TableType(Enum):
     """Enumeration of different table types."""
-    REGULAR = "TABLE"              # Regular table
-    FOREIGN = "FOREIGN TABLE"      # Foreign table
-    PARTITIONED = "PARTITIONED"    # Partitioned table
-    TEMPORARY = "TEMPORARY"        # Temporary table
-    UNLOGGED = "UNLOGGED"         # Unlogged table
+
+    REGULAR = "TABLE"  # Regular table
+    FOREIGN = "FOREIGN TABLE"  # Foreign table
+    PARTITIONED = "PARTITIONED"  # Partitioned table
+    TEMPORARY = "TEMPORARY"  # Temporary table
+    UNLOGGED = "UNLOGGED"  # Unlogged table
     MATERIALIZED = "MATERIALIZED"  # Materialized view
 
 
 class PartitioningStrategy(Enum):
     """Enumeration of table partitioning strategies."""
+
     RANGE = "RANGE"
     LIST = "LIST"
     HASH = "HASH"
@@ -246,14 +261,16 @@ class PartitioningStrategy(Enum):
 
 class ReplicaIdentity(Enum):
     """Enumeration of replica identity options."""
+
     DEFAULT = "DEFAULT"  # Primary key or NOTHING
     NOTHING = "NOTHING"  # No old values
-    FULL = "FULL"       # All columns
-    INDEX = "INDEX"     # User-specified index
+    FULL = "FULL"  # All columns
+    INDEX = "INDEX"  # User-specified index
 
 
 class StorageParameters(Enum):
     """Common table storage parameters."""
+
     FILLFACTOR = "fillfactor"
     TOAST_TUPLE_TARGET = "toast_tuple_target"
     PARALLEL_WORKERS = "parallel_workers"
@@ -264,6 +281,7 @@ class StorageParameters(Enum):
 
 class ConstraintType(Enum):
     """Enumeration of database constraint types."""
+
     CHECK = "CHECK"
     UNIQUE = "UNIQUE"
     PRIMARY_KEY = "PRIMARY KEY"
@@ -274,6 +292,7 @@ class ConstraintType(Enum):
 
 class DeferrableStatus(Enum):
     """Enumeration of constraint deferrable options."""
+
     NOT_DEFERRABLE = "NOT DEFERRABLE"
     IMMEDIATE = "DEFERRABLE INITIALLY IMMEDIATE"
     DEFERRED = "DEFERRABLE INITIALLY DEFERRED"
@@ -281,6 +300,7 @@ class DeferrableStatus(Enum):
 
 class ExclusionOperator(Enum):
     """Common exclusion constraint operators."""
+
     EQUAL = "="
     NOT_EQUAL = "<>"
     LESS = "<"
@@ -296,6 +316,7 @@ class ExclusionOperator(Enum):
 @dataclass
 class PostgreSQLTriggerInfo:
     """PostgreSQL trigger information."""
+
     name: str
     definition: str
     enabled: bool
@@ -304,9 +325,11 @@ class PostgreSQLTriggerInfo:
     events: List[str]  # INSERT, UPDATE, DELETE, TRUNCATE
     function: str
 
+
 @dataclass
 class PostgreSQLSequenceInfo:
     """PostgreSQL sequence information."""
+
     name: str
     start_value: int
     increment: int
@@ -316,9 +339,11 @@ class PostgreSQLSequenceInfo:
     cycle: bool
     owned_by: Optional[str]
 
+
 @dataclass
 class PostgreSQLDomainInfo:
     """PostgreSQL domain type information."""
+
     name: str
     base_type: str
     nullable: bool
@@ -326,16 +351,20 @@ class PostgreSQLDomainInfo:
     constraints: List[str]
     collation: Optional[str]
 
+
 @dataclass
 class PostgreSQLEnumType:
     """PostgreSQL enum type information."""
+
     name: str
     values: List[str]
     schema: str
 
+
 @dataclass
 class PostgreSQLRangeType:
     """PostgreSQL range type information."""
+
     name: str
     subtype: str
     subtype_opclass: str
@@ -343,37 +372,46 @@ class PostgreSQLRangeType:
     canonical: Optional[str]
     subtype_diff: Optional[str]
 
+
 @dataclass
 class PostgreSQLCompositeType:
     """PostgreSQL composite type information."""
+
     name: str
     attributes: List[Dict[str, Any]]
     schema: str
 
+
 class PostgreSQLStorageType(Enum):
     """PostgreSQL storage types."""
-    PLAIN = 'p'
-    EXTENDED = 'x'
-    EXTERNAL = 'e'
-    MAIN = 'm'
+
+    PLAIN = "p"
+    EXTENDED = "x"
+    EXTERNAL = "e"
+    MAIN = "m"
+
 
 class PostgreSQLCompressionMethod(Enum):
     """PostgreSQL column compression methods."""
-    NONE = 'n'
-    LZ4 = 'l'
-    PGLZ = 'p'
+
+    NONE = "n"
+    LZ4 = "l"
+    PGLZ = "p"
+
 
 class PostgreSQLProcedureType(Enum):
     """PostgreSQL procedure types."""
-    FUNCTION = 'f'
-    PROCEDURE = 'p'
-    AGGREGATE = 'a'
-    WINDOW = 'w'
+
+    FUNCTION = "f"
+    PROCEDURE = "p"
+    AGGREGATE = "a"
+    WINDOW = "w"
 
 
 @dataclass
 class PostgreSQLPolicyInfo:
     """PostgreSQL RLS policy information."""
+
     name: str
     command: str
     permissive: bool
@@ -381,9 +419,11 @@ class PostgreSQLPolicyInfo:
     qualifier: Optional[str]
     with_check: Optional[str]
 
+
 @dataclass
 class PostgreSQLExtensionInfo:
     """PostgreSQL extension information."""
+
     name: str
     version: str
     schema: str
@@ -393,6 +433,7 @@ class PostgreSQLExtensionInfo:
 @dataclass
 class PostgreSQLViewInfo:
     """PostgreSQL view information."""
+
     name: str
     definition: str
     materialized: bool
@@ -401,9 +442,11 @@ class PostgreSQLViewInfo:
     security_barrier: bool
     security_invoker: bool
 
+
 @dataclass
 class PostgreSQLStatisticsInfo:
     """PostgreSQL column statistics information."""
+
     table_name: str
     column_name: str
     statistics_target: int
@@ -413,56 +456,72 @@ class PostgreSQLStatisticsInfo:
     avg_width: Optional[int]
     correlation: Optional[float]
 
+
 @dataclass
 class PostgreSQLIndexAccess:
     """PostgreSQL index access method information."""
+
     method: IndexMethod
     operator_class: str
     operator_family: Optional[str]
     options: Dict[str, Any]
 
+
 class TextSearchConfiguration(Enum):
     """Text search configuration options."""
-    SIMPLE = 'simple'
-    ENGLISH = 'english'
-    SPANISH = 'spanish'
-    CUSTOM = 'custom'
+
+    SIMPLE = "simple"
+    ENGLISH = "english"
+    SPANISH = "spanish"
+    CUSTOM = "custom"
+
 
 class OperatorStrategy(Enum):
     """Operator optimization strategies."""
+
     SUPPORT = auto()
     RESTRICT = auto()
     JOIN = auto()
     RECHECK = auto()
 
+
 class TriggerTiming(Enum):
     """Event trigger timing options."""
-    BEFORE = 'BEFORE'
-    AFTER = 'AFTER'
-    INSTEAD_OF = 'INSTEAD OF'
+
+    BEFORE = "BEFORE"
+    AFTER = "AFTER"
+    INSTEAD_OF = "INSTEAD OF"
+
 
 class TriggerEvent(Enum):
     """Event trigger types."""
-    DDL_COMMAND_START = 'ddl_command_start'
-    DDL_COMMAND_END = 'ddl_command_end'
-    SQL_DROP = 'sql_drop'
-    TABLE_REWRITE = 'table_rewrite'
+
+    DDL_COMMAND_START = "ddl_command_start"
+    DDL_COMMAND_END = "ddl_command_end"
+    SQL_DROP = "sql_drop"
+    TABLE_REWRITE = "table_rewrite"
+
 
 class FDWValidation(Enum):
     """Foreign data wrapper validation levels."""
-    IMPORT = 'IMPORT FOREIGN SCHEMA'
-    IMPORT_ONLY = 'IMPORT ONLY'
-    NONE = 'NONE'
+
+    IMPORT = "IMPORT FOREIGN SCHEMA"
+    IMPORT_ONLY = "IMPORT ONLY"
+    NONE = "NONE"
+
 
 class ReplicationType(Enum):
     """Publication/subscription replication types."""
-    LOGICAL = 'logical'
-    PHYSICAL = 'physical'
-    NONE = 'none'
+
+    LOGICAL = "logical"
+    PHYSICAL = "physical"
+    NONE = "none"
+
 
 @dataclass
 class TextSearchInfo:
     """PostgreSQL full text search configuration."""
+
     name: str
     parser: str
     configuration: TextSearchConfiguration
@@ -472,9 +531,11 @@ class TextSearchInfo:
     custom_parsers: List[str] = field(default_factory=list)
     weights: Dict[str, float] = field(default_factory=dict)
 
+
 @dataclass
 class OperatorInfo:
     """Custom operator information."""
+
     name: str
     left_arg: str
     right_arg: str
@@ -488,9 +549,11 @@ class OperatorInfo:
     merges: bool = False
     strategies: List[OperatorStrategy] = field(default_factory=list)
 
+
 @dataclass
 class OperatorClassInfo:
     """Operator class information."""
+
     name: str
     index_method: str
     operators: List[OperatorInfo]
@@ -499,9 +562,11 @@ class OperatorClassInfo:
     storage: Optional[str] = None
     family: Optional[str] = None
 
+
 @dataclass
 class EventTriggerInfo:
     """Event trigger configuration."""
+
     name: str
     event: TriggerEvent
     timing: TriggerTiming
@@ -511,29 +576,35 @@ class EventTriggerInfo:
     roles: List[str] = field(default_factory=list)
     tags: List[str] = field(default_factory=list)
 
+
 @dataclass
 class FDWInfo:
     """Foreign data wrapper configuration."""
+
     name: str
     handler: str
     validator: Optional[str] = None
     options: Dict[str, str] = field(default_factory=dict)
     validation: FDWValidation = FDWValidation.NONE
-    servers: List['ForeignServerInfo'] = field(default_factory=list)
+    servers: List["ForeignServerInfo"] = field(default_factory=list)
+
 
 @dataclass
 class ForeignServerInfo:
     """Foreign server configuration."""
+
     name: str
     wrapper: str
     type: Optional[str] = None
     version: Optional[str] = None
     options: Dict[str, str] = field(default_factory=dict)
-    tables: List['ForeignTableInfo'] = field(default_factory=list)
+    tables: List["ForeignTableInfo"] = field(default_factory=list)
+
 
 @dataclass
 class ForeignTableInfo:
     """Foreign table configuration."""
+
     name: str
     server: str
     columns: List[str]
@@ -541,20 +612,24 @@ class ForeignTableInfo:
     constraints: List[str] = field(default_factory=list)
     triggers: List[str] = field(default_factory=list)
 
+
 @dataclass
 class PublicationInfo:
     """Publication configuration for logical replication."""
+
     name: str
     tables: List[str]
     publish_via_partition_root: bool = False
     publish: Set[str] = field(default_factory=set)  # insert, update, delete, truncate
     where_condition: Optional[str] = None
-    owner: str = 'postgres'
+    owner: str = "postgres"
     enabled: bool = True
+
 
 @dataclass
 class SubscriptionInfo:
     """Subscription configuration for logical replication."""
+
     name: str
     conninfo: str
     publications: List[str]
@@ -563,21 +638,25 @@ class SubscriptionInfo:
     copy_data: bool = True
     streaming: bool = False
     slot_name: Optional[str] = None
-    owner: str = 'postgres'
+    owner: str = "postgres"
+
 
 @dataclass
 class PartitioningDetails:
     """Detailed partitioning information."""
+
     strategy: str  # range, list, hash
     key_columns: List[str]
-    partitions: Dict[str, 'PartitionInfo']
-    subpartitioning: Optional['PartitioningDetails'] = None
+    partitions: Dict[str, "PartitionInfo"]
+    subpartitioning: Optional["PartitioningDetails"] = None
     interval: Optional[str] = None
     default_partition: Optional[str] = None
+
 
 @dataclass
 class PartitionInfo:
     """Individual partition information."""
+
     name: str
     strategy: str
     bound_spec: str
@@ -586,68 +665,80 @@ class PartitionInfo:
     indexes: List[str] = field(default_factory=list)
     statistics: Dict[str, Any] = field(default_factory=dict)
 
+
 @dataclass
 class PostgreSQLPartitionInfo:
     """Detailed PostgreSQL partition information."""
+
     strategy: PartitioningStrategy
     key_columns: List[str]
     bounds: Union[List[Any], int]  # for RANGE/LIST or HASH
-    subpartition: Optional['PostgreSQLPartitionInfo']
+    subpartition: Optional["PostgreSQLPartitionInfo"]
     partition_of: Optional[str]
     template: bool
     access_method: Optional[str]
 
+
 class PrivilegeType(Enum):
     """Types of PostgreSQL privileges."""
-    SELECT = 'SELECT'
-    INSERT = 'INSERT'
-    UPDATE = 'UPDATE'
-    DELETE = 'DELETE'
-    TRUNCATE = 'TRUNCATE'
-    REFERENCES = 'REFERENCES'
-    TRIGGER = 'TRIGGER'
-    EXECUTE = 'EXECUTE'
-    USAGE = 'USAGE'
-    CREATE = 'CREATE'
-    CONNECT = 'CONNECT'
-    TEMPORARY = 'TEMPORARY'
-    ALL = 'ALL'
+
+    SELECT = "SELECT"
+    INSERT = "INSERT"
+    UPDATE = "UPDATE"
+    DELETE = "DELETE"
+    TRUNCATE = "TRUNCATE"
+    REFERENCES = "REFERENCES"
+    TRIGGER = "TRIGGER"
+    EXECUTE = "EXECUTE"
+    USAGE = "USAGE"
+    CREATE = "CREATE"
+    CONNECT = "CONNECT"
+    TEMPORARY = "TEMPORARY"
+    ALL = "ALL"
+
 
 class SecurityLabelProvider(Enum):
     """Security label providers."""
-    SELINUX = 'selinux'
-    APPARMOR = 'apparmor'
-    LABEL = 'label'
-    CUSTOM = 'custom'
+
+    SELINUX = "selinux"
+    APPARMOR = "apparmor"
+    LABEL = "label"
+    CUSTOM = "custom"
+
 
 class SSLMode(Enum):
     """SSL connection modes."""
-    DISABLE = 'disable'
-    ALLOW = 'allow'
-    PREFER = 'prefer'
-    REQUIRE = 'require'
-    VERIFY_CA = 'verify-ca'
-    VERIFY_FULL = 'verify-full'
+
+    DISABLE = "disable"
+    ALLOW = "allow"
+    PREFER = "prefer"
+    REQUIRE = "require"
+    VERIFY_CA = "verify-ca"
+    VERIFY_FULL = "verify-full"
+
 
 class AuthMethod(Enum):
     """Authentication methods."""
-    TRUST = 'trust'
-    REJECT = 'reject'
-    MD5 = 'md5'
-    PASSWORD = 'password'
-    SCRAM_SHA_256 = 'scram-sha-256'
-    GSS = 'gss'
-    SSPI = 'sspi'
-    IDENT = 'ident'
-    PEER = 'peer'
-    PAM = 'pam'
-    LDAP = 'ldap'
-    RADIUS = 'radius'
-    CERT = 'cert'
+
+    TRUST = "trust"
+    REJECT = "reject"
+    MD5 = "md5"
+    PASSWORD = "password"
+    SCRAM_SHA_256 = "scram-sha-256"
+    GSS = "gss"
+    SSPI = "sspi"
+    IDENT = "ident"
+    PEER = "peer"
+    PAM = "pam"
+    LDAP = "ldap"
+    RADIUS = "radius"
+    CERT = "cert"
+
 
 @dataclass
 class ColumnPrivilegeInfo:
     """Column-level privilege information."""
+
     table_name: str
     column_name: str
     grantee: str
@@ -657,9 +748,11 @@ class ColumnPrivilegeInfo:
     inherited: bool = False
     with_hierarchy: bool = False
 
+
 @dataclass
 class SecurityLabelInfo:
     """Security label information."""
+
     object_type: str
     object_name: str
     provider: SecurityLabelProvider
@@ -667,9 +760,11 @@ class SecurityLabelInfo:
     comment: Optional[str] = None
     timestamp: Optional[datetime] = None
 
+
 @dataclass
 class SSLInfo:
     """SSL configuration information."""
+
     mode: SSLMode
     cert_file: Optional[str] = None
     key_file: Optional[str] = None
@@ -679,17 +774,21 @@ class SSLInfo:
     verify_host: bool = True
     ciphers: List[str] = field(default_factory=list)
 
+
 @dataclass
 class RoleSettingInfo:
     """Role-specific parameter settings."""
+
     role_name: str
     settings: Dict[str, str] = field(default_factory=dict)
     in_database: Optional[str] = None
     inheritable: bool = True
 
+
 @dataclass
 class ConnectionInfo:
     """Connection and authentication configuration."""
+
     database: str
     user: str
     auth_method: AuthMethod
@@ -698,9 +797,11 @@ class ConnectionInfo:
     options: Dict[str, str] = field(default_factory=dict)
     ssl_required: bool = False
 
+
 @dataclass
 class RolePrivilegeInfo:
     """Comprehensive role privilege information."""
+
     role_name: str
     schema_privileges: Dict[str, Set[PrivilegeType]]
     table_privileges: Dict[str, Set[PrivilegeType]]
@@ -715,9 +816,11 @@ class RolePrivilegeInfo:
     language_privileges: Dict[str, Set[PrivilegeType]]
     large_object_privileges: Dict[str, Set[PrivilegeType]]
 
+
 @dataclass
 class RoleInfo:
     """Role configuration and capabilities."""
+
     name: str
     superuser: bool = False
     inherit: bool = True
@@ -733,9 +836,11 @@ class RoleInfo:
     admin_of: List[str] = field(default_factory=list)
     admins: List[str] = field(default_factory=list)
 
+
 @dataclass
 class PolicyInfo:
     """Row-level security policy information."""
+
     name: str
     table_name: str
     command: str  # SELECT, INSERT, UPDATE, DELETE
@@ -745,6 +850,7 @@ class PolicyInfo:
     with_check: Optional[str] = None
     as_role: Optional[str] = None
     permissive: bool = True
+
 
 class TextSearchConfiguration:
     """Class for managing text search configurations."""
@@ -766,6 +872,7 @@ class TextSearchConfiguration:
 @dataclass
 class TableLockInfo:
     """Information about table locks."""
+
     lock_type: str
     granted: bool
     pid: int
@@ -779,6 +886,7 @@ class TableLockInfo:
 @dataclass
 class CollationInfo:
     """Information about database collations."""
+
     name: str
     locale: str
     provider: str
@@ -790,6 +898,7 @@ class CollationInfo:
 @dataclass
 class AccessMethodInfo:
     """Information about index access methods."""
+
     name: str
     type: str
     handler_function: Optional[str] = None
@@ -800,6 +909,7 @@ class AccessMethodInfo:
 @dataclass
 class AdvancedConstraintInfo:
     """Information about advanced database constraints."""
+
     name: str
     constraint_type: str
     definition: str
@@ -807,6 +917,7 @@ class AdvancedConstraintInfo:
     deferrable: bool = False
     initially_deferred: bool = False
     index_method: Optional[str] = None
+
 
 @dataclass
 class ColumnInfo:
@@ -914,12 +1025,14 @@ class ColumnInfo:
             if not validate_numeric_range(self.precision, min_value=1):
                 errors.append(f"Invalid precision: {self.precision}")
             if self.scale is not None:
-                if not validate_numeric_range(self.scale, min_value=0, max_value=self.precision):
+                if not validate_numeric_range(
+                    self.scale, min_value=0, max_value=self.precision
+                ):
                     errors.append(f"Invalid scale: {self.scale}")
 
         # Validate foreign key reference format
         if self.foreign_key:
-            if '.' not in self.foreign_key or len(self.foreign_key.split('.')) != 2:
+            if "." not in self.foreign_key or len(self.foreign_key.split(".")) != 2:
                 errors.append(f"Invalid foreign key reference: {self.foreign_key}")
 
         # Validate enum values
@@ -952,14 +1065,14 @@ class ColumnInfo:
         base_type = get_sqlalchemy_type_name(self.type_name)
 
         # Add type parameters if needed
-        if base_type == 'String' and self.max_length:
-            return f'String(length={self.max_length})'
-        elif base_type == 'Numeric' and self.precision:
+        if base_type == "String" and self.max_length:
+            return f"String(length={self.max_length})"
+        elif base_type == "Numeric" and self.precision:
             if self.scale is not None:
-                return f'Numeric(precision={self.precision}, scale={self.scale})'
-            return f'Numeric(precision={self.precision})'
-        elif base_type == 'Enum' and self.enum_values:
-            values = ', '.join(repr(v) for v in self.enum_values)
+                return f"Numeric(precision={self.precision}, scale={self.scale})"
+            return f"Numeric(precision={self.precision})"
+        elif base_type == "Enum" and self.enum_values:
+            values = ", ".join(repr(v) for v in self.enum_values)
             return f'Enum({values}, name="{self.name}_enum")'
 
         return base_type
@@ -981,41 +1094,41 @@ class ColumnInfo:
             }
         """
         args = {
-            'name': self.name,
-            'type_': self.get_sqlalchemy_type(),
-            'primary_key': self.primary_key,
-            'nullable': self.nullable and not self.primary_key,
+            "name": self.name,
+            "type_": self.get_sqlalchemy_type(),
+            "primary_key": self.primary_key,
+            "nullable": self.nullable and not self.primary_key,
         }
 
         if self.default is not None:
-            args['default'] = self.default
+            args["default"] = self.default
 
         if self.unique:
-            args['unique'] = True
+            args["unique"] = True
 
         if self.comment:
-            args['comment'] = self.comment
+            args["comment"] = self.comment
 
         if self.auto_increment != AutoIncrementType.NONE:
-            args['autoincrement'] = True
+            args["autoincrement"] = True
 
         if self.foreign_key:
-            args['foreign_key'] = self.foreign_key
+            args["foreign_key"] = self.foreign_key
 
         if self.on_update:
-            args['onupdate'] = self.on_update.value
+            args["onupdate"] = self.on_update.value
 
         if self.on_delete:
-            args['ondelete'] = self.on_delete.value
+            args["ondelete"] = self.on_delete.value
 
         if self.check_constraints:
-            args['check_constraint'] = ' AND '.join(self.check_constraints)
+            args["check_constraint"] = " AND ".join(self.check_constraints)
 
         if self.collation:
-            args['collation'] = self.collation
+            args["collation"] = self.collation
 
         if self.generated:
-            args['computed'] = self.generated
+            args["computed"] = self.generated
 
         return args
 
@@ -1031,7 +1144,7 @@ class ColumnInfo:
             >>> column.is_array_type()
             True
         """
-        return self.type_name.endswith('[]')
+        return self.type_name.endswith("[]")
 
     def is_numeric_type(self) -> bool:
         """
@@ -1046,8 +1159,15 @@ class ColumnInfo:
             True
         """
         numeric_types = {
-            'smallint', 'integer', 'bigint', 'decimal', 'numeric',
-            'real', 'double precision', 'serial', 'bigserial'
+            "smallint",
+            "integer",
+            "bigint",
+            "decimal",
+            "numeric",
+            "real",
+            "double precision",
+            "serial",
+            "bigserial",
         }
         return self.type_name.lower() in numeric_types
 
@@ -1064,8 +1184,12 @@ class ColumnInfo:
             True
         """
         text_types = {
-            'char', 'varchar', 'text', 'citext',
-            'character varying', 'character'
+            "char",
+            "varchar",
+            "text",
+            "citext",
+            "character varying",
+            "character",
         }
         return self.type_name.lower() in text_types
 
@@ -1084,6 +1208,7 @@ class ColumnInfo:
 
         return " ".join(parts)
 
+
 """
 core/context.py: Foreign Key information dataclass.
 
@@ -1097,9 +1222,9 @@ License: MIT
 """
 
 
-
 class ReferentialAction(Enum):
     """Enumeration of possible referential actions for foreign keys."""
+
     NO_ACTION = "NO ACTION"
     RESTRICT = "RESTRICT"
     CASCADE = "CASCADE"
@@ -1109,6 +1234,7 @@ class ReferentialAction(Enum):
 
 class MatchType(Enum):
     """Enumeration of foreign key match types."""
+
     SIMPLE = "SIMPLE"
     FULL = "FULL"
     PARTIAL = "PARTIAL"
@@ -1116,6 +1242,7 @@ class MatchType(Enum):
 
 class DeferrableType(Enum):
     """Enumeration of constraint deferrable types."""
+
     NOT_DEFERRABLE = "NOT DEFERRABLE"
     IMMEDIATE = "DEFERRABLE INITIALLY IMMEDIATE"
     DEFERRED = "DEFERRABLE INITIALLY DEFERRED"
@@ -1230,17 +1357,18 @@ class ForeignKeyInfo:
         """
         # Create base name from columns and tables
         parts = []
-        parts.append('fk')
+        parts.append("fk")
         parts.extend(self.constrained_columns)
         parts.append(self.referred_table)
 
         # Convert to snake case and join
-        name = '_'.join(to_snake_case(part) for part in parts)
+        name = "_".join(to_snake_case(part) for part in parts)
 
         # Ensure name length is reasonable
         if len(name) > 63:  # PostgreSQL identifier limit
             # Hash the full name and use first part + hash
             import hashlib
+
             hash_suffix = hashlib.md5(name.encode()).hexdigest()[:8]
             name = f"{name[:50]}_{hash_suffix}"
 
@@ -1264,17 +1392,19 @@ class ForeignKeyInfo:
             }
         """
         args = {
-            'name': self.name,
-            'onupdate': self.on_update.value,
-            'ondelete': self.on_delete.value,
-            'deferrable': self.deferrable != DeferrableType.NOT_DEFERRABLE,
-            'initially': 'DEFERRED' if self.deferrable == DeferrableType.DEFERRED else 'IMMEDIATE',
-            'match': self.match_type.value,
-            'use_alter': True  # Better for handling circular dependencies
+            "name": self.name,
+            "onupdate": self.on_update.value,
+            "ondelete": self.on_delete.value,
+            "deferrable": self.deferrable != DeferrableType.NOT_DEFERRABLE,
+            "initially": "DEFERRED"
+            if self.deferrable == DeferrableType.DEFERRED
+            else "IMMEDIATE",
+            "match": self.match_type.value,
+            "use_alter": True,  # Better for handling circular dependencies
         }
 
         if self.comment:
-            args['comment'] = self.comment
+            args["comment"] = self.comment
 
         return args
 
@@ -1320,7 +1450,7 @@ class ForeignKeyInfo:
         # Basic name generation - could be made more sophisticated
         if len(self.constrained_columns) == 1:
             base = self.constrained_columns[0]
-            if base.endswith('_id'):
+            if base.endswith("_id"):
                 base = base[:-3]
             return f"{base}_references"
         return f"{self.referred_table}_references"
@@ -1346,7 +1476,7 @@ class ForeignKeyInfo:
             f"FOREIGN KEY ({', '.join(self.constrained_columns)})",
             f"REFERENCES {self.referred_table} ({', '.join(self.referred_columns)})",
             f"ON UPDATE {self.on_update.value}",
-            f"ON DELETE {self.on_delete.value}"
+            f"ON DELETE {self.on_delete.value}",
         ]
 
         if self.match_type != MatchType.SIMPLE:
@@ -1365,7 +1495,6 @@ class ForeignKeyInfo:
         return f"FK {', '.join(self.constrained_columns)} -> {self.referred_table}({', '.join(self.referred_columns)})"
 
 
-
 @dataclass
 class IndexColumnInfo:
     """
@@ -1378,6 +1507,7 @@ class IndexColumnInfo:
         collation (Optional[str]): Collation for the column
         opclass (Optional[str]): Operator class for the column
     """
+
     name: str
     ascending: bool = True
     nulls_order: NullsOrder = NullsOrder.DEFAULT
@@ -1397,14 +1527,17 @@ class IndexColumnInfo:
             parts.append(self.opclass)
         return " ".join(parts)
 
+
 class IndexAlgorithm(Enum):
     """Supported index algorithms."""
-    DEFAULT = 'DEFAULT'
-    CONCURRENTLY = 'CONCURRENTLY'
-    BTREE = 'BTREE'
-    HASH = 'HASH'
-    GIST = 'GIST'
-    GIN = 'GIN'
+
+    DEFAULT = "DEFAULT"
+    CONCURRENTLY = "CONCURRENTLY"
+    BTREE = "BTREE"
+    HASH = "HASH"
+    GIST = "GIST"
+    GIN = "GIN"
+
 
 @dataclass
 class IndexInfo:
@@ -1453,10 +1586,11 @@ class IndexInfo:
     storage_parameters: Dict[str, Any] = field(default_factory=dict)
 
     # PostgreSQL specific attributes
-    access_method: PostgreSQLIndexAccess = field(default_factory=lambda: PostgreSQLIndexAccess(
-        method=IndexMethod.BTREE,
-        operator_class='default'
-    ))
+    access_method: PostgreSQLIndexAccess = field(
+        default_factory=lambda: PostgreSQLIndexAccess(
+            method=IndexMethod.BTREE, operator_class="default"
+        )
+    )
     recheck_cond: Optional[str] = None
     clustering: bool = False
     nulls_distinct: bool = True
@@ -1543,30 +1677,27 @@ class IndexInfo:
                 'postgresql_using': 'btree'
             }
         """
-        args = {
-            'name': self.name,
-            'unique': self.is_unique
-        }
+        args = {"name": self.name, "unique": self.is_unique}
 
         # Add method if not btree
         if self.method != IndexMethod.BTREE:
-            args['postgresql_using'] = self.method.value
+            args["postgresql_using"] = self.method.value
 
         # Add tablespace if specified
         if self.tablespace:
-            args['postgresql_tablespace'] = self.tablespace
+            args["postgresql_tablespace"] = self.tablespace
 
         # Add partial index clause
         if self.where_clause:
-            args['postgresql_where'] = self.where_clause
+            args["postgresql_where"] = self.where_clause
 
         # Add storage parameters
         if self.storage_parameters:
-            args['postgresql_with'] = self.storage_parameters
+            args["postgresql_with"] = self.storage_parameters
 
         # Add included columns
         if self.include_columns:
-            args['postgresql_include'] = self.include_columns
+            args["postgresql_include"] = self.include_columns
 
         return args
 
@@ -1616,7 +1747,7 @@ class IndexInfo:
         if self.storage_parameters or self.fillfactor:
             params = self.storage_parameters.copy()
             if self.fillfactor:
-                params['fillfactor'] = self.fillfactor
+                params["fillfactor"] = self.fillfactor
             param_strs = [f"{k}={v}" for k, v in params.items()]
             parts.append(f"WITH ({', '.join(param_strs)})")
 
@@ -1696,9 +1827,6 @@ class IndexInfo:
         return f"{prefix}INDEX {self.name} ON ({cols})"
 
 
-
-
-
 @dataclass
 class ExclusionElement:
     """
@@ -1709,6 +1837,7 @@ class ExclusionElement:
         operator (ExclusionOperator): Comparison operator
         opclass (Optional[str]): Optional operator class
     """
+
     column: str
     operator: ExclusionOperator
     opclass: Optional[str] = None
@@ -1863,41 +1992,43 @@ class ConstraintInfo:
                 'columns': ['email']
             }
         """
-        args = {
-            'name': self.name
-        }
+        args = {"name": self.name}
 
         if self.constraint_type == ConstraintType.UNIQUE:
-            args['unique'] = True
-            args['columns'] = self.columns
+            args["unique"] = True
+            args["columns"] = self.columns
             if self.using_method:
-                args['postgresql_using'] = self.using_method
+                args["postgresql_using"] = self.using_method
             if self.nulls_not_distinct:
-                args['postgresql_nulls_not_distinct'] = True
+                args["postgresql_nulls_not_distinct"] = True
 
         elif self.constraint_type == ConstraintType.CHECK:
-            args['check'] = True
-            args['sqltext'] = self.definition
+            args["check"] = True
+            args["sqltext"] = self.definition
 
         elif self.constraint_type == ConstraintType.PRIMARY_KEY:
-            args['primary_key'] = True
-            args['columns'] = self.columns
+            args["primary_key"] = True
+            args["columns"] = self.columns
 
         elif self.constraint_type == ConstraintType.EXCLUDE:
-            args['postgresql_exclude'] = self.get_exclusion_definition()
+            args["postgresql_exclude"] = self.get_exclusion_definition()
             if self.using_method:
-                args['postgresql_using'] = self.using_method
+                args["postgresql_using"] = self.using_method
 
         # Common options
         if self.deferrable != DeferrableStatus.NOT_DEFERRABLE:
-            args['deferrable'] = True
-            args['initially'] = 'DEFERRED' if self.deferrable == DeferrableStatus.DEFERRED else 'IMMEDIATE'
+            args["deferrable"] = True
+            args["initially"] = (
+                "DEFERRED"
+                if self.deferrable == DeferrableStatus.DEFERRED
+                else "IMMEDIATE"
+            )
 
         if self.index_tablespace:
-            args['postgresql_tablespace'] = self.index_tablespace
+            args["postgresql_tablespace"] = self.index_tablespace
 
         if self.include_columns:
-            args['postgresql_include'] = self.include_columns
+            args["postgresql_include"] = self.include_columns
 
         return args
 
@@ -1913,10 +2044,7 @@ class ConstraintInfo:
             >>> print(const.get_create_statement())
             ALTER TABLE {table_name} ADD CONSTRAINT uk_email UNIQUE (email);
         """
-        parts = [
-            "ADD CONSTRAINT",
-            self.name
-        ]
+        parts = ["ADD CONSTRAINT", self.name]
 
         # Main constraint definition
         if self.constraint_type == ConstraintType.CHECK:
@@ -1988,7 +2116,7 @@ class ConstraintInfo:
             ConstraintType.UNIQUE,
             ConstraintType.PRIMARY_KEY,
             ConstraintType.FOREIGN_KEY,
-            ConstraintType.EXCLUDE
+            ConstraintType.EXCLUDE,
         }
 
     def requires_index(self) -> bool:
@@ -2006,7 +2134,7 @@ class ConstraintInfo:
         return self.constraint_type in {
             ConstraintType.UNIQUE,
             ConstraintType.PRIMARY_KEY,
-            ConstraintType.EXCLUDE
+            ConstraintType.EXCLUDE,
         }
 
     def __str__(self) -> str:
@@ -2015,10 +2143,6 @@ class ConstraintInfo:
         if self.columns:
             constraint_desc += f" ({', '.join(self.columns)})"
         return f"{self.name}: {constraint_desc}"
-
-
-
-
 
 
 @dataclass
@@ -2031,6 +2155,7 @@ class PartitionBoundSpec:
         columns (List[str]): Columns used for partitioning
         bounds (Union[List[Any], int]): Boundary values or modulus
     """
+
     strategy: PartitioningStrategy
     columns: List[str]
     bounds: Union[List[Any], int]
@@ -2059,6 +2184,7 @@ class InheritanceInfo:
         constraints (List[str]): Inherited constraints
         storage_params (Dict[str, Any]): Inherited storage params
     """
+
     parent_table: str
     columns: List[str] = field(default_factory=list)
     constraints: List[str] = field(default_factory=list)
@@ -2075,9 +2201,11 @@ class TablespaceInfo:
         options (Dict[str, Any]): Tablespace options
         index_tablespace (Optional[str]): Separate tablespace for indexes
     """
+
     name: str
     options: Dict[str, Any] = field(default_factory=dict)
     index_tablespace: Optional[str] = None
+
 
 def _format_storage_params(params: Dict[str, Any]) -> str:
     """Format storage parameters for SQL output."""
@@ -2093,13 +2221,9 @@ def _format_storage_params(params: Dict[str, Any]) -> str:
     return f"WITH ({', '.join(param_strs)})"
 
 
-
-
-
-
-
 class RelationshipType(Enum):
     """Enumeration of supported relationship types."""
+
     ONE_TO_ONE = "one_to_one"
     ONE_TO_MANY = "one_to_many"
     MANY_TO_ONE = "many_to_one"
@@ -2112,6 +2236,7 @@ class RelationshipType(Enum):
 
 class CascadeOption(Enum):
     """Enumeration of SQLAlchemy cascade options."""
+
     SAVE_UPDATE = "save-update"
     DELETE = "delete"
     DELETE_ORPHAN = "delete-orphan"
@@ -2123,6 +2248,7 @@ class CascadeOption(Enum):
 
 class LazyLoadOption(Enum):
     """Enumeration of SQLAlchemy lazy loading options."""
+
     SELECT = "select"
     JOINED = "joined"
     SUBQUERY = "subquery"
@@ -2136,6 +2262,7 @@ class LazyLoadOption(Enum):
 
 class JoinType(Enum):
     """Enumeration of join types."""
+
     INNER = "INNER"
     LEFT = "LEFT"
     RIGHT = "RIGHT"
@@ -2154,6 +2281,7 @@ class JoinCondition:
         join_type (JoinType): Type of join
         where_clause (Optional[str]): Additional WHERE clause
     """
+
     local_column: str
     remote_column: str
     operator: str = "=="
@@ -2163,6 +2291,7 @@ class JoinCondition:
     def __str__(self) -> str:
         """Return string representation of join condition."""
         return f"{self.local_column} {self.operator} {self.remote_column}"
+
 
 @dataclass
 class TableInfo:
@@ -2196,16 +2325,17 @@ class TableInfo:
         triggers (List[str]): Trigger names
         grants (Dict[str, List[str]]): Access grants by role
     """
+
     name: str
     schema: str = "public"
     type: TableType = TableType.REGULAR
 
     # Structure
-    columns: List['ColumnInfo'] = field(default_factory=list)
+    columns: List["ColumnInfo"] = field(default_factory=list)
     primary_key: List[str] = field(default_factory=list)
-    foreign_keys: List['ForeignKeyInfo'] = field(default_factory=list)
-    indexes: List['IndexInfo'] = field(default_factory=list)
-    constraints: List['ConstraintInfo'] = field(default_factory=list)
+    foreign_keys: List["ForeignKeyInfo"] = field(default_factory=list)
+    indexes: List["IndexInfo"] = field(default_factory=list)
+    constraints: List["ConstraintInfo"] = field(default_factory=list)
     comment: Optional[str] = None
 
     # Storage and organization
@@ -2239,7 +2369,6 @@ class TableInfo:
     view_info: Optional[PostgreSQLViewInfo] = None
     partition_info: Optional[PostgreSQLPartitionInfo] = None
     vacuum_settings: Dict[str, Any] = field(default_factory=dict)
-
 
     def __post_init__(self):
         """
@@ -2315,11 +2444,16 @@ class TableInfo:
             if self.partition_of:
                 errors.append("Table cannot be both inherited and a partition")
             if not validate_table_name(self.inheritance.parent_table):
-                errors.append(f"Invalid parent table name: {self.inheritance.parent_table}")
+                errors.append(
+                    f"Invalid parent table name: {self.inheritance.parent_table}"
+                )
 
         # Validate statistics target
         if self.statistics_target is not None:
-            if not isinstance(self.statistics_target, int) or self.statistics_target < 0:
+            if (
+                not isinstance(self.statistics_target, int)
+                or self.statistics_target < 0
+            ):
                 errors.append(f"Invalid statistics target: {self.statistics_target}")
 
         # Validate tablespace
@@ -2328,7 +2462,9 @@ class TableInfo:
                 errors.append(f"Invalid tablespace name: {self.tablespace.name}")
             if self.tablespace.index_tablespace:
                 if not validate_table_name(self.tablespace.index_tablespace):
-                    errors.append(f"Invalid index tablespace name: {self.tablespace.index_tablespace}")
+                    errors.append(
+                        f"Invalid index tablespace name: {self.tablespace.index_tablespace}"
+                    )
 
         # Storage parameter validation
         for param in self.storage_params:
@@ -2380,10 +2516,8 @@ class TableInfo:
             >>> table.has_identity_column()
             True
         """
-        return any(
-            col.auto_increment != AutoIncrementType.NONE
-            for col in self.columns
-        )
+        return any(col.auto_increment != AutoIncrementType.NONE for col in self.columns)
+
     def get_create_statement(self) -> str:
         """
         Generate CREATE TABLE statement.
@@ -2463,7 +2597,7 @@ class TableInfo:
 
         return " ".join(parts) + ";"
 
-    def _get_sql_column_definition(self, column: 'ColumnInfo') -> str:
+    def _get_sql_column_definition(self, column: "ColumnInfo") -> str:
         """
         Generate SQL DDL column definition.
 
@@ -2512,36 +2646,36 @@ class TableInfo:
             'single_column'
         """
         analysis = {
-            'table_type': self.type.value,
-            'column_count': len(self.columns),
-            'has_identity': self.has_identity_column(),
-            'has_nullable_columns': any(col.nullable for col in self.columns),
-            'primary_key_type': self._analyze_primary_key(),
-            'foreign_key_count': len(self.foreign_keys),
-            'index_count': len(self.indexes),
-            'is_partitioned': bool(self.partition_key),
-            'is_partition': bool(self.partition_of),
-            'has_inheritance': bool(self.inheritance),
-            'has_row_security': self.row_security,
-            'column_types': self._analyze_column_types(),
-            'constraint_types': self._analyze_constraints(),
-            'index_types': self._analyze_indexes(),
-            'storage_size': self._estimate_storage_size()
+            "table_type": self.type.value,
+            "column_count": len(self.columns),
+            "has_identity": self.has_identity_column(),
+            "has_nullable_columns": any(col.nullable for col in self.columns),
+            "primary_key_type": self._analyze_primary_key(),
+            "foreign_key_count": len(self.foreign_keys),
+            "index_count": len(self.indexes),
+            "is_partitioned": bool(self.partition_key),
+            "is_partition": bool(self.partition_of),
+            "has_inheritance": bool(self.inheritance),
+            "has_row_security": self.row_security,
+            "column_types": self._analyze_column_types(),
+            "constraint_types": self._analyze_constraints(),
+            "index_types": self._analyze_indexes(),
+            "storage_size": self._estimate_storage_size(),
         }
 
         # Additional security analysis
-        analysis['security'] = {
-            'has_row_security': self.row_security,
-            'force_row_security': self.force_row_security,
-            'grants': self.grants.copy() if self.grants else {},
-            'has_column_grants': any(
-                col.name in (grant for grants in self.grants.values() for grant in grants)
+        analysis["security"] = {
+            "has_row_security": self.row_security,
+            "force_row_security": self.force_row_security,
+            "grants": self.grants.copy() if self.grants else {},
+            "has_column_grants": any(
+                col.name
+                in (grant for grants in self.grants.values() for grant in grants)
                 for col in self.columns
-            )
+            ),
         }
 
         return analysis
-
 
     def _analyze_foreign_keys(self) -> Dict[str, int]:
         """
@@ -2552,23 +2686,23 @@ class TableInfo:
         """
         fk_actions = {}
         for fk in self.foreign_keys:
-            action = fk.on_delete or 'NO ACTION'  # Default to 'NO ACTION' if None
+            action = fk.on_delete or "NO ACTION"  # Default to 'NO ACTION' if None
             fk_actions[action] = fk_actions.get(action, 0) + 1
         return fk_actions
 
     def _analyze_primary_key(self) -> str:
         """Analyze primary key configuration."""
         if not self.primary_key:
-            return 'none'
+            return "none"
         elif len(self.primary_key) == 1:
-            return 'single_column'
-        return 'composite'
+            return "single_column"
+        return "composite"
 
     def _analyze_column_types(self) -> Dict[str, int]:
         """Count usage of each column type."""
         type_counts = {}
         for col in self.columns:
-            base_type = col.type_name.split('(')[0].lower()
+            base_type = col.type_name.split("(")[0].lower()
             type_counts[base_type] = type_counts.get(base_type, 0) + 1
         return type_counts
 
@@ -2597,19 +2731,19 @@ class TableInfo:
         for col in self.columns:
             # Get base size for type
             base_size = {
-                'smallint': 2,
-                'integer': 4,
-                'bigint': 8,
-                'double': 8,
-                'text': 32,  # Average text size
-                'varchar': min(col.max_length or 255, 255),
-                'timestamp': 8,
-                'date': 4,
-                'boolean': 1,
-                'uuid': 16,
-                'json': 100,  # Average JSON size
-                'jsonb': 100,
-                'bytea': 100,  # Average BYTEA size
+                "smallint": 2,
+                "integer": 4,
+                "bigint": 8,
+                "double": 8,
+                "text": 32,  # Average text size
+                "varchar": min(col.max_length or 255, 255),
+                "timestamp": 8,
+                "date": 4,
+                "boolean": 1,
+                "uuid": 16,
+                "json": 100,  # Average JSON size
+                "jsonb": 100,
+                "bytea": 100,  # Average BYTEA size
             }.get(col.type_name.lower(), 8)  # Default to 8 bytes
 
             # Adjust for NULL storage
@@ -2623,7 +2757,6 @@ class TableInfo:
         total_bytes += len(self.columns) * 4  # Alignment padding
 
         return total_bytes
-
 
     def get_sqlalchemy_model(self) -> str:
         """
@@ -2652,7 +2785,9 @@ class TableInfo:
         parts.append(f"class {model_name}(Model):")
 
         # Add docstring
-        docstring = f'"""\n{self.comment or "SQLAlchemy model for " + self.name} table.\n\n'
+        docstring = (
+            f'"""\n{self.comment or "SQLAlchemy model for " + self.name} table.\n\n'
+        )
         docstring += "Attributes:\n"
         for col in self.columns:
             docstring += f"    {col.name} ({col.get_sqlalchemy_type()}): "
@@ -2662,7 +2797,7 @@ class TableInfo:
 
         # Table configuration
         parts.append(f"    __tablename__ = '{self.name}'")
-        if self.schema != 'public':
+        if self.schema != "public":
             parts.append(f"    __schema__ = '{self.schema}'")
 
         # Table arguments
@@ -2677,7 +2812,9 @@ class TableInfo:
         # Columns
         parts.append("")  # Empty line before columns
         for col in self.columns:
-            parts.append(f"    {col.name} = {self._get_sqlalchemy_column_definition(col)}")
+            parts.append(
+                f"    {col.name} = {self._get_sqlalchemy_column_definition(col)}"
+            )
 
         # Relationships
         if self.foreign_keys:
@@ -2701,7 +2838,7 @@ class TableInfo:
         args = []
 
         # Add schema
-        if self.schema != 'public':
+        if self.schema != "public":
             args.append(f"schema='{self.schema}'")
 
         # Add constraints
@@ -2732,7 +2869,7 @@ class TableInfo:
         # Return formatted arguments
         return ["{" + ", ".join(args) + "}"] if args else []
 
-    def _get_sqlalchemy_column_definition(self, column: 'ColumnInfo') -> str:
+    def _get_sqlalchemy_column_definition(self, column: "ColumnInfo") -> str:
         """
         Generate SQLAlchemy Column() definition.
 
@@ -2774,7 +2911,9 @@ class TableInfo:
 
         return f"Column({', '.join(args)})"
 
-    def _get_foreign_key_for_column(self, column_name: str) -> Optional['ForeignKeyInfo']:
+    def _get_foreign_key_for_column(
+        self, column_name: str
+    ) -> Optional["ForeignKeyInfo"]:
         """Find foreign key constraint for a column."""
         for fk in self.foreign_keys:
             if column_name in fk.constrained_columns:
@@ -2812,24 +2951,21 @@ class TableInfo:
                 ]
                 args.append(f"primaryjoin=and_({', '.join(join_cols)})")
 
-            relationships.append(
-                f"{rel_name} = relationship({', '.join(args)})"
-            )
+            relationships.append(f"{rel_name} = relationship({', '.join(args)})")
 
         return relationships
 
-    def _get_relationship_name(self, fk: 'ForeignKeyInfo') -> str:
+    def _get_relationship_name(self, fk: "ForeignKeyInfo") -> str:
         """Generate appropriate relationship name."""
         # Use configured naming template
         template = self.config.relationships.relationship_naming_template
 
         # Determine relationship type
-        rel_type = 'one_to_many' if len(fk.referred_columns) == 1 else 'many_to_many'
+        rel_type = "one_to_many" if len(fk.referred_columns) == 1 else "many_to_many"
 
         # Apply template
         name = template.format(
-            tablename=to_snake_case(fk.referred_table),
-            reltype=rel_type
+            tablename=to_snake_case(fk.referred_table), reltype=rel_type
         )
 
         return name
@@ -2842,37 +2978,43 @@ class TableInfo:
         for col in self.columns:
             if col.generated:
                 prop_name = f"{col.name}_computed"
-                properties.extend([
-                    "    @hybrid_property",
-                    f"    def {prop_name}(self):",
-                    f"        return {col.generated}"
-                ])
+                properties.extend(
+                    [
+                        "    @hybrid_property",
+                        f"    def {prop_name}(self):",
+                        f"        return {col.generated}",
+                    ]
+                )
 
         # Add custom properties based on column types
         for col in self.columns:
-            if col.type_name.lower() == 'jsonb':
+            if col.type_name.lower() == "jsonb":
                 properties.extend(self._generate_jsonb_properties(col))
 
         return properties
 
-    def _generate_jsonb_properties(self, column: 'ColumnInfo') -> List[str]:
+    def _generate_jsonb_properties(self, column: "ColumnInfo") -> List[str]:
         """Generate convenience properties for JSONB columns."""
         properties = []
         prop_base = to_snake_case(column.name)
 
         # Add keys() property
-        properties.extend([
-            "    @hybrid_property",
-            f"    def {prop_base}_keys(self):",
-            f"        return list(self.{column.name}.keys()) if self.{column.name} else []"
-        ])
+        properties.extend(
+            [
+                "    @hybrid_property",
+                f"    def {prop_base}_keys(self):",
+                f"        return list(self.{column.name}.keys()) if self.{column.name} else []",
+            ]
+        )
 
         # Add convenience methods for common operations
-        properties.extend([
-            "    @hybrid_method",
-            f"    def get_{prop_base}(self, key, default=None):",
-            f"        return self.{column.name}.get(key, default) if self.{column.name} else default"
-        ])
+        properties.extend(
+            [
+                "    @hybrid_method",
+                f"    def get_{prop_base}(self, key, default=None):",
+                f"        return self.{column.name}.get(key, default) if self.{column.name} else default",
+            ]
+        )
 
         return properties
 
@@ -2881,31 +3023,37 @@ class TableInfo:
         methods = []
 
         # Add __repr__ method
-        methods.extend([
-            "",
-            "    def __repr__(self) -> str:",
-            f"        return f\"{self.get_model_name()}({self._get_repr_attributes()})\"",
-        ])
+        methods.extend(
+            [
+                "",
+                "    def __repr__(self) -> str:",
+                f'        return f"{self.get_model_name()}({self._get_repr_attributes()})"',
+            ]
+        )
 
         # Add to_dict method
-        methods.extend([
-            "",
-            "    def to_dict(self) -> Dict[str, Any]:",
-            "        return {",
-            "            " + ",\n            ".join(
-                f"'{col.name}': self.{col.name}"
-                for col in self.columns
-            ),
-            "        }"
-        ])
+        methods.extend(
+            [
+                "",
+                "    def to_dict(self) -> Dict[str, Any]:",
+                "        return {",
+                "            "
+                + ",\n            ".join(
+                    f"'{col.name}': self.{col.name}" for col in self.columns
+                ),
+                "        }",
+            ]
+        )
 
         # Add class-level methods
-        methods.extend([
-            "",
-            "    @classmethod",
-            "    def get_by_id(cls, session: Session, id: Any) -> Optional['User']:",
-            "        return session.query(cls).get(id)"
-        ])
+        methods.extend(
+            [
+                "",
+                "    @classmethod",
+                "    def get_by_id(cls, session: Session, id: Any) -> Optional['User']:",
+                "        return session.query(cls).get(id)",
+            ]
+        )
 
         return methods
 
@@ -2917,7 +3065,7 @@ class TableInfo:
             attrs.append(f"{pk}={{self.{pk}}}")
 
         # Add a few identifying columns if they exist
-        ident_columns = {'name', 'title', 'email', 'username', 'code'}
+        ident_columns = {"name", "title", "email", "username", "code"}
         for col in self.columns:
             if col.name in ident_columns:
                 attrs.append(f"{col.name}={{self.{col.name}}}")
@@ -2968,13 +3116,16 @@ class Relationship:
         enable_typechecks (bool): Enable polymorphic type checking
         overlaps (Optional[str]): Related attribute name that overlaps
     """
+
     source_table: str
     target_table: str
     relationship_type: RelationshipType
     foreign_keys: List[str]
     backref_name: Optional[str] = None
     is_nullable: bool = True
-    cascade_options: List[CascadeOption] = field(default_factory=lambda: [CascadeOption.SAVE_UPDATE])
+    cascade_options: List[CascadeOption] = field(
+        default_factory=lambda: [CascadeOption.SAVE_UPDATE]
+    )
     lazy_load: LazyLoadOption = LazyLoadOption.SELECT
     join_conditions: List[JoinCondition] = field(default_factory=list)
     secondary_table: Optional[str] = None
@@ -3017,7 +3168,7 @@ class Relationship:
                 RelationshipType.ONE_TO_MANY,
                 RelationshipType.MANY_TO_MANY,
                 RelationshipType.ONE_TO_MANY_POLYMORPHIC,
-                RelationshipType.MANY_TO_MANY_POLYMORPHIC
+                RelationshipType.MANY_TO_MANY_POLYMORPHIC,
             }
 
         # Create default join conditions if none provided
@@ -3057,8 +3208,10 @@ class Relationship:
             errors.append(f"Invalid backref name: {self.backref_name}")
 
         # Validate many-to-many configuration
-        if self.relationship_type in {RelationshipType.MANY_TO_MANY,
-                                    RelationshipType.MANY_TO_MANY_POLYMORPHIC}:
+        if self.relationship_type in {
+            RelationshipType.MANY_TO_MANY,
+            RelationshipType.MANY_TO_MANY_POLYMORPHIC,
+        }:
             if not self.secondary_table:
                 errors.append("Many-to-many relationship requires secondary table")
             elif not validate_table_name(self.secondary_table):
@@ -3067,9 +3220,13 @@ class Relationship:
         # Validate join conditions
         for join in self.join_conditions:
             if not validate_column_name(join.local_column):
-                errors.append(f"Invalid local column in join condition: {join.local_column}")
+                errors.append(
+                    f"Invalid local column in join condition: {join.local_column}"
+                )
             if not validate_column_name(join.remote_column):
-                errors.append(f"Invalid remote column in join condition: {join.remote_column}")
+                errors.append(
+                    f"Invalid remote column in join condition: {join.remote_column}"
+                )
 
         # Validate remote side columns
         for col in self.remote_side:
@@ -3081,8 +3238,10 @@ class Relationship:
 
     def _get_default_cascade_options(self) -> List[CascadeOption]:
         """Get default cascade options based on relationship type."""
-        if self.relationship_type in {RelationshipType.ONE_TO_MANY,
-                                    RelationshipType.ONE_TO_MANY_POLYMORPHIC}:
+        if self.relationship_type in {
+            RelationshipType.ONE_TO_MANY,
+            RelationshipType.ONE_TO_MANY_POLYMORPHIC,
+        }:
             return [CascadeOption.ALL, CascadeOption.DELETE_ORPHAN]
         return [CascadeOption.SAVE_UPDATE]
 
@@ -3090,11 +3249,13 @@ class Relationship:
         """Create default join conditions based on foreign keys."""
         conditions = []
         for fk in self.foreign_keys:
-            conditions.append(JoinCondition(
-                local_column=fk,
-                remote_column=fk.replace('_id', ''),
-                join_type=JoinType.INNER
-            ))
+            conditions.append(
+                JoinCondition(
+                    local_column=fk,
+                    remote_column=fk.replace("_id", ""),
+                    join_type=JoinType.INNER,
+                )
+            )
         return conditions
 
     def get_relationship_name(self) -> str:
@@ -3112,7 +3273,7 @@ class Relationship:
         base_name = to_snake_case(self.target_table)
         if not self.uselist:
             return base_name
-        return f"{base_name}s" if not base_name.endswith('s') else base_name
+        return f"{base_name}s" if not base_name.endswith("s") else base_name
 
     def get_backref_name(self) -> str:
         """
@@ -3130,9 +3291,11 @@ class Relationship:
             return self.backref_name
 
         base_name = to_snake_case(self.source_table)
-        if self.relationship_type in {RelationshipType.MANY_TO_ONE,
-                                    RelationshipType.MANY_TO_ONE_POLYMORPHIC}:
-            return f"{base_name}s" if not base_name.endswith('s') else base_name
+        if self.relationship_type in {
+            RelationshipType.MANY_TO_ONE,
+            RelationshipType.MANY_TO_ONE_POLYMORPHIC,
+        }:
+            return f"{base_name}s" if not base_name.endswith("s") else base_name
         return base_name
 
     def get_sqlalchemy_relationship(self) -> str:
@@ -3160,7 +3323,9 @@ class Relationship:
         if self.backref_name:
             backref_options = self._get_backref_options()
             if backref_options:
-                args.append(f"backref=backref('{self.backref_name}', {backref_options})")
+                args.append(
+                    f"backref=backref('{self.backref_name}', {backref_options})"
+                )
             else:
                 args.append(f"backref='{self.backref_name}'")
 
@@ -3217,7 +3382,7 @@ class Relationship:
 
         # Construct final relationship
         relationship_name = self.get_relationship_name()
-        formatted_args = ',\n                     '.join(args)
+        formatted_args = ",\n                     ".join(args)
         return f"{relationship_name} = relationship({formatted_args})"
 
     def _get_backref_options(self) -> Optional[str]:
@@ -3225,8 +3390,10 @@ class Relationship:
         options = []
 
         # Add uselist for backref
-        if self.relationship_type in {RelationshipType.ONE_TO_MANY,
-                                    RelationshipType.ONE_TO_MANY_POLYMORPHIC}:
+        if self.relationship_type in {
+            RelationshipType.ONE_TO_MANY,
+            RelationshipType.ONE_TO_MANY_POLYMORPHIC,
+        }:
             options.append("uselist=False")
 
         # Add other backref-specific options
@@ -3269,9 +3436,9 @@ class Relationship:
         constraints = []
         for fk in self.foreign_keys:
             # Determine referenced column
-            ref_col = fk.replace('_id', '')
-            if not ref_col.endswith('id'):
-                ref_col = 'id'
+            ref_col = fk.replace("_id", "")
+            if not ref_col.endswith("id"):
+                ref_col = "id"
 
             # Build constraint options
             options = []
@@ -3364,7 +3531,7 @@ class Relationship:
         doc_lines = []
 
         # Basic relationship description
-        rel_type = self.relationship_type.value.replace('_', '-')
+        rel_type = self.relationship_type.value.replace("_", "-")
         doc_lines.append(
             f"{rel_type.title()} relationship between "
             f"{to_pascal_case(self.source_table)} and {to_pascal_case(self.target_table)}."
@@ -3396,13 +3563,13 @@ class Relationship:
         if self.doc:
             doc_lines.extend(["", self.doc])
 
-        return '\n'.join(doc_lines)
+        return "\n".join(doc_lines)
 
     def _format_foreign_key_desc(self) -> str:
         """Format foreign key description for documentation."""
         if len(self.foreign_keys) == 1:
             fk = self.foreign_keys[0]
-            ref_col = fk.replace('_id', '.id')
+            ref_col = fk.replace("_id", ".id")
             return f"{self.target_table}.{fk} -> {self.source_table}.{ref_col}"
 
         return ", ".join(
@@ -3510,7 +3677,8 @@ class RelationshipResolver:
         """
         # Find all relationships involved in the cycle
         cycle_relationships = [
-            rel for rel in self.relationships
+            rel
+            for rel in self.relationships
             if rel.source_table in cycle and rel.target_table in cycle
         ]
 
@@ -3543,7 +3711,8 @@ class RelationshipResolver:
 
         # Remove cascade options
         relationship.cascade_options = [
-            opt for opt in relationship.cascade_options
+            opt
+            for opt in relationship.cascade_options
             if opt not in {CascadeOption.DELETE, CascadeOption.DELETE_ORPHAN}
         ]
 
@@ -3552,9 +3721,13 @@ class RelationshipResolver:
 
         # Update relationship documentation
         if relationship.doc:
-            relationship.doc += "\nNote: This relationship was modified to break a circular dependency."
+            relationship.doc += (
+                "\nNote: This relationship was modified to break a circular dependency."
+            )
         else:
-            relationship.doc = "This relationship was modified to break a circular dependency."
+            relationship.doc = (
+                "This relationship was modified to break a circular dependency."
+            )
 
     def get_relationship_order(self) -> List[str]:
         """
@@ -3598,10 +3771,10 @@ class RelationshipResolver:
         """
         return [
             {
-                'cycle': cycle,
-                'length': len(cycle),
-                'tables_involved': set(cycle),
-                'resolution': self._get_cycle_resolution(cycle)
+                "cycle": cycle,
+                "length": len(cycle),
+                "tables_involved": set(cycle),
+                "resolution": self._get_cycle_resolution(cycle),
             }
             for cycle in self.cycles
         ]
@@ -3610,20 +3783,22 @@ class RelationshipResolver:
         """Get resolution details for a specific cycle."""
         rel = self._select_relationship_to_modify(cycle)
         return {
-            'modified_relationship': {
-                'source': rel.source_table,
-                'target': rel.target_table,
-                'type': rel.relationship_type.value
+            "modified_relationship": {
+                "source": rel.source_table,
+                "target": rel.target_table,
+                "type": rel.relationship_type.value,
             },
-            'modifications': {
-                'lazy_loading': rel.lazy_load.value,
-                'post_update': rel.post_update,
-                'removed_cascade_options': [
-                    opt.value for opt in rel.cascade_options
+            "modifications": {
+                "lazy_loading": rel.lazy_load.value,
+                "post_update": rel.post_update,
+                "removed_cascade_options": [
+                    opt.value
+                    for opt in rel.cascade_options
                     if opt in {CascadeOption.DELETE, CascadeOption.DELETE_ORPHAN}
-                ]
-            }
+                ],
+            },
         }
+
 
 @dataclass
 class GenerationContext:
@@ -3668,11 +3843,13 @@ class GenerationContext:
     def __post_init__(self):
         """Initialize default imports and validate configuration."""
         # Add default SQLAlchemy imports
-        self.add_imports([
-            "from sqlalchemy import Column, ForeignKey, Integer, String",
-            "from sqlalchemy.orm import relationship",
-            "from sqlalchemy.ext.declarative import declarative_base",
-        ])
+        self.add_imports(
+            [
+                "from sqlalchemy import Column, ForeignKey, Integer, String",
+                "from sqlalchemy.orm import relationship",
+                "from sqlalchemy.ext.declarative import declarative_base",
+            ]
+        )
 
         # Validate configuration
         if self.config is None:
@@ -3755,7 +3932,7 @@ class GenerationContext:
 
         for column in self.current_table.columns:
             sa_type = column.get_sqlalchemy_type()
-            if sa_type not in {'Integer', 'String'}:  # These are in default imports
+            if sa_type not in {"Integer", "String"}:  # These are in default imports
                 self.add_import(f"from sqlalchemy import {sa_type}")
 
     def process_relationships(self) -> None:
@@ -3771,9 +3948,14 @@ class GenerationContext:
         self.relationships = resolver.resolve_cycles()
 
         # Add any necessary relationship-specific imports
-        if any(rel.relationship_type in {RelationshipType.MANY_TO_MANY,
-                                       RelationshipType.MANY_TO_MANY_POLYMORPHIC}
-               for rel in self.relationships):
+        if any(
+            rel.relationship_type
+            in {
+                RelationshipType.MANY_TO_MANY,
+                RelationshipType.MANY_TO_MANY_POLYMORPHIC,
+            }
+            for rel in self.relationships
+        ):
             self.add_import("from sqlalchemy import Table")
 
     def get_model_name(self, table_name: Optional[str] = None) -> str:
@@ -3855,11 +4037,11 @@ class GenerationContext:
             ...     print("Errors encountered:", summary['errors'])
         """
         return {
-            'model_count': len(self.generated_code),
-            'relationship_count': len(self.relationships),
-            'errors': self.errors,
-            'warnings': self.warnings,
-            'tables_processed': [table.name for table in self.tables],
-            'import_count': len(self.imports),
-            'status': 'failed' if self.errors else 'success'
+            "model_count": len(self.generated_code),
+            "relationship_count": len(self.relationships),
+            "errors": self.errors,
+            "warnings": self.warnings,
+            "tables_processed": [table.name for table in self.tables],
+            "import_count": len(self.imports),
+            "status": "failed" if self.errors else "success",
         }

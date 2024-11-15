@@ -2543,6 +2543,16 @@ class PostgreSQLIntrospector:
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")
 
+
+
+
+
+
+
+
+
+
+
     def __enter__(self) -> "PostgreSQLIntrospector":
         """Context manager entry."""
         return self
