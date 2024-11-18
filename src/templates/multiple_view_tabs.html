@@ -1,0 +1,376 @@
+{% extends 'appbuilder/baselayout.html' %} {% block head_css %} {{ super() }}
+<style>
+    /* Custom CSS for tabs */
+    .nav-tabs-custom {
+        margin-bottom: 20px;
+        background: #fff;
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
+        border-radius: 3px;
+    }
+
+    .nav-tabs-custom > .nav-tabs {
+        margin: 0;
+        border-bottom: 1px solid #f4f4f4;
+        padding: 0 15px;
+        background-color: #f8f9fa;
+        border-top-left-radius: 3px;
+        border-top-right-radius: 3px;
+    }
+
+    .nav-tabs-custom > .nav-tabs > li {
+        margin-bottom: -1px;
+        margin-right: 5px;
+    }
+
+    .nav-tabs-custom > .nav-tabs > li > a {
+        color: #444;
+        border-radius: 0;
+        padding: 12px 15px;
+        transition: all 0.3s ease;
+    }
+
+    .nav-tabs-custom > .nav-tabs > li > a:hover {
+        color: #333;
+        background-color: #fff;
+        border-color: transparent;
+    }
+
+    .nav-tabs-custom > .nav-tabs > li.active > a {
+        border-top: 3px solid #3c8dbc;
+        border-left-color: #f4f4f4;
+        border-right-color: #f4f4f4;
+        background-color: #fff;
+    }
+
+    .nav-tabs-custom > .tab-content {
+        background: #fff;
+        padding: 20px;
+        border-bottom-right-radius: 3px;
+        border-bottom-left-radius: 3px;
+    }
+
+    .panel {
+        margin-top: 15px;
+        border: none;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+        background-color: #fff;
+    }
+
+    .panel-heading {
+        padding: 15px;
+        border-bottom: 1px solid #f4f4f4;
+    }
+
+    .panel-body {
+        padding: 15px;
+    }
+
+    .btn-toolbar {
+        margin-bottom: 20px;
+    }
+
+    .btn-group .btn {
+        margin-right: 5px;
+    }
+
+    .search-container {
+        margin-bottom: 20px;
+    }
+
+    .search-container .input-group {
+        width: 100%;
+        max-width: 400px;
+    }
+
+    .filter-controls {
+        padding: 10px 0;
+    }
+
+    .filter-controls .badge {
+        margin-right: 5px;
+        padding: 8px 12px;
+        font-size: 0.9em;
+    }
+
+    .filter-controls .badge a {
+        margin-left: 5px;
+        color: #fff;
+        opacity: 0.8;
+    }
+
+    .filter-controls .badge a:hover {
+        opacity: 1;
+        text-decoration: none;
+    }
+
+    .tab-loading {
+        padding: 20px;
+        text-align: center;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 767px) {
+        .nav-tabs-custom > .nav-tabs {
+            padding: 0;
+            overflow-x: auto;
+            overflow-y: hidden;
+            display: -webkit-box;
+            display: -ms-flexbox;
+            display: flex;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .nav-tabs-custom > .nav-tabs > li {
+            float: none;
+            margin: 0;
+            white-space: nowrap;
+        }
+
+        .search-container .input-group {
+            max-width: 100%;
+        }
+
+        .btn-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        .btn-group {
+            margin-bottom: 10px;
+        }
+    }
+</style>
+{% endblock %} {% block content %}
+<div class="container-fluid">
+    {# Title Section #} {% if show_title %}
+    <div class="row mb-3">
+        <div class="col-md-12">
+            <h2>{{ title }}</h2>
+        </div>
+    </div>
+    {% endif %} {# Menu Section #} {% if show_menu %}
+    <div class="row mb-3">
+        <div class="col-md-12">
+            <div class="btn-toolbar" role="toolbar">
+                <div class="btn-group mr-2" role="group">
+                    <a
+                        href="{{ url_for('.change_layout') }}"
+                        class="btn btn-outline-primary"
+                    >
+                        <i class="fa fa-columns"></i> Change Layout
+                    </a>
+                    <a
+                        href="{{ url_for('.custom_view') }}"
+                        class="btn btn-outline-secondary"
+                    >
+                        <i class="fa fa-cog"></i> Custom View
+                    </a>
+                </div>
+                {% if actions %}
+                <div class="btn-group mr-2" role="group">
+                    {% for action in actions %}
+                    <a
+                        href="{{ url_for('.'+action.name) }}"
+                        class="btn btn-outline-secondary"
+                    >
+                        <i class="{{ action.icon }}"></i> {{ action.text }}
+                    </a>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %} {# Search and Filters Section #} {% if search_enabled %}
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <div class="input-group">
+                <input
+                    type="text"
+                    id="search"
+                    class="form-control"
+                    placeholder="Search..."
+                />
+                <div class="input-group-append">
+                    <span class="input-group-text">
+                        <i class="fa fa-search"></i>
+                    </span>
+                </div>
+            </div>
+        </div>
+        {% if filters %}
+        <div class="col-md-8">
+            <div class="filter-controls">
+                {% for filter in filters %}
+                <span class="badge badge-primary">
+                    {{ filter.label }}: {{ filter.value }}
+                    <a
+                        href="{{ url_for('.remove_filter', filter_id=loop.index0) }}"
+                        title="Remove filter"
+                    >
+                        <i class="fa fa-times"></i>
+                    </a>
+                </span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %} {# Tabs Section #}
+    <div class="row">
+        <div class="col-md-12">
+            <div class="nav-tabs-custom">
+                {# Tab Navigation #}
+                <ul class="nav nav-tabs" role="tablist">
+                    {% for view_data in views_data %} {% if 'can_list' in
+                    view_data.permissions %}
+                    <li class="nav-item">
+                        <a
+                            class="nav-link {% if loop.first %}active{% endif %}"
+                            id="tab-{{ view_data.name }}"
+                            data-toggle="tab"
+                            href="#content-{{ view_data.name }}"
+                            role="tab"
+                            aria-controls="content-{{ view_data.name }}"
+                            aria-selected="{% if loop.first %}true{% else %}false{% endif %}"
+                        >
+                            <i class="fa fa-table"></i>
+                            {{ view_data.title }}
+                            <span class="badge badge-light"
+                                >{{ view_data.widgets.page_size }}</span
+                            >
+                        </a>
+                    </li>
+                    {% endif %} {% endfor %}
+                </ul>
+
+                {# Tab Content #}
+                <div class="tab-content">
+                    {% for view_data in views_data %} {% if 'can_list' in
+                    view_data.permissions %}
+                    <div
+                        class="tab-pane fade {% if loop.first %}show active{% endif %}"
+                        id="content-{{ view_data.name }}"
+                        role="tabpanel"
+                        aria-labelledby="tab-{{ view_data.name }}"
+                        data-search-columns="{{ view_data.search_columns|tojson }}"
+                    >
+                        <div class="panel panel-default">
+                            {% if view_data.widgets.search_widget %}
+                            <div class="panel-heading">
+                                {{ view_data.widgets.search_widget|safe }}
+                            </div>
+                            {% endif %}
+                            <div class="panel-body">
+                                <div class="tab-loading" style="display: none">
+                                    <i class="fa fa-spinner fa-spin"></i>
+                                    Loading...
+                                </div>
+                                {{ view_data.widgets.list_widget|safe }}
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %} {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} {% block tail_js %} {{ super() }}
+<script>
+    $(document).ready(function() {
+        // Tab handling
+        $('.nav-tabs a').on('click', function (e) {
+            e.preventDefault();
+            var $tab = $(this);
+            var $content = $($tab.attr('href'));
+
+            // Show loading indicator
+            $content.find('.tab-loading').show();
+            $content.find('.panel-body > *:not(.tab-loading)').css('opacity', '0.5');
+
+            // Switch tab
+            $tab.tab('show');
+
+            // Update URL with active tab
+            var tabId = $tab.attr('href').substring(1);
+            window.history.replaceState({}, '', `?tab=${tabId}`);
+
+            // Refresh content
+            setTimeout(function() {
+                $content.find('.tab-loading').hide();
+                $content.find('.panel-body > *').css('opacity', '1');
+
+                // Initialize any DataTables if present
+                var $dataTable = $content.find('table.dataTable');
+                if ($dataTable.length && $.fn.dataTable.isDataTable($dataTable)) {
+                    $dataTable.DataTable().columns.adjust();
+                }
+            }, 300);
+        });
+
+        // Search handling
+        {% if search_enabled %}
+        var searchTimeout;
+        $('#search').on('keyup', function() {
+            clearTimeout(searchTimeout);
+            var $input = $(this);
+
+            searchTimeout = setTimeout(function() {
+                var value = $input.val().toLowerCase();
+                var $activePane = $('.tab-pane.active');
+                var searchColumns = JSON.parse($activePane.attr('data-search-columns'));
+
+                $activePane.find('table tbody tr').each(function() {
+                    var $row = $(this);
+                    var visible = false;
+
+                    searchColumns.forEach(function(colIndex) {
+                        var cellText = $row.find(`td:eq(${colIndex})`).text().toLowerCase();
+                        if (cellText.indexOf(value) > -1) {
+                            visible = true;
+                        }
+                    });
+
+                    $row.toggle(visible);
+                });
+            }, 300);
+        });
+        {% endif %}
+
+        // Initialize active tab from URL
+        var urlParams = new URLSearchParams(window.location.search);
+        var activeTab = urlParams.get('tab');
+        if (activeTab) {
+            $(`.nav-tabs a[href="#${activeTab}"]`).tab('show');
+        }
+
+        // Handle responsive behavior
+        function handleResponsive() {
+            var windowWidth = $(window).width();
+            $('.nav-tabs-custom').toggleClass('mobile-view', windowWidth < 768);
+
+            // Adjust table columns
+            $('.tab-pane.active table.dataTable').each(function() {
+                if ($.fn.dataTable.isDataTable(this)) {
+                    $(this).DataTable().columns.adjust();
+                }
+            });
+        }
+
+        $(window).on('resize', handleResponsive).trigger('resize');
+
+        // Initialize tooltips
+        $('[data-toggle="tooltip"]').tooltip();
+
+        // Handle filter removal
+        $('.filter-controls .badge a').on('click', function(e) {
+            e.preventDefault();
+            var $badge = $(this).closest('.badge');
+            $badge.fadeOut(300, function() {
+                window.location.href = $(e.currentTarget).attr('href');
+            });
+        });
+    });
+</script>
+{% endblock %}

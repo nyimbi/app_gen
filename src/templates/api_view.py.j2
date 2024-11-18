@@ -1,39 +1,43 @@
-{% raw %}
-{% if single_file %}
 # Imports for all views in single-file mode
-from flask_appbuilder.api import ModelRestApi, expose
+from flask import request, jsonify, current_app
+from sqlalchemy import or_
+from flask_appbuilder import ModelRestApi
+from flask_appbuilder.api import BaseApi, expose, rison, safe
 from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.security.decorators import has_access
-from flask import request, jsonify
-from {{ config.get('app_package', 'app') }} import appbuilder, db
-{% endif %}
+from flask_appbuilder.models.filters import BaseFilter
+from flask_appbuilder.security.decorators import has_access, protect
 
+from app import appbuilder, db
+from ..models import {{ table_name|capitalize }}
+
+# from {{ config.get('app_package', 'app') }} import appbuilder, db
 
 class {{ table_name|capitalize }}Api(ModelRestApi):
     resource_name = "{{ table_name.lower() }}"
     datamodel = SQLAInterface({{ table_name|capitalize }})
+    custom_template = ""
 
-    {% if columns %}
+    {%- if columns %}
     # Include or exclude specific columns from the API
     include_columns = [
-        {% for column in columns %}
+        {%- for column in columns %}
         "{{ column['name'] }}",
-        {% endfor %}
+        {%- endfor %}
     ]
-    {% endif %}
+    {%- endif %}
 
-    {% if config.get('permissions') %}
+    {%- if config.get('permissions') %}
     # Permissions for different operations
     allow_browser_login = {{ config.get('permissions').get('allow_browser_login', True) }}
-    {% endif %}
+    {%- endif %}
 
-    {% if config.get('extra_methods') %}
+    {%- if config.get('extra_methods') %}
     # Extra methods provided by config
-    {% for method in config.get('extra_methods') %}
+    {%- for method in config.get('extra_methods') %}
     def {{ method }}(self, *args, **kwargs):
         pass
-    {% endfor %}
-    {% endif %}
+    {%- endfor %}
+    {%- endif %}
 
     @expose('/custom_query/', methods=['GET'])
     @has_access
@@ -74,7 +78,7 @@ class {{ table_name|capitalize }}Api(ModelRestApi):
     @has_access
     def bulk_delete(self):
         """
-        An endpoint to allow bulk deletion of records based on a list of IDs.
+        An endpoint to allow bulk deletion of records based on a list of IDs in {{ table_name | capitalize }}.
         """
         try:
             data = request.get_json()
@@ -130,7 +134,7 @@ class {{ table_name|capitalize }}Api(ModelRestApi):
     @has_access
     def search(self):
         """
-        A flexible search endpoint that allows searching across multiple fields.
+        A flexible search endpoint that allows searching across multiple fields in {{ table_name|capitalize }}.
         """
         try:
             search_term = request.args.get('q', '')
@@ -148,8 +152,9 @@ class {{ table_name|capitalize }}Api(ModelRestApi):
         except Exception as e:
             return jsonify({"error": str(e)}), 400
 
+"""
 {% if not single_file %}
 # Registering the API with Flask-AppBuilder
 appbuilder.add_api({{ table_name|capitalize }}Api)
 {% endif %}
-{% endraw %}
+"""

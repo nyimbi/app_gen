@@ -1,0 +1,15 @@
+{% extends "appbuilder/base.html" %}
+{% block content %}
+<h2>Registration Step 4: Skills and Interests</h2>
+<form method="post">
+    <div class="form-group">
+        <label for="skills_description">Skills</label>
+        <textarea class="form-control" id="skills_description" name="skills_description" rows="3" required></textarea>
+    </div>
+    <div class="form-group">
+        <label for="interests">Interests</label>
+        <textarea class="form-control" id="interests" name="interests" rows="3" required></textarea>
+    </div>
+    <button type="submit" class="btn btn-primary">Next</button>
+</form>
+{% endblock %}

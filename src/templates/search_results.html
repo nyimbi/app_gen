@@ -1,0 +1,97 @@
+
+{% extends "appbuilder/base.html" %}
+{% import 'appbuilder/general/lib.html' as lib %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-12">
+            <h1>Search Results</h1>
+
+            {# Search form #}
+            <div class="well well-sm">
+                <form class="form-inline" id="searchForm" method="get">
+                    <div class="form-group">
+                        <input type="text" class="form-control" name="q" placeholder="Search..." value="{{ search_query }}">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Search</button>
+                </form>
+            </div>
+
+            {% if search_query %}
+                <h3>Results for "{{ search_query }}"</h3>
+            {% endif %}
+
+            {% if not items %}
+                <p>No results found.</p>
+            {% else %}
+                {# Results table #}
+                <table class="table table-hover table-bordered">
+                    <thead>
+                        <tr>
+                            {% for col in list_columns %}
+                            <th>{{ col|capitalize }}</th>
+                            {% endfor %}
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in items %}
+                        <tr>
+                            {% for col in list_columns %}
+                            <td>
+                                {% if item[col + '_highlighted'] %}
+                                    {{ item[col + '_highlighted']|safe }}
+                                {% else %}
+                                    {{ item[col] }}
+                                {% endif %}
+                            </td>
+                            {% endfor %}
+                            <td>
+                                <a href="{{ url_for(modelview_name + '.show', pk=item['id']) }}" class="btn btn-sm btn-primary">View</a>
+                                <a href="{{ url_for(modelview_name + '.edit', pk=item['id']) }}" class="btn btn-sm btn-success">Edit</a>
+                                <a href="{{ url_for(modelview_name + '.delete', pk=item['id']) }}" class="btn btn-sm btn-danger">Delete</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                {# Pagination #}
+                {% if pagination %}
+                <nav aria-label="Page navigation">
+                    <ul class="pagination">
+                        {% for page in pagination.iter_pages() %}
+                            {% if page %}
+                                {% if page != pagination.page %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="{{ url_for(modelview_name + '.search', q=search_query, page=page) }}">{{ page }}</a>
+                                    </li>
+                                {% else %}
+                                    <li class="page-item active">
+                                        <span class="page-link">{{ page }} <span class="sr-only">(current)</span></span>
+                                    </li>
+                                {% endif %}
+                            {% else %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">...</span>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+                    </ul>
+                </nav>
+                {% endif %}
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    $(document).ready(function() {
+        // You can add any JavaScript functionality here if needed
+    });
+</script>
+{% endblock %}

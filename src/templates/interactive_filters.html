@@ -1,0 +1,143 @@
+
+{% extends "appbuilder/base.html" %}
+{% import 'appbuilder/general/lib.html' as lib %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-12">
+            <h1>{{ title }}</h1>
+
+            {# Interactive Filter Form #}
+            <form id="filterForm" class="form-horizontal">
+                {% for filter_col in filter_columns %}
+                <div class="form-group">
+                    <label class="col-sm-2 control-label">{{ filter_col|capitalize }}</label>
+                    <div class="col-sm-10">
+                        {% if filter_col in filter_rel_fields %}
+                            <select name="{{ filter_col }}" class="form-control select2" multiple="multiple">
+                                <option value="">Select {{ filter_col|capitalize }}</option>
+                                {% for value, label in filter_rel_fields[filter_col] %}
+                                    <option value="{{ value }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        {% else %}
+                            <input type="text" name="{{ filter_col }}" class="form-control" placeholder="Filter by {{ filter_col|capitalize }}">
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+                <div class="form-group">
+                    <div class="col-sm-offset-2 col-sm-10">
+                        <button type="submit" class="btn btn-primary">Apply Filters</button>
+                        <button type="button" id="resetFilters" class="btn btn-default">Reset Filters</button>
+                    </div>
+                </div>
+            </form>
+
+            {# Results Table #}
+            <table class="table table-hover table-bordered">
+                <thead>
+                    <tr>
+                        {% for col in list_columns %}
+                        <th>{{ col|capitalize }}</th>
+                        {% endfor %}
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="resultsTable">
+                    {# Results will be dynamically inserted here #}
+                </tbody>
+            </table>
+
+            {# Pagination #}
+            <nav aria-label="Page navigation">
+                <ul class="pagination" id="pagination">
+                    {# Pagination links will be dynamically inserted here #}
+                </ul>
+            </nav>
+
+            {# Loading Indicator #}
+            <div id="loading" class="text-center" style="display: none;">
+                <i class="fa fa-spinner fa-spin fa-3x"></i>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css" rel="stylesheet" />
+<script>
+$(document).ready(function() {
+    $('.select2').select2();
+
+    var currentPage = 1;
+
+    function loadResults(page) {
+        $('#loading').show();
+        var formData = $('#filterForm').serialize() + '&page=' + page;
+
+        $.ajax({
+            url: '{{ url_for(modelview_name + ".api_filter_results") }}',
+            data: formData,
+            success: function(response) {
+                var rows = '';
+                $.each(response.data, function(index, item) {
+                    rows += '<tr>';
+                    {% for col in list_columns %}
+                    rows += '<td>' + (item.{{ col }} || '') + '</td>';
+                    {% endfor %}
+                    rows += '<td>';
+                    rows += '<a href="{{ url_for(modelview_name + ".show", pk="') }}' + item.id + '" class="btn btn-sm btn-primary">View</a> ';
+                    rows += '<a href="{{ url_for(modelview_name + ".edit", pk="') }}' + item.id + '" class="btn btn-sm btn-success">Edit</a> ';
+                    rows += '<a href="{{ url_for(modelview_name + ".delete", pk="') }}' + item.id + '" class="btn btn-sm btn-danger">Delete</a>';
+                    rows += '</td>';
+                    rows += '</tr>';
+                });
+                $('#resultsTable').html(rows);
+
+                // Update pagination
+                var pagination = '';
+                for (var i = 1; i <= response.total_pages; i++) {
+                    pagination += '<li class="page-item ' + (i === response.page ? 'active' : '') + '">';
+                    pagination += '<a class="page-link" href="#" data-page="' + i + '">' + i + '</a>';
+                    pagination += '</li>';
+                }
+                $('#pagination').html(pagination);
+
+                currentPage = response.page;
+            },
+            error: function() {
+                alert('An error occurred while filtering data.');
+            },
+            complete: function() {
+                $('#loading').hide();
+            }
+        });
+    }
+
+    $('#filterForm').submit(function(e) {
+        e.preventDefault();
+        loadResults(1);
+    });
+
+    $('#resetFilters').click(function() {
+        $('#filterForm')[0].reset();
+        $('.select2').val(null).trigger('change');
+        loadResults(1);
+    });
+
+    $(document).on('click', '.pagination .page-link', function(e) {
+        e.preventDefault();
+        var page = $(this).data('page');
+        loadResults(page);
+    });
+
+    // Initial load
+    loadResults(1);
+});
+</script>
+{% endblock %}

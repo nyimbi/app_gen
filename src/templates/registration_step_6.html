@@ -1,0 +1,21 @@
+{% extends "appbuilder/base.html" %}
+{% block content %}
+<h2>Registration Step 6: Preferences</h2>
+<form method="post">
+    <div class="form-group">
+        <label for="is_volunteer">Are you interested in volunteering?</label>
+        <select class="form-control" id="is_volunteer" name="is_volunteer">
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+        </select>
+    </div>
+    <div class="form-group">
+        <label for="is_staff">Are you staff?</label>
+        <select class="form-control" id="is_staff" name="is_staff">
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+        </select>
+    </div>
+    <button type="submit" class="btn btn-primary">Complete Registration</button>
+</form>
+{% endblock %}

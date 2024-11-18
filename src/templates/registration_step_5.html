@@ -1,0 +1,11 @@
+{% extends "appbuilder/base.html" %}
+{% block content %}
+<h2>Registration Step 5: Bio</h2>
+<form method="post">
+    <div class="form-group">
+        <label for="bio">Bio</label>
+        <textarea class="form-control" id="bio" name="bio" rows="5" required></textarea>
+    </div>
+    <button type="submit" class="btn btn-primary">Next</button>
+</form>
+{% endblock %}

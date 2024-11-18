@@ -25,47 +25,180 @@ Usage:
 Customize the configuration variables at the top of the WizardView class
 to tailor the wizard to your specific needs.
 """
-
-{% if not single_file %}
-from flask import flash, redirect, url_for, session, request
-from flask_appbuilder import SimpleFormView
-from flask_appbuilder.forms import DynamicForm
-from flask_appbuilder.fieldwidgets import BS3TextFieldWidget, BS3PasswordFieldWidget, BS3TextAreaFieldWidget, Select2Widget, DatePickerWidget
-from flask_appbuilder.fields import StringField, IntegerField, FloatField, DateField, SelectField
-from flask_babel import lazy_gettext as _
-from wtforms.validators import DataRequired, Optional, Length, NumberRange, Email
-from werkzeug.utils import secure_filename
 import os
 import logging
-from . import appbuilder, db
-from .models import {{ table_name|capitalize }}
-{% endif %}
+from flask import flash, redirect, url_for, session, request, current_app
+from flask_appbuilder import SimpleFormView, expose, action, has_access
+from flask_appbuilder.forms import DynamicForm
+from flask_babel import lazy_gettext as _
+from werkzeug.utils import secure_filename
+from wtforms.validators import DataRequired, Optional, Length, NumberRange, Email
+from flask_appbuilder.models.sqla.interface import SQLAInterface
+from flask_appbuilder.actions import action
+from flask_appbuilder.security.decorators import has_access
+from werkzeug.utils import secure_filename
+from flask_appbuilder.models.sqla.filters import (
+    FilterGreater, FilterEqualFunction, FilterStartsWith, FilterContains, FilterNotEqual,
+    FilterEndsWith, FilterGreater, FilterNotEndsWith, FilterRelationManyToManyEqual, FilterRelationOneToManyEqual,
+    FilterRelationOneToManyNotEqual, FilterSmaller, SQLAFilterConverter
+    )
+from flask_wtf import FlaskForm
+from wtforms import (
+    BooleanField,
+    DateField,
+    DateTimeField,
+    DecimalField,
+    FloatField,
+    IntegerField,
+    StringField,
+    TextAreaField,
+)
+from wtforms import validators
+from wtforms.validators import DataRequired, Optional, Length, NumberRange, Email
+from wtforms import StringField, IntegerField, FloatField, DateField, SelectField, BooleanField, PasswordField
+from flask_appbuilder.fields import EnumField, QuerySelectField, QuerySelectMultipleField, AJAXSelectField
+from flask_appbuilder.fieldwidgets import (
+    BS3TextFieldWidget, BS3PasswordFieldWidget, BS3TextAreaFieldWidget, Select2Widget, DatePickerWidget
+)
+from flask_appbuilder.widgets import (
+    ListWidget, ShowWidget, FormWidget, ListBlock, ListItem, ListLinkWidget, ListThumbnail, ShowBlockWidget
+)
+from flask_appbuilder.fieldwidgets import (
+     BS3TextFieldWidget,
+     BS3PasswordFieldWidget,
+     BS3TextAreaFieldWidget,
+     Select2Widget,
+     Select2ManyWidget,
+     DatePickerWidget,
+     DateTimePickerWidget,
+     # TimePickerWidget,
+     # BS3DateTimePickerWidget,
+     # ColorPickerWidget,
+     # FileUploadFieldWidget,
+     Select2AJAXWidget,
+     Select2SlaveAJAXWidget,
+     # BS3DateTimeFieldWidget,
+     # BS3DateFieldWidget,
+     # CheckboxWidget,
+     # BS3FileUploadFieldWidget
+ )
+from flask_babel import lazy_gettext as _
+from app import appbuilder, db
+from ..models import {{ table_name|capitalize }}
 
 logger = logging.getLogger(__name__)
 
 class {{ table_name|capitalize }}WizardView(SimpleFormView):
+    route_base = '/{{ table_name.lower() }}_wizard'
+    endpoint = '{{ table_name.lower() }}_wizard'
+    default_view = 'this_form_get'  # Add this line
+    custom_template = ""
+
     # Configuration variables
     form_title = _("{{ table_name|capitalize }} Wizard")
-    form_template = '{{ config.get("form_template", "wizard_form.html") }}'
+    form_template = '{{ config.get("form_template", "wizard_form.html") if config else "wizard_form.html" }}'
     success_message = _("{{ table_name|capitalize }} created successfully!")
     error_message = _("An error occurred while processing your request.")
     steps_config = {{ steps }}  # List of lists, each inner list represents a step
-    allow_previous = {{ config.get("allow_previous", True) }}
-    show_progress = {{ config.get("show_progress", True) }}
-    progress_template = '{{ config.get("progress_template", "wizard_progress.html") }}'
-    enable_file_upload = {{ config.get("enable_file_upload", False) }}
-    upload_folder = '{{ config.get("upload_folder", "uploads/") }}'
-    allowed_extensions = {{ config.get("allowed_extensions", "['txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif']") }}
-    max_content_length = {{ config.get("max_content_length", 16 * 1024 * 1024) }}  # 16 MB default
-    enable_optional_steps = {{ config.get("enable_optional_steps", False) }}
-    optional_steps = {{ config.get("optional_steps", []) }}
-    enable_conditional_steps = {{ config.get("enable_conditional_steps", False) }}
+
+    allow_previous = {{ config.get("allow_previous", True) if config else True }}
+    show_progress = {{ config.get("show_progress", True) if config else True }}
+    progress_template = '{{ config.get("progress_template", "wizard_progress.html") if config else "wizard_progress.html" }}'
+    enable_file_upload = {{ config.get("enable_file_upload", False) if config else False }}
+    upload_folder = '{{ config.get("upload_folder", "uploads/") if config else "uploads/" }}'
+    allowed_extensions = {{ config.get("allowed_extensions", ["txt", "pdf", "png", "jpg", "jpeg", "gif"]) if config else ["txt", "pdf", "png", "jpg", "jpeg", "gif"] }}
+    max_content_length = {{ config.get("max_content_length", 16 * 1024 * 1024) if config else 16 * 1024 * 1024 }}
+    enable_optional_steps = {{ config.get("enable_optional_steps", False) if config else False }}
+    optional_steps = {{ config.get("optional_steps", []) if config else [] }}
+    enable_conditional_steps = {{ config.get("enable_conditional_steps", False) if config else False }}
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.current_step = 1
         self.total_steps = len(self.steps_config)
         self.form = self.generate_form(self.current_step)
+
+    def render_wizard_template(self):
+        """Helper method to render wizard template with common context"""
+        progress = (self.current_step / self.total_steps) * 100 if self.total_steps > 0 else 0
+
+        context = {
+            'form': self.form,
+            'form_title': self.form_title,
+            'modelview_name': self.__class__.__name__,
+            'current_step': self.current_step,
+            'total_steps': self.total_steps,
+            'progress': progress,
+            'previous_step': self.current_step - 1 if self.current_step > 1 else None,
+            'next_step': self.current_step + 1 if self.current_step < self.total_steps else 'submit',
+            'step_description': f"Step {self.current_step} of {self.total_steps}",
+            'show_progress': self.show_progress,
+            'progress_template': self.progress_template,
+            'allow_previous': self.allow_previous and self.current_step > 1,
+            'is_last_step': self.is_last_step(),
+            'is_optional_step': self.is_step_optional(self.current_step),
+            'base_template': "appbuilder/base.html",
+        }
+
+        return self.render_template(
+            self.form_template,
+            **context
+        )
+
+    @expose('/')
+    @has_access
+    def this_form_get(self):
+        """Initial entry point for the wizard"""
+        self.current_step = 1
+        self.form = self.generate_form(self.current_step)
+        widgets = self.form_get(self.form)
+        return self.render_wizard_template(self.form, widgets=widgets)
+
+    @expose('/step/<int:step>', methods=['GET', 'POST'])
+    @has_access
+    def step(self, step):
+        """Handle individual wizard steps"""
+        if 1 <= step <= self.total_steps:
+            self.current_step = step
+            self.form = self.generate_form(self.current_step)
+
+            if request.method == 'POST':
+                if self.form.validate_on_submit():
+                    return self.form_post(self.form)
+                else:
+                    flash(_('Form validation failed'), 'error')
+
+            widgets = self.form_get(self.form)
+            return self.render_wizard_template(self.form, widgets=widgets)
+        else:
+            flash(_('Invalid step'), 'error')
+            return redirect(url_for(f'.this_form_get'))
+
+    def form_post(self, form):
+        """Handle form submission"""
+        self.update_session_data(form)
+
+        if self.is_last_step():
+            if self.process_final_step():
+                flash(self.success_message, 'info')
+                return redirect(self.get_redirect())
+
+        # Move to next step
+        next_step = self.current_step + 1
+        return redirect(url_for(f'.step', step=next_step))
+
+    def form_post(self, form):
+        """Handle form submission"""
+        self.update_session_data(form)
+
+        if self.is_last_step():
+            if self.process_final_step():
+                flash(self.success_message, 'info')
+                return redirect(self.get_redirect())
+
+        # Move to next step
+        next_step = self.current_step + 1
+        return redirect(url_for(f'.step', step=next_step))
 
     def generate_form(self, step):
         class StepForm(DynamicForm):
@@ -198,7 +331,33 @@ class {{ table_name|capitalize }}WizardView(SimpleFormView):
         return '.' in filename and \
                filename.rsplit('.', 1)[1].lower() in self.allowed_extensions
 
+
+    @expose('/')
+    @has_access
+    def this_form_get(self):
+        """
+        Initial entry point for the wizard
+        """
+        self.current_step = 1
+        self.form = self.generate_form(self.current_step)
+        widgets = self.form_get(self.form)
+
+        return self.render_template(
+            self.form_template,
+            form=self.form,
+            form_title=self.form_title,
+            widgets=widgets,
+            current_step=self.current_step,
+            total_steps=self.total_steps,
+            show_progress=self.show_progress,
+            progress_template=self.progress_template,
+            allow_previous=False,  # First step
+            is_last_step=self.total_steps == 1,
+            is_optional_step=self.is_step_optional(self.current_step)
+        )
+
     @expose('/wizard/<step>', methods=['GET', 'POST'])
+    @has_access
     def wizard(self, step):
         requested_step = int(step)
         if 1 <= requested_step <= self.total_steps:
@@ -245,13 +404,15 @@ class {{ table_name|capitalize }}WizardView(SimpleFormView):
         }
     }
 
-{% if not single_file %}
+"""
+{%- if not single_file %}
 # Register the WizardView with AppBuilder
 appbuilder.add_view(
     {{ table_name|capitalize }}WizardView,
     "{{ table_name|capitalize }} Wizard",
-    icon="{{ config.get('icon', 'fa-magic') }}",
+    icon="{{ config.get('icon', 'fa-magic') if config else 'fa-magic' }}",
     category="Wizards",
     category_icon="fa-tasks"
 )
-{% endif %}
+{%- endif %}
+"""

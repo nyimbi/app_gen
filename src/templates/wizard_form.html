@@ -1,0 +1,68 @@
+{% extends base_template %}
+{% import 'appbuilder/general/lib.html' as lib %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-12">
+            <h1>{{ form_title|default('Wizard Form') }}</h1>
+
+            {% if show_progress|default(true) %}
+            {# Progress bar #}
+            <div class="progress mb-4">
+                <div class="progress-bar" role="progressbar"
+                     style="width: {{ progress|default(0)|int }}%;"
+                     aria-valuenow="{{ progress|default(0)|int }}"
+                     aria-valuemin="0"
+                     aria-valuemax="100">
+                    {{ progress|default(0)|int }}%
+                </div>
+            </div>
+
+            {# Step indicator #}
+            <ul class="nav nav-pills nav-justified mb-4">
+                {% for i in range(1, total_steps|default(1) + 1) %}
+                <li class="nav-item">
+                    <a class="nav-link {% if i == current_step %}active{% elif i < current_step %}complete{% endif %}"
+                       {% if i < current_step %}href="{{ url_for('.step', step=i) }}"{% endif %}>
+                        Step {{ i }}
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            <h2>{{ step_description|default('') }}</h2>
+
+            <form method="post" enctype="multipart/form-data">
+                {{ form.hidden_tag() }}
+
+                {% for field in form if field.type != 'CSRFTokenField' %}
+                <div class="form-group">
+                    {{ field.label }}
+                    {{ field(class="form-control") }}
+                    {% if field.errors %}
+                    <div class="alert alert-danger">
+                        {% for error in field.errors %}
+                        {{ error }}
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+
+                <div class="form-group mt-4">
+                    {% if previous_step %}
+                    <a href="{{ url_for('.step', step=previous_step) }}"
+                       class="btn btn-secondary">Previous</a>
+                    {% endif %}
+
+                    <button type="submit" class="btn btn-primary">
+                        {% if is_last_step|default(false) %}Submit{% else %}Next{% endif %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

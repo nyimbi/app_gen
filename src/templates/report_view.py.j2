@@ -1,25 +1,68 @@
 {% if not single_file %}
-from flask_appbuilder import ModelView
-from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.charts.views import GroupByChartView
-from flask_appbuilder.models.group import aggregate_count, aggregate_avg, aggregate_sum
-from flask_appbuilder.widgets import ListWidget, ShowWidget
-from flask_babel import lazy_gettext as _
-from flask_appbuilder.actions import action
-from flask import flash, redirect, url_for, request, send_file
 import io
 import csv
 from sqlalchemy import func
-from . import appbuilder, db
-from .models import {{ table_name }}
+from flask import flash, redirect, url_for, request, send_file, current_app
+from flask_appbuilder import ModelView, expose, action, has_access
+from flask_appbuilder.models.sqla.interface import SQLAInterface
+from flask_appbuilder.charts.views import GroupByChartView
+from flask_appbuilder.models.group import aggregate_count, aggregate_avg, aggregate_sum
+from flask_appbuilder.widgets import ListWidget, ShowWidget, FormWidget
+from wtforms.validators import DataRequired, Optional, Length, NumberRange, Email
+from wtforms import (
+    BooleanField,
+    DateField,
+    DateTimeField,
+    DecimalField,
+    FloatField,
+    IntegerField,
+    StringField,
+    TextAreaField,
+)
+from flask_appbuilder.fieldwidgets import (
+    BS3TextFieldWidget, BS3PasswordFieldWidget, BS3TextAreaFieldWidget, Select2Widget, DatePickerWidget
+)
+from flask_appbuilder.models.sqla.filters import (
+    FilterGreater, FilterEqualFunction, FilterStartsWith, FilterContains, FilterNotEqual,
+    FilterEndsWith, FilterGreater, FilterNotEndsWith, FilterRelationManyToManyEqual, FilterRelationOneToManyEqual,
+    FilterRelationOneToManyNotEqual, FilterSmaller, SQLAFilterConverter
+    )
+from flask_appbuilder.widgets import (
+    ListWidget, ShowWidget, FormWidget, ListBlock, ListItem, ListLinkWidget, ListThumbnail, ShowBlockWidget
+)
+from flask_appbuilder.fieldwidgets import (
+     BS3TextFieldWidget,
+     BS3PasswordFieldWidget,
+     BS3TextAreaFieldWidget,
+     Select2Widget,
+     Select2ManyWidget,
+     DatePickerWidget,
+     DateTimePickerWidget,
+     # TimePickerWidget,
+     # BS3DateTimePickerWidget,
+     # ColorPickerWidget,
+     # FileUploadFieldWidget,
+     Select2AJAXWidget,
+     Select2SlaveAJAXWidget,
+     # BS3DateTimeFieldWidget,
+     # BS3DateFieldWidget,
+     # CheckboxWidget,
+     # BS3FileUploadFieldWidget
+ )
+from flask_babel import lazy_gettext as _
+from flask_appbuilder.actions import action
+from app import appbuilder, db
+from ..models import {{ table_name |capitalize}}
 {% endif %}
 
-class {{ table_name }}ReportView(ModelView):
-    datamodel = SQLAInterface({{ table_name }})
+class {{ table_name|capitalize }}ReportView(ModelView):
+    datamodel = SQLAInterface({{ table_name|capitalize }})
     base_order = ('{{ columns[0].name }}', 'asc')
     base_filters = [['{{ columns[0].name }}', FilterStartsWith, '']]
+    custom_template = ""
 
-    list_title = '{{ table_name }} Report'
+
+    list_title = '{{ table_name|capitalize }} Report'
     show_title = 'Report Details'
     list_widget = ListWidget(label_columns={'{{ columns[0].name }}': '{{ columns[0].name|capitalize }}'})
     show_widget = ShowWidget()
@@ -80,8 +123,8 @@ class {{ table_name }}ReportView(ModelView):
             title='Summary Report for {{ table_name }}'
         )
 
-class {{ table_name }}RChartView(GroupByChartView):
-    datamodel = SQLAInterface({{ table_name }})
+class {{ table_name|capitalize }}RChartView(GroupByChartView):
+    datamodel = SQLAInterface({{ table_name|capitalize }})
     chart_title = 'Grouped {{ table_name }} Chart'
 
     definitions = [
@@ -101,19 +144,20 @@ class {{ table_name }}RChartView(GroupByChartView):
         {% endfor %}
     ]
 
+"""
 {% if not single_file %}
 appbuilder.add_view(
-    {{ table_name }}ReportView,
-    "{{ table_name }} Report",
+    {{ table_name|capitalize }}ReportView,
+    "{{ table_name|capitalize }} Report",
     icon="fa-folder-open-o",
     category="Reports"
 )
 
 appbuilder.add_view(
-    {{ table_name }}ChartView,
-    "{{ table_name }} Charts",
+    {{ table_name|capitalize }}ChartView,
+    "{{ table_name|capitalize }} Charts",
     icon="fa-bar-chart",
     category="Reports"
 )
 {% endif %}
-
+"""

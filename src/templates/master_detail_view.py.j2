@@ -30,19 +30,44 @@ To use this template effectively:
 This template should give you a solid foundation for creating complex master-detail views in your Flask-AppBuilder application.
 
 #}
-{% if not single_file %}
-from flask import flash
+from flask import flash, current_app
 from flask_appbuilder import MasterDetailView
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder.actions import action
 from flask_babel import lazy_gettext as _
-from . import appbuilder, db
+from werkzeug.utils import secure_filename
+from wtforms.validators import DataRequired, Optional, Length, NumberRange, Email
+from flask_appbuilder.fields import StringField, IntegerField, FloatField, DateField, SelectField
+from flask_appbuilder.fieldwidgets import (
+    BS3TextFieldWidget, BS3PasswordFieldWidget, BS3TextAreaFieldWidget, Select2Widget, DatePickerWidget
+)
+from flask_appbuilder.widgets import ListWidget, ShowWidget, FormWidget
+from flask_appbuilder.fieldwidgets import (
+     BS3TextFieldWidget,
+     BS3PasswordFieldWidget,
+     BS3TextAreaFieldWidget,
+     Select2Widget,
+     Select2ManyWidget,
+     DatePickerWidget,
+     DateTimePickerWidget,
+     # TimePickerWidget,
+     # BS3DateTimePickerWidget,
+     # ColorPickerWidget,
+     # FileUploadFieldWidget,
+     Select2AJAXWidget,
+     Select2SlaveAJAXWidget,
+     # BS3DateTimeFieldWidget,
+     # BS3DateFieldWidget,
+     # CheckboxWidget,
+     # BS3FileUploadFieldWidget
+ )
+from app import appbuilder, db
 from .models import {{ master_table.name|capitalize }}, {{ detail_table.name|capitalize }}
-{% endif %}
 
 class {{ master_table.name|capitalize }}{{ detail_table.name|capitalize }}MasterDetailView(MasterDetailView):
     datamodel = SQLAInterface({{ master_table.name|capitalize }})
     related_views = [SQLAInterface({{ detail_table.name|capitalize }})]
+    custom_template = ""
 
     # Basic configuration
     route_base = "/{{ master_table.name.lower() }}_{{ detail_table.name.lower() }}"
@@ -59,70 +84,70 @@ class {{ master_table.name|capitalize }}{{ detail_table.name|capitalize }}Master
 
     # Master view configuration
     list_columns = [
-        {% for column in master_table.columns if not column.primary_key %}
+        {%- for column in master_table.columns if not column.primary_key %}
         "{{ column.name }}",
-        {% endfor %}
+        {%- endfor %}
     ]
     add_columns = [
-        {% for column in master_table.columns if not column.primary_key %}
+        {%- for column in master_table.columns if not column.primary_key %}
         "{{ column.name }}",
-        {% endfor %}
+        {%- endfor %}
     ]
     edit_columns = [
-        {% for column in master_table.columns if not column.primary_key %}
+        {%- for column in master_table.columns if not column.primary_key %}
         "{{ column.name }}",
-        {% endfor %}
+        {%- endfor %}
     ]
     show_columns = [
-        {% for column in master_table.columns %}
+        {%- for column in master_table.columns %}
         "{{ column.name }}",
-        {% endfor %}
+        {%- endfor %}
     ]
     search_columns = [
-        {% for column in master_table.columns if not column.primary_key %}
+        {%- for column in master_table.columns if not column.primary_key %}
         "{{ column.name }}",
-        {% endfor %}
+        {%- endfor %}
     ]
     base_order = ("{{ master_table.columns[0].name }}", "asc")
 
     # Detail view configuration
     detail_columns = [
-        {% for column in detail_table.columns if not column.primary_key and column.name != relationship.constrained_column %}
+        {%- for column in detail_table.columns if not column.primary_key and column.name != relationship.constrained_column %}
         "{{ column.name }}",
-        {% endfor %}
+        {%- endfor %}
     ]
     detail_add_columns = [
-        {% for column in detail_table.columns if not column.primary_key and column.name != relationship.constrained_column %}
+        {%- for column in detail_table.columns if not column.primary_key and column.name != relationship.constrained_column %}
         "{{ column.name }}",
-        {% endfor %}
+        {%- endfor %}
     ]
     detail_edit_columns = [
-        {% for column in detail_table.columns if not column.primary_key and column.name != relationship.constrained_column %}
+        {%- for column in detail_table.columns if not column.primary_key and column.name != relationship.constrained_column %}
         "{{ column.name }}",
-        {% endfor %}
+        {%- endfor %}
     ]
     detail_show_columns = [
-        {% for column in detail_table.columns if column.name != relationship.constrained_column %}
+        {%- for column in detail_table.columns if column.name != relationship.constrained_column %}
         "{{ column.name }}",
-        {% endfor %}
+        {%- endfor %}
     ]
     detail_search_columns = [
-        {% for column in detail_table.columns if not column.primary_key and column.name != relationship.constrained_column %}
+        {%- for column in detail_table.columns if not column.primary_key and column.name != relationship.constrained_column %}
         "{{ column.name }}",
-        {% endfor %}
+        {%- endfor %}
     ]
     detail_base_order = ("{{ detail_table.columns[0].name }}", "asc")
 
     # Form widgets and validators
-    {% for column in master_table.columns if not column.primary_key %}
+    {%- for column in master_table.columns if not column.primary_key %}
     {{ column.name }}_widget = None  # Specify custom widget if needed
     {{ column.name }}_validators = []  # Specify custom validators if needed
-    {% endfor %}
+    {%- endfor %}
 
-    {% for column in detail_table.columns if not column.primary_key and column.name != relationship.constrained_column %}
+    {%- for column in detail_table.columns if not column.primary_key and column.name != relationship.constrained_column %}
     detail_{{ column.name }}_widget = None  # Specify custom widget if needed
     detail_{{ column.name }}_validators = []  # Specify custom validators if needed
-    {% endfor %}
+    {%- endfor %}
 
     # Relationship configuration
     master_detail_relation = "{{ relationship.constrained_column }}"
@@ -244,14 +269,15 @@ class {{ master_table.name|capitalize }}{{ detail_table.name|capitalize }}Master
         # Add custom logic here
         pass
 
-{% if not single_file %}
+"""
+{%- if not single_file %}
 # Register the MasterDetailView with AppBuilder
 appbuilder.add_view(
     {{ master_table.name|capitalize }}{{ detail_table.name|capitalize }}MasterDetailView,
     "{{ master_table.name|capitalize }} - {{ detail_table.name|capitalize }}",
-    icon="{{ config.get('icon', 'fa-link') }}",
+    icon="{{ config.get('icon', 'fa-link') if config else 'fa-link' }}",
     category="Master-Detail",
     category_icon="fa-sitemap"
 )
-{% endif %}
-
+{%- endif %}
+"""

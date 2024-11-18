@@ -402,3 +402,44 @@ def get_display_column(columns):
         return primary_keys[0], False
 
     return columns[0]['name'], False
+
+def is_association_table(table_name, inspector):
+    """Improved detection of association tables.
+    Check if a table is likely an association table.
+
+    An association table typically has the following characteristics:
+    0. The name ends in _assoc (our formal convention)
+    1. Has at least two foreign keys
+    2. May have additional columns for metadata (e.g., creation date, status)
+    3. Usually has a relatively small number of columns compared to regular entity tables
+    4. The name often follows a pattern like 'table1_table2' or 'table1_to_table2'
+
+    Args:
+            table_name (str): Name of the table to check
+            inspector (sa.engine.reflection.Inspector): SQLAlchemy Inspector object
+
+        Returns:
+            bool: True if the table is likely an association table, False otherwise
+    """
+    if table_name.endswith("_assoc"):
+        return True
+
+    fks = inspector.get_foreign_keys(table_name)
+    columns = inspector.get_columns(table_name)
+
+    if len(fks) < 2:
+        return False
+
+    non_fk_columns = [col for col in columns if col['name'] not in
+                      [c for fk in fks for c in fk['constrained_columns']]]
+
+    # Allow for id, timestamps, and a couple of additional metadata columns
+    allowed_extra = ['id', 'created_at', 'updated_at', 'created_by', 'updated_by']
+    extra_columns = [col for col in non_fk_columns if col['name'] not in allowed_extra]
+
+   # Check if the table name follows the pattern 'table1_table2' or 'table1_to_table2'
+    name_parts = table_name.split('_')
+    if len(name_parts) >= 2 and (name_parts[-1] in fks[0]['referred_table'] or name_parts[-1] in fks[1]['referred_table']):
+        return True
+
+    return len(extra_columns) <= 2

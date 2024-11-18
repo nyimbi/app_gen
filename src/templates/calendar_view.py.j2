@@ -1,19 +1,51 @@
 {% if not single_file %}
-from flask import render_template, request, jsonify
+from flask import render_template, request, jsonify, current_app
 from flask_appbuilder import expose, has_access
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder.views import ModelView
-from flask_appbuilder.widgets import FormWidget
+from werkzeug.utils import secure_filename
+from wtforms.validators import DataRequired, Optional, Length, NumberRange, Email
+from wtforms import (
+    BooleanField,
+    DateField,
+    DateTimeField,
+    DecimalField,
+    FloatField,
+    IntegerField,
+    StringField,
+    TextAreaField,
+)
+from flask_appbuilder.fieldwidgets import BS3TextFieldWidget, BS3PasswordFieldWidget, BS3TextAreaFieldWidget, Select2Widget, DatePickerWidget
+from flask_appbuilder.widgets import ListWidget, ShowWidget, FormWidget
+from flask_appbuilder.fieldwidgets import (
+     BS3TextFieldWidget,
+     BS3PasswordFieldWidget,
+     BS3TextAreaFieldWidget,
+     Select2Widget,
+     Select2ManyWidget,
+     DatePickerWidget,
+     DateTimePickerWidget,
+     # TimePickerWidget,
+     # BS3DateTimePickerWidget,
+     # ColorPickerWidget,
+     # FileUploadFieldWidget,
+     Select2AJAXWidget,
+     Select2SlaveAJAXWidget,
+     # BS3DateTimeFieldWidget,
+     # BS3DateFieldWidget,
+     # CheckboxWidget,
+     # BS3FileUploadFieldWidget
+ )
 from wtforms import SelectField
 from wtforms.validators import DataRequired
-from .models import {{ table_name }}
-from . import appbuilder, db
+from ..models import {{ table_name| capitalize }}
+from app import appbuilder, db
 import calendar
 from datetime import datetime, timedelta
 {% endif %}
 
-class {{ table_name }}CalendarView(ModelView):
-    datamodel = SQLAInterface({{ table_name }})
+class {{ table_name | capitalize }}CalendarView(ModelView):
+    datamodel = SQLAInterface({{ table_name | capitalize}})
     base_order = ('{{ date_columns[0] }}', 'asc')
 
     date_columns = [{% for col in date_columns %}'{{ col }}'{% if not loop.last %}, {% endif %}{% endfor %}]
@@ -23,9 +55,9 @@ class {{ table_name }}CalendarView(ModelView):
     show_title = 'Event Details'
 
     # Columns configuration
-    list_columns = [{% for col in columns %}{% if not col.primary_key %}'{{ col.name }}'{% if not loop.last %}, {% endif %}{% endif %}{% endfor %}]
-    edit_columns = [{% for col in columns %}{% if not col.primary_key %}'{{ col.name }}'{% if not loop.last %}, {% endif %}{% endif %}{% endfor %}]
-    show_columns = [{% for col in columns %}{% if not col.primary_key %}'{{ col.name }}'{% if not loop.last %}, {% endif %}{% endif %}{% endfor %}]
+    list_columns = [{%- for col in columns %}{%- if not col.primary_key %}'{{ col.name }}'{%- if not loop.last %}, {%- endif -%}{%- endif -%}{%- endfor -%}]
+    edit_columns = [{%- for col in columns %}{%- if not col.primary_key %}'{{ col.name }}'{%- if not loop.last %}, {%- endif -%}{%- endif -%}{%- endfor -%}]
+    show_columns = [{%- for col in columns %}{%- if not col.primary_key %}'{{ col.name }}'{%- if not loop.last %}, {%- endif -%}{%- endif -%}{%- endfor -%}]
 
     @expose('/calendar/')
     @has_access
@@ -149,11 +181,13 @@ class {{ table_name }}CalendarView(ModelView):
         except Exception as e:
             return jsonify({"error": str(e)}), 400
 
-{% if not single_file %}
+"""
+{%- if not single_file %}
 appbuilder.add_view(
-    {{ table_name }}CalendarView,
-    "{{ table_name }} Calendar",
+    {{ table_name| capitalize }}CalendarView,
+    "{{ table_name| capitalize }} Calendar",
     icon="fa-calendar",
     category="Calendar"
 )
-{% endif %}
+{%- endif %}
+"""

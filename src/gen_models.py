@@ -1,4 +1,8 @@
 """
+Author: Nyimbi Odero
+Copyright: Nyimbi Odero, 2024
+License: MIT
+
 gen_models.py: SQLAlchemy Model Generator
 
 This script generates SQLAlchemy ORM models by introspecting an existing database schema.
@@ -48,8 +52,9 @@ import enum
 import argparse
 
 from oheaders import gen_model_header, gen_photo_column, gen_file_column
-from utils import snake_to_pascal, is_association_table
-from db_utils import map_pgsql_datatypes, get_display_column
+from utils.case_utils import snake_to_pascal
+from utils.db_utils import is_association_table
+from utils.db_utils import map_pgsql_datatypes, get_display_column
 
 p = inflect.engine()
 Base = declarative_base()

@@ -1,0 +1,105 @@
+
+{% extends "appbuilder/base.html" %}
+{% import 'appbuilder/general/lib.html' as lib %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-12">
+            <h1>Personalize View Settings</h1>
+
+            <form id="personalizeForm" method="post" action="{{ url_for(modelview_name + '.personalize') }}">
+                {{ form.csrf_token }}
+
+                <div class="panel panel-default">
+                    <div class="panel-heading">
+                        <h3 class="panel-title">Select Columns to Display</h3>
+                    </div>
+                    <div class="panel-body">
+                        <div class="row">
+                            {% for column in columns %}
+                            <div class="col-md-4">
+                                <div class="checkbox">
+                                    <label>
+                                        <input type="checkbox" name="columns" value="{{ column }}"
+                                               {% if column in current_columns %}checked{% endif %}>
+                                        {{ column|capitalize }}
+                                    </label>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel panel-default">
+                    <div class="panel-heading">
+                        <h3 class="panel-title">Column Order</h3>
+                    </div>
+                    <div class="panel-body">
+                        <ul id="columnOrder" class="list-group">
+                            {% for column in current_columns %}
+                            <li class="list-group-item" data-column="{{ column }}">
+                                <i class="fa fa-bars handle"></i> {{ column|capitalize }}
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        <input type="hidden" name="column_order" id="columnOrderInput">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="page_size">Items per page:</label>
+                    <input type="number" class="form-control" id="page_size" name="page_size"
+                           value="{{ current_page_size }}" min="1" max="100">
+                </div>
+
+                <button type="submit" class="btn btn-primary">Save Settings</button>
+                <a href="{{ url_for(modelview_name + '.list') }}" class="btn btn-default">Cancel</a>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
+<script>
+    $(document).ready(function() {
+        var el = document.getElementById('columnOrder');
+        var sortable = Sortable.create(el, {
+            handle: '.handle',
+            animation: 150,
+            onEnd: function() {
+                updateColumnOrder();
+            }
+        });
+
+        function updateColumnOrder() {
+            var order = sortable.toArray();
+            $('#columnOrderInput').val(JSON.stringify(order));
+        }
+
+        updateColumnOrder();
+
+        $('#personalizeForm').submit(function() {
+            updateColumnOrder();
+        });
+
+        $('input[name="columns"]').change(function() {
+            var column = $(this).val();
+            if ($(this).is(':checked')) {
+                $('#columnOrder').append(
+                    '<li class="list-group-item" data-column="' + column + '">' +
+                    '<i class="fa fa-bars handle"></i> ' + column.charAt(0).toUpperCase() + column.slice(1) +
+                    '</li>'
+                );
+            } else {
+                $('#columnOrder li[data-column="' + column + '"]').remove();
+            }
+            updateColumnOrder();
+        });
+    });
+</script>
+{% endblock %}

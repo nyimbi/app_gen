@@ -1,7 +1,9 @@
 # main_app.py.j2
 
 from flask import Flask
+from flask import current_app
 from flask_appbuilder import AppBuilder, SQLA
+from app import appbuilder, db
 
 app = Flask(__name__)
 app.config.from_object('config')
@@ -11,14 +13,14 @@ appbuilder = AppBuilder(app, db.session)
 {% if single_file %}
 from . import views
 {% else %}
-{% for view in views %}
+{%- for view in views %}
 from . import {{ view }}
-{% endfor %}
+{%- endfor %}
 {% endif %}
 
-{% for table_name in table_names %}
+{%- for table_name in table_names %}
 from .models import {{ table_name }}
-{% endfor %}
+{%- endfor %}
 
 db.create_all()
 

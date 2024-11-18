@@ -1,0 +1,16 @@
+{% extends "appbuilder/general/model/edit.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="progress mb-3">
+        <div class="progress-bar" role="progressbar" style="width: {{ completion }}%;" aria-valuenow="{{ completion }}" aria-valuemin="0" aria-valuemax="100">{{ completion }}% Complete</div>
+    </div>
+    {{ super() }}
+</div>
+
+<script>
+    // Add any custom JavaScript for progressive form functionality here
+    // For example, showing/hiding form sections based on user input
+</script>
+{% endblock %}
+

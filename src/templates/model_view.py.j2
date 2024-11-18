@@ -18,19 +18,63 @@ This template includes:
 15. Method to override the default route base
 16. A custom API method
 17. View registration with AppBuilder (for non-single-file mode)
-
 #}
-
-{% if not single_file %}
-from flask import flash, redirect, url_for
-from flask_appbuilder import ModelView
+{%- if not single_file %}
+from flask import flash, redirect, url_for, current_app
+from flask_appbuilder import ModelView, expose, action, has_access
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder.actions import action
 from flask_appbuilder.security.decorators import has_access
+from werkzeug.utils import secure_filename
+from flask_appbuilder.models.sqla.filters import (
+    FilterGreater, FilterEqualFunction, FilterStartsWith, FilterContains, FilterNotEqual,
+    FilterEndsWith, FilterGreater, FilterNotEndsWith, FilterRelationManyToManyEqual, FilterRelationOneToManyEqual,
+    FilterRelationOneToManyNotEqual, FilterSmaller, SQLAFilterConverter
+    )
+from flask_wtf import FlaskForm
+from wtforms import (
+    BooleanField,
+    DateField,
+    DateTimeField,
+    DecimalField,
+    FloatField,
+    IntegerField,
+    StringField,
+    TextAreaField,
+)
+from wtforms import validators
+from wtforms.validators import DataRequired, Optional, Length, NumberRange, Email
+from wtforms import StringField, IntegerField, FloatField, DateField, SelectField, BooleanField, PasswordField
+from flask_appbuilder.fields import EnumField, QuerySelectField, QuerySelectMultipleField, AJAXSelectField
+from flask_appbuilder.fieldwidgets import (
+    BS3TextFieldWidget, BS3PasswordFieldWidget, BS3TextAreaFieldWidget, Select2Widget, DatePickerWidget
+)
+from flask_appbuilder.widgets import (
+    ListWidget, ShowWidget, FormWidget, ListBlock, ListItem, ListLinkWidget, ListThumbnail, ShowBlockWidget
+)
+from flask_appbuilder.fieldwidgets import (
+     BS3TextFieldWidget,
+     BS3PasswordFieldWidget,
+     BS3TextAreaFieldWidget,
+     Select2Widget,
+     Select2ManyWidget,
+     DatePickerWidget,
+     DateTimePickerWidget,
+     # TimePickerWidget,
+     # BS3DateTimePickerWidget,
+     # ColorPickerWidget,
+     # FileUploadFieldWidget,
+     Select2AJAXWidget,
+     Select2SlaveAJAXWidget,
+     # BS3DateTimeFieldWidget,
+     # BS3DateFieldWidget,
+     # CheckboxWidget,
+     # BS3FileUploadFieldWidget
+ )
 from flask_babel import lazy_gettext as _
-from . import appbuilder, db
-from .models import {{ table_name|capitalize }}
-{% endif %}
+from app import appbuilder, db
+from ..models import {{ table_name|capitalize }}
+{%- endif %}
 
 class {{ table_name|capitalize }}ModelView(ModelView):
     datamodel = SQLAInterface({{ table_name|capitalize }})
@@ -41,18 +85,19 @@ class {{ table_name|capitalize }}ModelView(ModelView):
     show_title = "{{ table_name|capitalize }} Details"
     add_title = "Add {{ table_name|capitalize }}"
     edit_title = "Edit {{ table_name|capitalize }}"
+    custom_template = ""
 
     # List view configuration
     list_columns = {{ list_columns }}
     list_widget = ListWidget
     label_columns = {
-        {% for column in columns %}
+        {%- for column in columns -%}
         "{{ column.name }}": _("{{ column.label|capitalize }}"),
-        {% endfor %}
+        {%- endfor -%}
     }
     search_columns = {{ list_columns }}
     base_order = ("id", "asc")
-    base_filters = [["id", FilterGreaterThan, 0]]
+    base_filters = [["id", FilterGreater, 0]]
 
     # Show view configuration
     show_columns = {{ list_columns }}
@@ -60,36 +105,36 @@ class {{ table_name|capitalize }}ModelView(ModelView):
 
     # Add and Edit form configuration
     add_columns = [
-        {% for column in columns if not column.primary_key %}
+        {%- for column in columns if not column.primary_key -%}
         "{{ column.name }}",
-        {% endfor %}
+        {%- endfor -%}
     ]
     edit_columns = [
-        {% for column in columns if not column.primary_key %}
+        {%- for column in columns if not column.primary_key -%}
         "{{ column.name }}",
-        {% endfor %}
+        {%- endfor -%}
     ]
     add_widget = FormWidget
     edit_widget = FormWidget
 
     # Form field configurations
-    {% for column_name, field_info in form_fields.items() %}
+
+    {%- for column_name, field_info in form_fields.items() %}
     {{ column_name }} = {
         "widget": {{ field_info.widget }},
         "validators": [{{ field_info.validators|join(', ') }}],
-        "description": _("Enter {{ column_name|replace('_', ' ')|capitalize }}"),
-    }
-    {% endfor %}
+        "description": _("Enter {{ column_name|replace('_', ' ')|capitalize }}"),}
+    {%- endfor %}
 
     # Related views (for relationships)
-    {% for relationship in relationships %}
-    related_views = [
-        ("{{ relationship.referred_table|capitalize }}ModelView", "{{ relationship.constrained_column }}"),
-    ]
-    {% endfor %}
+    {%- for relationship in relationships %}
+    # related_views = [
+    #    ({{ relationship.referred_table|capitalize }}ModelView), #, "{{ relationship.constrained_column }}"),
+    # ]
+    {%- endfor %}
 
     # Custom queries
-    base_query = db.session.query({{ table_name|capitalize }}).filter({{ table_name|capitalize }}.active == True)
+    # base_query = db.session.query({{ table_name|capitalize }}).filter({{ table_name|capitalize }}.is_active == True)
 
     # Pagination settings
     page_size = 20
@@ -111,9 +156,9 @@ class {{ table_name|capitalize }}ModelView(ModelView):
     edit_exclude_columns = ["created_at", "updated_at"]
     show_exclude_columns = []
     description_columns = {
-        {% for column in columns %}
+        {%- for column in columns -%}
         "{{ column.name }}": _("Description for {{ column.name }}"),
-        {% endfor %}
+        {%- endfor -%}
     }
 
     # Custom actions
@@ -163,6 +208,7 @@ class {{ table_name|capitalize }}ModelView(ModelView):
         # Custom API logic here
         pass
 
+"""
 {% if not single_file %}
 appbuilder.add_view(
     {{ table_name|capitalize }}ModelView,
@@ -172,3 +218,4 @@ appbuilder.add_view(
     category_icon="fa-database"
 )
 {% endif %}
+"""

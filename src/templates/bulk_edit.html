@@ -1,0 +1,75 @@
+
+{% extends "appbuilder/base.html" %}
+{% import 'appbuilder/general/lib.html' as lib %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-12">
+            <h1>Bulk Edit {{ model_name }}</h1>
+
+            <form id="bulk-edit-form" method="post" action="{{ url_for(modelview_name + '.bulk_edit_form', ids=ids) }}">
+                {{ form.csrf_token }}
+
+                <div class="alert alert-info">
+                    You are editing {{ items|length }} item(s). Fields left blank will not be updated.
+                </div>
+
+                {% for field in form %}
+                    {% if field.name != 'csrf_token' %}
+                        <div class="form-group">
+                            {{ field.label }}
+                            {{ field(class="form-control") }}
+                            {% if field.errors %}
+                                <div class="alert alert-danger">
+                                    {% for error in field.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                {% endfor %}
+
+                <button type="submit" class="btn btn-primary">Update Items</button>
+                <a href="{{ url_for(modelview_name + '.list') }}" class="btn btn-default">Cancel</a>
+            </form>
+
+            <h2 class="mt-4">Items being edited:</h2>
+            <table class="table table-bordered table-hover">
+                <thead>
+                    <tr>
+                        {% for col in list_columns %}
+                            <th>{{ col|capitalize }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                        <tr>
+                            {% for col in list_columns %}
+                                <td>{{ item[col] }}</td>
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    $(document).ready(function() {
+        // You can add custom JavaScript for the bulk edit form here
+        // For example, you might want to add confirmation before submission
+        $('#bulk-edit-form').submit(function(e) {
+            if (!confirm('Are you sure you want to update these items?')) {
+                e.preventDefault();
+            }
+        });
+    });
+</script>
+{% endblock %}

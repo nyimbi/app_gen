@@ -24,15 +24,34 @@ examples for different chart configurations, which should be customized
 based on the specific requirements of your application and data structure.
 """
 #}
-
-{% if not single_file %}
+from flask import current_app
 from flask_appbuilder.charts.views import ChartView
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder.models.group import aggregate_sum, aggregate_count, aggregate_avg
+from flask_appbuilder.widgets import ListWidget, ShowWidget, FormWidget
+from flask_appbuilder.fieldwidgets import (
+     BS3TextFieldWidget,
+     BS3PasswordFieldWidget,
+     BS3TextAreaFieldWidget,
+     Select2Widget,
+     Select2ManyWidget,
+     DatePickerWidget,
+     DateTimePickerWidget,
+     # TimePickerWidget,
+     # BS3DateTimePickerWidget,
+     # ColorPickerWidget,
+     # FileUploadFieldWidget,
+     Select2AJAXWidget,
+     Select2SlaveAJAXWidget,
+     # BS3DateTimeFieldWidget,
+     # BS3DateFieldWidget,
+     # CheckboxWidget,
+     # BS3FileUploadFieldWidget
+ )
 from flask_babel import lazy_gettext as _
-from . import appbuilder
-from .models import {{ table_name|capitalize }}
-{% endif %}
+from app import appbuilder, db
+from ..models import {{ table_name|capitalize }}
+
 
 class {{ table_name|capitalize }}ChartView(ChartView):
     datamodel = SQLAInterface({{ table_name|capitalize }})
@@ -40,12 +59,21 @@ class {{ table_name|capitalize }}ChartView(ChartView):
     chart_type = "PieChart"
     chart_3d = True
 
+    # Required properties for ChartView
+    group_by_columns = ['{{ date_columns[0].name }}']  # Add this line
+
     definitions = [
         {
             "group": "{{ date_columns[0].name }}",
             "series": [(aggregate_count, "{{ numeric_columns[0].name }}")],
         }
     ]
+
+    # Add default formatters for the series
+    formatters_columns = {
+        "{{ date_columns[0].name }}": lambda x: x.strftime("%Y-%m-%d"),
+        "{{ numeric_columns[0].name }}": lambda x: f"{x:,.0f}"
+    }
 
     label_columns = {
         "{{ date_columns[0].name }}": _("Date"),
@@ -62,19 +90,27 @@ class {{ table_name|capitalize }}ChartView(ChartView):
 
     # Base query for data retrieval
     base_order = ("{{ date_columns[0].name }}", "asc")
-    base_filters = [["{{ numeric_columns[0].name }}", ">", 0]]
+    # base_filters = [["{{ numeric_columns[0].name }}", ">", 0]]
 
-    # Custom method for data processing
+    # Add error handling for data retrieval
     def get_data(self):
-        data = super().get_data()
-        # Add custom data processing logic here
-        return data
+        try:
+            data = super().get_data()
+            return data
+        except Exception as e:
+            log.error(f"Error getting chart data: {str(e)}")
+            return []
 
-    # Additional chart options
+    #  Additional chart options with defaults
     chart_options = {
-        "colors": ["#FF0000", "#00FF00", "#0000FF"],  # Custom color scheme
+        "colors": ["#FF0000", "#00FF00", "#0000FF"],
         "legend": {"position": "bottom"},
         "tooltip": {"trigger": "selection"},
+        "height": 400,
+        "width": 600,
+        "orientation": "horizontal",
+        "is3D": True,
+        "pieHole": 0.4
     }
 
     # Time series configuration
@@ -110,17 +146,30 @@ class {{ table_name|capitalize }}ChartView(ChartView):
     #     "pointSize": 5,
     # }
 
+    def __init__(self, **kwargs):
+        super({{ table_name|capitalize }}ChartView, self).__init__(**kwargs)
+        # Additional initialization if needed
+        self.title = _("{{ table_name|capitalize }} Statistics")
+
+    def pre_process_data(self, data):
+        """
+        Hook to pre-process the data before chart rendering
+        """
+        return data
+
     # Export functionality
     enable_export = True
     export_formats = ["csv", "xlsx", "pdf"]
 
-{% if not single_file %}
+"""
+{%- if not single_file %}
 # Register the ChartView with AppBuilder
 appbuilder.add_view(
     {{ table_name|capitalize }}ChartView,
     "{{ table_name|capitalize }} Charts",
-    icon="{{ config.get('icon', 'fa-bar-chart') }}",
+    icon="{{ config.get('icon', 'fa-bar-chart') if config else 'fa-bar-chart' }}",
     category="Charts",
     category_icon="fa-chart-pie"
 )
-{% endif %}
+{%- endif %}
+"""

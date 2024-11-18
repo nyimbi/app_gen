@@ -1,0 +1,338 @@
+{% if not single_file %}
+from colorama import Fore, Back, Style
+from flask import render_template, request, jsonify, abort, current_app, url_for
+from flask_appbuilder import MultipleView, expose, has_access
+from flask_appbuilder.models.sqla.interface import SQLAInterface
+from flask_appbuilder.forms import DynamicForm
+from flask_appbuilder.widgets import ListWidget, ShowWidget, FormWidget
+from flask_appbuilder.fieldwidgets import (
+    BS3TextFieldWidget,
+    BS3PasswordFieldWidget,
+    BS3TextAreaFieldWidget,
+    Select2Widget,
+    Select2ManyWidget,
+    DatePickerWidget,
+    DateTimePickerWidget,
+    Select2AJAXWidget,
+    Select2SlaveAJAXWidget,
+)
+from wtforms import SelectField, BooleanField
+from wtforms.validators import DataRequired
+from sqlalchemy import func
+from app import appbuilder, db
+
+from ..models import {{ table_name | capitalize }}
+
+# Import related views
+{% for related_view in related_views %}
+from .{{ related_view.replace('ModelView', '').lower() }}_model_view import {{ related_view }}
+{% endfor %}
+{% endif %}
+
+LAYOUT_OPTIONS = {
+    'tabs': 'Tabbed Layout',
+    'accordion': 'Accordion Layout',
+    'grid': 'Grid Layout',
+    'list': 'List Layout',
+    'cards': 'Card Layout',
+    'sidebar': 'Sidebar Layout',
+    'split': 'Split View Layout',
+    'wizard': 'Wizard Layout'
+}
+
+class {{ table_name|capitalize }}MultipleView(MultipleView):
+    """
+    Multiple view implementation for {{ table_name|capitalize }}.
+    Combines multiple related views into a single interface with various layout options.
+    """
+    template_folder = "templates"
+    base_permissions = ['can_list', 'can_show']
+    {% set default_layout = config.get("default_layout", "cards") if config else "tabs" %}
+    layout = '{{ default_layout }}'
+    base_template = "appbuilder/base.html"
+
+    # Define view classes
+    view_classes = [
+        {%- for related_view in related_views %}
+        {{ related_view }},
+        {%- endfor %}
+    ]
+
+    def __init__(self, **kwargs):
+        """Initialize the multiple view with configuration and view instances."""
+        super({{ table_name|capitalize }}MultipleView, self).__init__(**kwargs)
+
+        # Basic configuration
+        self.title = "{{ table_name|capitalize }} Multiple View"
+        self.endpoint = "{{ table_name.lower() }}_multiple"
+        self.route_base = "/{{ table_name.lower() }}_multiple"
+        self.show_title = True
+        self.show_menu = True
+        self.search_enabled = True
+        self.layout = 'tabs'
+        self.page_size = 10
+        self._filters = []
+        self.actions = []
+
+        # Initialize view instances
+        self.views = []
+        try:
+            for view_class in self.view_classes:
+                view_instance = view_class()
+                view_instance.datamodel = SQLAInterface(view_instance.datamodel.obj)
+                self.views.append(view_instance)
+        except Exception as e:
+            print(f"Error initializing views: {str(e)}")
+            self.views = []
+
+    def _get_list_widget(self, view):
+        """Get the list widget for a specific view instance."""
+        try:
+            # Get the items for the view
+            items = view.datamodel.get_all()
+
+            # Get the widgets configuration from the view
+            widgets = {
+                'list_widget': view.list_widget(
+                    datamodel=view.datamodel,
+                    filters=getattr(view, '_filters', []),
+                    title=getattr(view, 'list_title', view.__class__.__name__),
+                    list_columns=getattr(view, 'list_columns', []),
+                    orderby=getattr(view, 'base_order', ('id', 'asc')),
+                    base_permissions=getattr(view, 'base_permissions', ['can_list']),
+                    actions=getattr(view, 'actions', {})
+                ),
+                'search_widget': view.search_widget(
+                    filters=getattr(view, '_filters', []),
+                    execution_count=len(items)
+                ) if hasattr(view, 'search_widget') else None,
+                'page_size': getattr(view, 'page_size', self.page_size)
+            }
+            return widgets
+        except Exception as e:
+            print(f"Error generating widgets for {view.__class__.__name__}: {str(e)}")
+            return {
+                'list_widget': '<div class="alert alert-danger">Error loading view</div>',
+                'search_widget': None,
+                'page_size': self.page_size
+            }
+
+    def _prepare_view_data(self, view):
+        """Prepare data for a single view."""
+        try:
+            widgets = self._get_list_widget(view)
+            return {
+                'name': view.__class__.__name__,
+                'title': getattr(view, 'list_title', view.__class__.__name__),
+                'widgets': widgets,
+                'permissions': getattr(view, 'base_permissions', ['can_list']),
+                'filters': getattr(view, '_filters', []),
+                'search_columns': getattr(view, 'search_columns', []),
+                'actions': getattr(view, 'actions', {}),
+                'page_size': getattr(view, 'page_size', self.page_size)
+            }
+        except Exception as e:
+            print(f"Error preparing view data: {str(e)}")
+            return None
+
+    @expose('/')
+    @has_access
+    def list(self):
+        """Default view."""
+        self.update_redirect()
+        return self.render_multiple()
+
+    @expose('/layout/', methods=['GET', 'POST'])
+    @has_access
+    def change_layout(self):
+        """Handle layout changes."""
+        layout_form = LayoutForm(request.form)
+
+        if request.method == 'POST' and layout_form.validate():
+            self.layout = layout_form.layout.data
+            self.show_title = layout_form.show_title.data
+            self.show_menu = layout_form.show_menu.data
+            self.search_enabled = layout_form.search_enabled.data
+            return self.render_multiple()
+
+        # Populate form with current values
+        layout_form.layout.data = self.layout
+        layout_form.show_title.data = self.show_title
+        layout_form.show_menu.data = self.show_menu
+        layout_form.search_enabled.data = self.search_enabled
+
+        return self.render_template(
+            'layout_form.html',
+            form=layout_form,
+            appbuilder=self.appbuilder,
+            base_template=self.base_template,
+            title="Change Layout",
+            show_title=True
+        )
+
+    def render_multiple(self):
+        """Render the multiple view with all views and widgets."""
+        template = f'multiple_view_{self.layout}.html'
+        print(Fore.RED + f'Using template: {template}' + Style.RESET_ALL)
+
+        try:
+            # Create context for each view
+            views_data = []
+            for view in self.views:
+                view_data = self._prepare_view_data(view)
+                if view_data:
+                    views_data.append(view_data)
+
+            # Prepare complete context
+            context = {
+                'views': self.views,
+                'views_data': views_data,
+                'layout': self.layout,
+                'title': self.title,
+                'show_title': self.show_title,
+                'show_menu': self.show_menu,
+                'search_enabled': self.search_enabled,
+                'appbuilder': self.appbuilder,
+                'base_template': self.base_template,
+                'actions': self.actions,
+                'filters': self._filters,
+                'page_size': self.page_size
+            }
+
+            return self.render_template(template, **context)
+
+        except Exception as e:
+            print(f"Error rendering multiple view: {str(e)}")
+            return self.render_template(
+                'error.html',
+                error_message=str(e),
+                base_template=self.base_template
+            )
+
+    @expose('/<view_name>')
+    @has_access
+    def render_view(self, view_name):
+        """Render a specific view."""
+        view = next((v for v in self.views if v.__class__.__name__.lower() == view_name.lower()), None)
+        if view:
+            return view.list()
+        abort(404)
+
+    @expose('/custom/')
+    @has_access
+    def custom_view(self):
+        """Custom view implementation."""
+        return self.render_template(
+            'custom_view.html',
+            title="Custom View",
+            mywidget="Some custom data",
+            appbuilder=self.appbuilder,
+            base_template=self.base_template
+        )
+
+    @expose('/api/data/')
+    @has_access
+    def api_data(self):
+        """API endpoint for view data."""
+        try:
+            data = [{
+                'id': view.__class__.__name__,
+                'name': getattr(view, 'title', view.__class__.__name__),
+                'count': view.datamodel.get_count()
+            } for view in self.views]
+            return jsonify(data)
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @expose('/api/chart-data/')
+    @has_access
+    def api_chart_data(self):
+        """API endpoint for chart data."""
+        try:
+            chart_data = {}
+            for view in self.views:
+                model = view.datamodel.obj
+                chart_data[view.__class__.__name__] = {
+                    'labels': [col.name for col in model.__table__.columns if col.name != 'id'],
+                    'datasets': [{
+                        'label': 'Count',
+                        'data': [view.datamodel.get_count(filters=[getattr(model, col.name) != None])
+                                for col in model.__table__.columns if col.name != 'id']
+                    }]
+                }
+            return jsonify(chart_data)
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @expose('/remove_filter/<int:filter_id>')
+    @has_access
+    def remove_filter(self, filter_id):
+        """Remove a filter and refresh the view."""
+        try:
+            if 0 <= filter_id < len(self._filters):
+                self._filters.pop(filter_id)
+            return redirect(url_for(f'.{self.default_view}'))
+        except Exception as e:
+            print(f"Error removing filter: {str(e)}")
+            return redirect(url_for(f'.{self.default_view}'))
+
+    # Hook methods
+    def pre_add(self, item):
+        """Hook method called before adding a new record."""
+        for view in self.views:
+            if hasattr(view, 'pre_add'):
+                view.pre_add(item)
+
+    def post_add(self, item):
+        """Hook method called after adding a new record."""
+        for view in self.views:
+            if hasattr(view, 'post_add'):
+                view.post_add(item)
+
+    def pre_update(self, item):
+        """Hook method called before updating a record."""
+        for view in self.views:
+            if hasattr(view, 'pre_update'):
+                view.pre_update(item)
+
+    def post_update(self, item):
+        """Hook method called after updating a record."""
+        for view in self.views:
+            if hasattr(view, 'post_update'):
+                view.post_update(item)
+
+    def pre_delete(self, item):
+        """Hook method called before deleting a record."""
+        for view in self.views:
+            if hasattr(view, 'pre_delete'):
+                view.pre_delete(item)
+
+    def post_delete(self, item):
+        """Hook method called after deleting a record."""
+        for view in self.views:
+            if hasattr(view, 'post_delete'):
+                view.post_delete(item)
+
+class LayoutForm(FormWidget):
+    """Form for changing the layout configuration."""
+    layout = SelectField(
+        'Layout',
+        choices=list(LAYOUT_OPTIONS.items()),
+        validators=[DataRequired()],
+        widget=Select2Widget()
+    )
+    show_title = BooleanField('Show Title', default=True)
+    show_menu = BooleanField('Show Menu', default=True)
+    search_enabled = BooleanField('Enable Search', default=True)
+
+"""
+{% if not single_file %}
+appbuilder.add_view(
+    {{ table_name|capitalize }}MultipleView,
+    "{{ table_name|capitalize }} Multiple View",
+    icon="fa-dashboard",
+    category="Multiple Views",
+    category_icon="fa-list"
+)
+{% endif %}
+"""

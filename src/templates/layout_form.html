@@ -1,0 +1,215 @@
+{% extends 'appbuilder/baselayout.html' %} {% block head_css %} {{ super() }}
+<style>
+    .layout-form-container {
+        background: #fff;
+        padding: 25px;
+        border-radius: 5px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+        margin-top: 20px;
+    }
+
+    .layout-form-title {
+        margin-bottom: 25px;
+        padding-bottom: 15px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        font-weight: 500;
+        color: #333;
+    }
+
+    .form-check {
+        margin-bottom: 15px;
+        padding-left: 30px;
+    }
+
+    .form-check-input {
+        margin-left: -30px;
+    }
+
+    .form-check-label {
+        font-weight: normal;
+        color: #555;
+    }
+
+    .layout-preview {
+        margin-top: 20px;
+        padding: 15px;
+        border: 1px dashed #ddd;
+        border-radius: 4px;
+    }
+
+    .btn-toolbar {
+        margin-top: 25px;
+        padding-top: 20px;
+        border-top: 1px solid #eee;
+    }
+
+    /* Select2 customization */
+    .select2-container--default .select2-selection--single {
+        height: 38px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+    }
+
+    .select2-container--default
+        .select2-selection--single
+        .select2-selection__rendered {
+        line-height: 36px;
+        padding-left: 12px;
+    }
+
+    .select2-container--default
+        .select2-selection--single
+        .select2-selection__arrow {
+        height: 36px;
+    }
+</style>
+{% endblock %} {% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="layout-form-container">
+                <div class="layout-form-title">
+                    <h2><i class="fa fa-columns"></i> {{ title }}</h2>
+                    <p class="text-muted">
+                        Customize how your multiple view is displayed
+                    </p>
+                </div>
+
+                <form method="post" class="layout-form">
+                    {{ form.hidden_tag() }} {# Layout Selection #}
+                    <div class="form-group">
+                        {{ form.layout.label }} {{
+                        form.layout(class="form-control select2",
+                        **{'data-toggle': 'select2', 'data-placeholder': 'Select
+                        a layout'}) }} {% if form.layout.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.layout.errors %} {{ error }} {%
+                            endfor %}
+                        </div>
+                        {% endif %}
+                        <small class="form-text text-muted">
+                            Choose how your views will be arranged
+                        </small>
+                    </div>
+
+                    {# Display Options #}
+                    <h5 class="mb-3">Display Options</h5>
+
+                    <div class="form-check">
+                        {{ form.show_title(class="form-check-input") }} {{
+                        form.show_title.label(class="form-check-label") }}
+                        <small class="form-text text-muted">
+                            Show or hide the view title
+                        </small>
+                    </div>
+
+                    <div class="form-check">
+                        {{ form.show_menu(class="form-check-input") }} {{
+                        form.show_menu.label(class="form-check-label") }}
+                        <small class="form-text text-muted">
+                            Show or hide the menu buttons
+                        </small>
+                    </div>
+
+                    <div class="form-check">
+                        {{ form.search_enabled(class="form-check-input") }} {{
+                        form.search_enabled.label(class="form-check-label") }}
+                        <small class="form-text text-muted">
+                            Enable or disable search functionality
+                        </small>
+                    </div>
+
+                    {# Preview Section #}
+                    <div class="layout-preview d-none">
+                        <h6>Preview</h6>
+                        <div id="layout-preview-content">
+                            <!-- Preview content will be loaded here -->
+                        </div>
+                    </div>
+
+                    {# Action Buttons #}
+                    <div class="btn-toolbar">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fa fa-save"></i> Save Changes
+                        </button>
+                        <a
+                            href="{{ url_for('.list') }}"
+                            class="btn btn-secondary ml-2"
+                        >
+                            <i class="fa fa-times"></i> Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} {% block tail_js %} {{ super() }}
+<script>
+    $(document).ready(function () {
+        // Initialize Select2
+        $(".select2").select2({
+            theme: "bootstrap4",
+            width: "100%",
+        });
+
+        // Handle layout changes
+        $("#layout").on("change", function () {
+            var selectedLayout = $(this).val();
+            updateLayoutPreview(selectedLayout);
+        });
+
+        // Handle form submission
+        $(".layout-form").on("submit", function (e) {
+            // Add loading state
+            var $submitBtn = $(this).find('button[type="submit"]');
+            var originalText = $submitBtn.html();
+            $submitBtn.html('<i class="fa fa-spinner fa-spin"></i> Saving...');
+            $submitBtn.prop("disabled", true);
+
+            // Form will submit normally
+            setTimeout(function () {
+                $submitBtn.html(originalText);
+                $submitBtn.prop("disabled", false);
+            }, 2000);
+        });
+
+        // Function to update layout preview
+        function updateLayoutPreview(layout) {
+            var $preview = $(".layout-preview");
+            $preview.removeClass("d-none");
+
+            var previewContent = "";
+            switch (layout) {
+                case "tabs":
+                    previewContent =
+                        '<div class="nav nav-tabs"><div class="nav-item"><a class="nav-link active">Tab 1</a></div></div>';
+                    break;
+                case "cards":
+                    previewContent =
+                        '<div class="card"><div class="card-body">Card Layout</div></div>';
+                    break;
+                // Add other layout previews as needed
+            }
+
+            $("#layout-preview-content").html(previewContent);
+        }
+
+        // Initialize tooltips
+        $('[data-toggle="tooltip"]').tooltip();
+
+        // Show initial preview if layout is selected
+        var initialLayout = $("#layout").val();
+        if (initialLayout) {
+            updateLayoutPreview(initialLayout);
+        }
+    });
+</script>
+{% endblock %}
