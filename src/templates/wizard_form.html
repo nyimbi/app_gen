@@ -34,26 +34,28 @@
 
             <h2>{{ step_description|default('') }}</h2>
 
-            <form method="post" enctype="multipart/form-data">
-                {{ form.hidden_tag() }}
+            <form method="post" action="{{ url_for('.wizard', step=current_step) }}" enctype="multipart/form-data">
+                {% if form.csrf_token %}
+                    {{ form.csrf_token }}
+                {% endif %}
 
-                {% for field in form if field.type != 'CSRFTokenField' %}
-                <div class="form-group">
-                    {{ field.label }}
-                    {{ field(class="form-control") }}
-                    {% if field.errors %}
-                    <div class="alert alert-danger">
-                        {% for error in field.errors %}
-                        {{ error }}
-                        {% endfor %}
+                {% for field in form if field.name != 'csrf_token' %}
+                    <div class="form-group">
+                        {{ field.label }}
+                        {{ field(class="form-control") }}
+                        {% if field.errors %}
+                        <div class="alert alert-danger">
+                            {% for error in field.errors %}
+                            {{ error }}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
                     </div>
-                    {% endif %}
-                </div>
                 {% endfor %}
 
                 <div class="form-group mt-4">
                     {% if previous_step %}
-                    <a href="{{ url_for('.step', step=previous_step) }}"
+                    <a href="{{ url_for('.wizard', step=previous_step) }}"
                        class="btn btn-secondary">Previous</a>
                     {% endif %}
 

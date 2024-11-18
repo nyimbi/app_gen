@@ -121,7 +121,8 @@ class ViewGenerator:
                     "constrained_column": fk.parent.name,
                     "referred_table": fk.column.table.name,
                     "referred_column": fk.column.name,
-                    "view_class": f"{fk.column.table.name.capitalize()}ModelView"  # Ensure proper case
+                    "view_class": f"{fk.column.table.name.capitalize()}ModelView",  # Ensure proper case
+                    "relationship_type": "many_to_one"  # Add relationship type
                 }
             )
         return relationships
@@ -416,6 +417,7 @@ class ViewGenerator:
         return validators
 
     def get_related_views(self, table: Table) -> List[str]:
+        """Get list of related view class names with relationship types."""
         related_views = []
         for relationship in self.relationships.get(table.name, []):
             view_name = f"{relationship['referred_table'].capitalize()}ModelView"
@@ -459,10 +461,11 @@ class ViewGenerator:
         """Generate __init__.py file with proper view imports."""
         template = self.jinja_env.get_template("init_template.py.j2")
 
-        # Collect view information for each table
+        # Use views_info from generate_views
         views_info = []
         for table in self.metadata.tables.values():
-            table_views = {
+            relationships = self.get_relationship_info(table)
+            view_info = {
                 'name': table.name,
                 'has_model_view': True,  # Always generate model view
                 'has_multiple_view': True,  # Always generate multiple view
@@ -471,9 +474,11 @@ class ViewGenerator:
                 'has_calendar_view': self.has_date_columns(table),
                 'has_report_view': True,  # Always generate report view
                 'has_api_view': True,  # Always generate API view
-                'capitalize_name': table.name.capitalize()
+                'capitalize_name': table.name.capitalize(),
+                'relationships': relationships,
+                'related_views': self.get_related_views(table)
             }
-            views_info.append(table_views)
+            views_info.append(view_info)
         # print('###',views_info)
         content = template.render(
             config=self.config,
@@ -609,6 +614,8 @@ appbuilder.security_manager_class = MySecurityManager
 
 
     def generate_views(self):
+        views_info = []
+
         if self.single_file:
             self.generate_imports()
 
@@ -617,6 +624,21 @@ appbuilder.security_manager_class = MySecurityManager
 
         for table_name in self.metadata.tables:
             table = self.metadata.tables[table_name]
+            relationships = self.get_relationship_info(table)
+            view_info = {
+                'name': table_name,
+                'capitalize_name': table_name.capitalize(),
+                'has_model_view': True,
+                'has_multiple_view': True,
+                'has_chart_view': self.has_chart_columns(table),
+                'has_wizard_view': len(self.get_column_info(table)) > 8,
+                'has_calendar_view': self.has_date_columns(table),
+                'has_report_view': True,
+                'has_api_view': True,
+                'relationships': self.get_relationship_info(table),  # Include relationships
+                'related_views': self.get_related_views(table)  # Add related views
+            }
+            views_info.append(view_info)
             self.generate_model_view(table)
             self.generate_multiple_view(table)
             self.generate_master_detail_views(table)

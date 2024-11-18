@@ -52,7 +52,7 @@ class {{ table_name|capitalize }}MultipleView(MultipleView):
     base_template = "appbuilder/base.html"
 
     # Define view classes
-    view_classes = [
+    related_views = [
         {%- for related_view in related_views %}
         {{ related_view }},
         {%- endfor %}
@@ -77,7 +77,7 @@ class {{ table_name|capitalize }}MultipleView(MultipleView):
         # Initialize view instances
         self.views = []
         try:
-            for view_class in self.view_classes:
+            for view_class in self.related_views:
                 view_instance = view_class()
                 view_instance.datamodel = SQLAInterface(view_instance.datamodel.obj)
                 self.views.append(view_instance)

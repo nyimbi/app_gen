@@ -58,6 +58,7 @@ class {{ table_name|capitalize }}ChartView(ChartView):
     chart_title = _("{{ table_name|capitalize }} Statistics")
     chart_type = "PieChart"
     chart_3d = True
+    custom_template = ""
 
     # Required properties for ChartView
     group_by_columns = ['{{ date_columns[0].name }}']  # Add this line

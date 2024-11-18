@@ -29,6 +29,7 @@ import os
 import logging
 from flask import flash, redirect, url_for, session, request, current_app
 from flask_appbuilder import SimpleFormView, expose, action, has_access
+from flask_wtf import FlaskForm
 from flask_appbuilder.forms import DynamicForm
 from flask_babel import lazy_gettext as _
 from werkzeug.utils import secure_filename
@@ -89,6 +90,7 @@ from ..models import {{ table_name|capitalize }}
 logger = logging.getLogger(__name__)
 
 class {{ table_name|capitalize }}WizardView(SimpleFormView):
+    model = {{ table_name|capitalize }}
     route_base = '/{{ table_name.lower() }}_wizard'
     endpoint = '{{ table_name.lower() }}_wizard'
     default_view = 'this_form_get'  # Add this line
@@ -116,14 +118,14 @@ class {{ table_name|capitalize }}WizardView(SimpleFormView):
         super().__init__(**kwargs)
         self.current_step = 1
         self.total_steps = len(self.steps_config)
-        self.form = self.generate_form(self.current_step)
 
-    def render_wizard_template(self):
+    def render_wizard_template(self, form=None, widgets=None):
         """Helper method to render wizard template with common context"""
+
         progress = (self.current_step / self.total_steps) * 100 if self.total_steps > 0 else 0
 
         context = {
-            'form': self.form,
+            'form': form,
             'form_title': self.form_title,
             'modelview_name': self.__class__.__name__,
             'current_step': self.current_step,
@@ -138,6 +140,7 @@ class {{ table_name|capitalize }}WizardView(SimpleFormView):
             'is_last_step': self.is_last_step(),
             'is_optional_step': self.is_step_optional(self.current_step),
             'base_template': "appbuilder/base.html",
+            'widgets': widgets or {},
         }
 
         return self.render_template(
@@ -145,64 +148,44 @@ class {{ table_name|capitalize }}WizardView(SimpleFormView):
             **context
         )
 
-    @expose('/')
-    @has_access
-    def this_form_get(self):
-        """Initial entry point for the wizard"""
-        self.current_step = 1
-        self.form = self.generate_form(self.current_step)
-        widgets = self.form_get(self.form)
-        return self.render_wizard_template(self.form, widgets=widgets)
+        @expose('/step/<int:step>', methods=['GET', 'POST'])
+        @has_access
+        def step(self, step):
+            """Handle individual wizard steps"""
+            if not (1 <= step <= self.total_steps):
+                flash(_('Invalid step'), 'error')
+                return redirect(url_for(f'.step', step=1))  # Redirect to first step instead of this_form_get
 
-    @expose('/step/<int:step>', methods=['GET', 'POST'])
-    @has_access
-    def step(self, step):
-        """Handle individual wizard steps"""
-        if 1 <= step <= self.total_steps:
             self.current_step = step
-            self.form = self.generate_form(self.current_step)
+            form = self.generate_form(self.current_step)
 
             if request.method == 'POST':
-                if self.form.validate_on_submit():
-                    return self.form_post(self.form)
+                if form.validate():
+                    self.update_session_data(form)
+
+                    if self.is_last_step():
+                        if self.process_final_step():
+                            flash(self.success_message, 'info')
+                            return self.get_redirect()  # Direct return instead of redirect
+                        else:
+                            flash(self.error_message, 'error')
+                            return self.render_wizard_template(form=form)
+
+                    # Move to next step
+                    next_step = self.current_step + 1
+                    return redirect(url_for(f'.step', step=next_step))
                 else:
                     flash(_('Form validation failed'), 'error')
 
-            widgets = self.form_get(self.form)
-            return self.render_wizard_template(self.form, widgets=widgets)
-        else:
-            flash(_('Invalid step'), 'error')
-            return redirect(url_for(f'.this_form_get'))
+            # GET request or form validation failed
+            return self.render_wizard_template(form=form)
 
-    def form_post(self, form):
-        """Handle form submission"""
-        self.update_session_data(form)
-
-        if self.is_last_step():
-            if self.process_final_step():
-                flash(self.success_message, 'info')
-                return redirect(self.get_redirect())
-
-        # Move to next step
-        next_step = self.current_step + 1
-        return redirect(url_for(f'.step', step=next_step))
-
-    def form_post(self, form):
-        """Handle form submission"""
-        self.update_session_data(form)
-
-        if self.is_last_step():
-            if self.process_final_step():
-                flash(self.success_message, 'info')
-                return redirect(self.get_redirect())
-
-        # Move to next step
-        next_step = self.current_step + 1
-        return redirect(url_for(f'.step', step=next_step))
 
     def generate_form(self, step):
-        class StepForm(DynamicForm):
-            pass
+        """Generate a form instance for the current step"""
+        class StepForm(FlaskForm):
+            class Meta:
+                csrf = True  # Enable CSRF protection
 
         for column in self.steps_config[step - 1]:
             field_type, widget, validators = self.get_field_config(column)
@@ -212,8 +195,9 @@ class {{ table_name|capitalize }}WizardView(SimpleFormView):
                 validators=validators
             ))
 
-        return StepForm
-
+        form = StepForm()
+        form.process(request.form)  # Process form data if any
+        return form
 
     def get_field_config(self, column):
         field_type = StringField
@@ -270,21 +254,36 @@ class {{ table_name|capitalize }}WizardView(SimpleFormView):
 
         return redirect(url_for(self.endpoint))
 
+
     def update_session_data(self, form):
+        """Update session with form data"""
         if 'wizard_data' not in session:
             session['wizard_data'] = {}
+
+        form_data = {}
         for field in form:
-            session['wizard_data'][field.name] = field.data
+            if field.name != 'csrf_token':
+                form_data[field.name] = field.data
+
+        session['wizard_data'].update(form_data)
         session.modified = True
+
+    @expose('/', methods=['GET', 'POST'])
+    @has_access
+    def this_form_get(self):
+        """Initial entry point for the wizard"""
+        return redirect(url_for(f'{self.endpoint}.wizard', step=1))
+
 
     def is_last_step(self):
         return self.current_step == self.total_steps
 
     def process_final_step(self):
         try:
-            new_item = {{ table_name|capitalize }}()
+            new_item = self.model()
             for key, value in session['wizard_data'].items():
-                setattr(new_item, key, value)
+                if hasattr(new_item, key):
+                    setattr(new_item, key, value)
             db.session.add(new_item)
             db.session.commit()
             session.pop('wizard_data', None)
@@ -292,7 +291,6 @@ class {{ table_name|capitalize }}WizardView(SimpleFormView):
         except Exception as e:
             db.session.rollback()
             logger.error(f"Error saving data: {str(e)}")
-            flash(self.error_message, 'error')
             return False
 
     def next_step(self):
@@ -331,59 +329,36 @@ class {{ table_name|capitalize }}WizardView(SimpleFormView):
         return '.' in filename and \
                filename.rsplit('.', 1)[1].lower() in self.allowed_extensions
 
-
-    @expose('/')
-    @has_access
-    def this_form_get(self):
-        """
-        Initial entry point for the wizard
-        """
-        self.current_step = 1
-        self.form = self.generate_form(self.current_step)
-        widgets = self.form_get(self.form)
-
-        return self.render_template(
-            self.form_template,
-            form=self.form,
-            form_title=self.form_title,
-            widgets=widgets,
-            current_step=self.current_step,
-            total_steps=self.total_steps,
-            show_progress=self.show_progress,
-            progress_template=self.progress_template,
-            allow_previous=False,  # First step
-            is_last_step=self.total_steps == 1,
-            is_optional_step=self.is_step_optional(self.current_step)
-        )
-
-    @expose('/wizard/<step>', methods=['GET', 'POST'])
+    @expose('/wizard/<int:step>', methods=['GET', 'POST'])
     @has_access
     def wizard(self, step):
-        requested_step = int(step)
-        if 1 <= requested_step <= self.total_steps:
-            self.current_step = requested_step
-            self.form = self.generate_form(self.current_step)
+        """Handle individual wizard steps"""
+        if not (1 <= step <= self.total_steps):
+            flash(_('Invalid step'), 'error')
+            return redirect(url_for(f'{self.endpoint}.wizard', step=1))
+
+        self.current_step = step
+        form = self.generate_form(self.current_step)
 
         if request.method == 'POST':
-            if self.form.validate_on_submit():
-                return self.form_post(self.form)
+            if form.validate():
+                self.update_session_data(form)
+
+                if self.is_last_step():
+                    if self.process_final_step():
+                        flash(self.success_message, 'info')
+                        return self.get_redirect()
+                    else:
+                        flash(self.error_message, 'error')
+                        return self.render_wizard_template(form=form)
+
+                # Move to next step
+                next_step = self.current_step + 1
+                return redirect(url_for(f'{self.endpoint}.wizard', step=next_step))
             else:
                 flash(_('Form validation failed'), 'error')
 
-        widgets = self.form_get(self.form)
-        return self.render_template(
-            self.form_template,
-            form=self.form,
-            form_title=self.form_title,
-            widgets=widgets,
-            current_step=self.current_step,
-            total_steps=self.total_steps,
-            show_progress=self.show_progress,
-            progress_template=self.progress_template,
-            allow_previous=self.allow_previous and self.current_step > 1,
-            is_last_step=self.is_last_step(),
-            is_optional_step=self.is_step_optional(self.current_step)
-        )
+        return self.render_wizard_template(form=form)
 
     # Custom action hooks
     def pre_process(self):
@@ -395,7 +370,8 @@ class {{ table_name|capitalize }}WizardView(SimpleFormView):
         pass
 
     def get_redirect(self):
-        return url_for('{{ table_name.lower() }}.list')
+        """Return the redirect URL after successful completion"""
+        return redirect(url_for('{{ table_name.lower() }}.list'))
 
     # CSRF protection
     form_widget_args = {

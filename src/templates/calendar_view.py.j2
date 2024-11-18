@@ -47,6 +47,7 @@ from datetime import datetime, timedelta
 class {{ table_name | capitalize }}CalendarView(ModelView):
     datamodel = SQLAInterface({{ table_name | capitalize}})
     base_order = ('{{ date_columns[0] }}', 'asc')
+    custom_template = ""
 
     date_columns = [{% for col in date_columns %}'{{ col }}'{% if not loop.last %}, {% endif %}{% endfor %}]
     default_date_column = '{{ date_columns[0] }}'
