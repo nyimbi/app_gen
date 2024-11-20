@@ -52,6 +52,7 @@ def extract_mixin_name(description):
 def generate(prompt, mixin_description):
 
     chat = ChatAnthropic(model="claude-3-5-sonnet-20240620",
+                         api_key="sk-ant-xx-xx",
                          temperature=0,
                          max_tokens=8192)
 
