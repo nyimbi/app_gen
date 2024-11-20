@@ -5,66 +5,182 @@
 <div class="container">
     <div class="row">
         <div class="col-md-12">
-            <h1>{{ form_title|default('Wizard Form') }}</h1>
+            <h2>{{ form_title|default('Wizard Form') }}</h2>
 
-            {% if show_progress|default(true) %}
-            {# Progress bar #}
-            <div class="progress mb-4">
-                <div class="progress-bar" role="progressbar"
-                     style="width: {{ progress|default(0)|int }}%;"
-                     aria-valuenow="{{ progress|default(0)|int }}"
-                     aria-valuemin="0"
-                     aria-valuemax="100">
-                    {{ progress|default(0)|int }}%
-                </div>
+            {# Show form-wide validation errors if any #}
+            {% if form.errors %}
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <h5 class="alert-heading">Please correct the following errors:</h5>
+                <ul class="mb-0">
+                    {% for field_name, field_errors in form.errors.items() %}
+                    <li><strong>{{ form[field_name].label.text }}:</strong> {{ field_errors|join(', ') }}</li>
+                    {% endfor %}
+                </ul>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
-
-            {# Step indicator #}
-            <ul class="nav nav-pills nav-justified mb-4">
-                {% for i in range(1, total_steps|default(1) + 1) %}
-                <li class="nav-item">
-                    <a class="nav-link {% if i == current_step %}active{% elif i < current_step %}complete{% endif %}"
-                       {% if i < current_step %}href="{{ url_for('.step', step=i) }}"{% endif %}>
-                        Step {{ i }}
-                    </a>
-                </li>
-                {% endfor %}
-            </ul>
             {% endif %}
 
-            <h2>{{ step_description|default('') }}</h2>
+            {% if show_progress|default(true) %}
+                {# Progress bar #}
+                <div class="progress mb-4">
+                    <div class="progress-bar" role="progressbar"
+                         style="width: {{ progress|default(0)|int }}%;"
+                         aria-valuenow="{{ progress|default(0)|int }}"
+                         aria-valuemin="0"
+                         aria-valuemax="100">
+                        {{ progress|default(0)|int }}%
+                    </div>
+                </div>
 
-            <form method="post" action="{{ url_for('.wizard', step=current_step) }}" enctype="multipart/form-data">
+                {# Step indicator with completion status #}
+                <ul class="nav nav-pills nav-justified mb-4">
+                    {% for i in range(1, total_steps|default(1) + 1) %}
+                        {% set step_data = session.get('wizard_data', {}) %}
+                        {% set step_fields = steps_config[i-1]|map(attribute='name')|list %}
+                        {% set filled_fields = namespace(count=0) %}
+                        {% for field in step_fields %}
+                            {% if field in step_data and step_data[field] %}
+                                {% set filled_fields.count = filled_fields.count + 1 %}
+                            {% endif %}
+                        {% endfor %}
+                        {% set is_step_complete = filled_fields.count == step_fields|length %}
+                        {% set is_step_empty = filled_fields.count == 0 %}
+
+                        <li class="nav-item">
+                            <a class="nav-link
+                                {% if i == current_step %}active
+                                {% elif i < current_step and is_step_complete %}complete
+                                {% elif i < current_step %}incomplete
+                                {% endif %}"
+                                {% if i <= current_step %}href="{{ url_for('.wizard', step=i) }}"{% endif %}
+                                title="{{ 'Completed' if is_step_complete else 'Incomplete' }}">
+                                Step {{ i }}
+                                {% if is_step_complete %}
+                                    <i class="fa fa-check"></i>
+                                {% endif %}
+                            </a>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+
+
+            <h4 class="mb-4">{{ step_description|default('') }}</h4>
+
+            <form method="post" enctype="multipart/form-data" novalidate>
                 {% if form.csrf_token %}
                     {{ form.csrf_token }}
                 {% endif %}
 
                 {% for field in form if field.name != 'csrf_token' %}
-                    <div class="form-group">
-                        {{ field.label }}
-                        {{ field(class="form-control") }}
+                    <div class="form-group {% if field.errors %}has-error{% endif %}">
+                        {# Label with required indicator #}
+                        <label for="{{ field.id }}" class="form-label {% if field.errors %}text-danger{% endif %}">
+                            {{ field.label.text }}
+                            {%- if field.flags.required or not field.flags.optional -%}
+                                <span class="required-indicator text-danger">*</span>
+                            {%- endif -%}
+                        </label>
+
+                        {# Field rendering with error state #}
+                        {{ field(class="form-control " + ("is-invalid" if field.errors else "")) }}
+
+                        {# Field-specific errors #}
                         {% if field.errors %}
-                        <div class="alert alert-danger">
-                            {% for error in field.errors %}
-                            {{ error }}
-                            {% endfor %}
-                        </div>
+                            <div class="invalid-feedback d-block">
+                                {% for error in field.errors %}
+                                    <div>{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+
+                        {# Field description #}
+                        {% if field.description %}
+                            <small class="form-text text-muted">{{ field.description }}</small>
                         {% endif %}
                     </div>
                 {% endfor %}
 
                 <div class="form-group mt-4">
                     {% if previous_step %}
-                    <a href="{{ url_for('.wizard', step=previous_step) }}"
-                       class="btn btn-secondary">Previous</a>
+                        <a href="{{ url_for('.wizard', step=previous_step) }}" class="btn btn-secondary">Previous</a>
                     {% endif %}
 
                     <button type="submit" class="btn btn-primary">
                         {% if is_last_step|default(false) %}Submit{% else %}Next{% endif %}
                     </button>
+                    <!-- Add Save Progress button -->
+                    <a href="{{ url_for('.save_progress') }}"
+                        class="btn btn-outline-primary"
+                        onclick="return confirm('Save your progress?')">
+                        Save Progress
+                    </a>
                 </div>
             </form>
+
+            {% if is_optional_step %}
+                <div class="mt-3">
+                    <small class="text-muted">This step is optional. You can skip it by clicking Next.</small>
+                </div>
+            {% endif %}
+            <!-- Add a resume banner if there's saved progress -->
+            {% if session.get(session_key + '_last_step') %}
+            <div class="alert alert-info alert-dismissible fade show mt-3" role="alert">
+                You have saved progress. Would you like to
+                <a href="{{ url_for('.resume_progress') }}" class="alert-link">resume where you left off</a>?
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
+
+<style>
+.required-indicator {
+        margin-left: 3px;
+        font-weight: bold;
+        color: #dc3545;
+    }
+    .nav-pills .nav-link {
+        background-color: #e9ecef;  /* Default light grey for unvisited steps */
+        color: #495057;
+    }
+    .nav-pills .nav-link.complete {
+        background-color: #28a745;  /* Green for completed steps */
+        color: white;
+    }
+    .nav-pills .nav-link.incomplete {
+        background-color: #6c757d;  /* Grey for incomplete steps */
+        color: white;
+    }
+    .nav-pills .nav-link.active {
+        background-color: #007bff !important;  /* Blue for current step */
+        color: white;
+    }
+    .nav-pills .nav-link i.fa-check {
+        margin-left: 5px;
+    }
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+    .form-label {
+        font-weight: 500;
+        margin-bottom: 0.5rem;
+    }
+    .has-error .form-label {
+        color: #dc3545;
+    }
+    .has-error .form-control {
+        border-color: #dc3545;
+    }
+    .invalid-feedback {
+        display: block;
+        color: #dc3545;
+        font-size: 0.875rem;
+        margin-top: 0.25rem;
+    }
+    .alert ul {
+        padding-left: 1.25rem;
+    }
+</style>
 {% endblock %}

@@ -1,6 +1,7 @@
 {% if not single_file %}
 from colorama import Fore, Back, Style
-from flask import render_template, request, jsonify, abort, current_app, url_for
+from sqlalchemy.orm import joinedload
+from flask import render_template, request, jsonify, abort, current_app, url_for, redirect, session, flash
 from flask_appbuilder import MultipleView, expose, has_access
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder.forms import DynamicForm
@@ -46,7 +47,7 @@ class {{ table_name|capitalize }}MultipleView(MultipleView):
     Combines multiple related views into a single interface with various layout options.
     """
     template_folder = "templates"
-    base_permissions = ['can_list', 'can_show']
+    base_permissions = ['can_list', 'can_show', 'can_add', 'can_edit', 'can_delete']
     {% set default_layout = config.get("default_layout", "cards") if config else "tabs" %}
     layout = '{{ default_layout }}'
     base_template = "appbuilder/base.html"
@@ -79,7 +80,17 @@ class {{ table_name|capitalize }}MultipleView(MultipleView):
         try:
             for view_class in self.related_views:
                 view_instance = view_class()
-                view_instance.datamodel = SQLAInterface(view_instance.datamodel.obj)
+                # Properly initialize the datamodel
+                if not hasattr(view_instance, 'datamodel'):
+                    view_instance.datamodel = SQLAInterface(view_instance.model)
+                # Set list columns if not defined
+                if not hasattr(view_instance, 'list_columns'):
+                    view_instance.list_columns = [col.name for col in view_instance.datamodel.obj.__table__.columns
+                                            if not col.name.startswith('_')]
+                # Set label columns if not defined
+                if not hasattr(view_instance, 'label_columns'):
+                    view_instance.label_columns = {col: col.replace('_', ' ').title()
+                                                for col in view_instance.list_columns}
                 self.views.append(view_instance)
         except Exception as e:
             print(f"Error initializing views: {str(e)}")
@@ -88,34 +99,123 @@ class {{ table_name|capitalize }}MultipleView(MultipleView):
     def _get_list_widget(self, view):
         """Get the list widget for a specific view instance."""
         try:
-            # Get the items for the view
-            items = view.datamodel.get_all()
+            # Get the items for the view with pagination
+            page = request.args.get('page', 1, type=int)
+            page_size = getattr(view, 'page_size', self.page_size)
 
-            # Get the widgets configuration from the view
-            widgets = {
-                'list_widget': view.list_widget(
-                    datamodel=view.datamodel,
-                    filters=getattr(view, '_filters', []),
-                    title=getattr(view, 'list_title', view.__class__.__name__),
-                    list_columns=getattr(view, 'list_columns', []),
-                    orderby=getattr(view, 'base_order', ('id', 'asc')),
-                    base_permissions=getattr(view, 'base_permissions', ['can_list']),
-                    actions=getattr(view, 'actions', {})
-                ),
-                'search_widget': view.search_widget(
-                    filters=getattr(view, '_filters', []),
-                    execution_count=len(items)
-                ) if hasattr(view, 'search_widget') else None,
-                'page_size': getattr(view, 'page_size', self.page_size)
-            }
-            return widgets
-        except Exception as e:
-            print(f"Error generating widgets for {view.__class__.__name__}: {str(e)}")
+            # Get base query
+            query = view.datamodel.session.query(view.datamodel.obj)
+
+            # Apply any filters
+            for filter_obj in getattr(view, '_filters', []):
+                query = filter_obj.apply(query)
+
+            # Get total count
+            count = query.count()
+
+            # Apply pagination
+            items = query.offset((page - 1) * page_size).limit(page_size).all()
+
+            # Get the columns to display
+            list_columns = getattr(view, 'list_columns', [])
+            if not list_columns:
+                exclude_cols = ['created_by', 'changed_by', 'created_on', 'changed_on']
+                list_columns = [col.name for col in view.datamodel.obj.__table__.columns
+                            if col.name not in exclude_cols]
+
+            # Generate widget data
+            widgets = {}
+            for item in items:
+                row_data = {}
+                for col in list_columns:
+                    try:
+                        value = getattr(item, col)
+                        row_data[col] = self._get_formatted_value(value)
+                    except Exception as e:
+                        row_data[col] = f'<span class="text-danger">Error: {str(e)}</span>'
+                widgets[str(item.id)] = row_data
+
             return {
-                'list_widget': '<div class="alert alert-danger">Error loading view</div>',
-                'search_widget': None,
-                'page_size': self.page_size
+                'list_columns': list_columns,
+                'label_columns': view.label_columns,
+                'items': items,
+                'count': count,
+                'page_size': page_size,
+                'page': page,
+                'widgets': widgets
             }
+
+        except Exception as e:
+            print(f"Error generating list widget for {view.__class__.__name__}: {str(e)}")
+            return {
+                'list_columns': [],
+                'label_columns': {},
+                'items': [],
+                'count': 0,
+                'page_size': self.page_size,
+                'page': 1,
+                'widgets': {}
+            }
+
+    def _get_formatted_value(self, value):
+        """Format value for display."""
+        if value is None:
+            return ''
+        elif isinstance(value, (datetime.date, datetime.datetime)):
+            return value.strftime('%Y-%m-%d %H:%M:%S')
+        elif isinstance(value, bool):
+            return '<i class="fa fa-check text-success"></i>' if value else '<i class="fa fa-times text-danger"></i>'
+        elif hasattr(value, '__table__'):  # Related object
+            return str(value)
+        else:
+            return str(value)
+
+    def _get_view_widgets(self, view, items, columns):
+        """Generate widgets for each item in the view."""
+        widgets = {}
+        for item in items:
+            row_widgets = {}
+            for col in columns:
+                try:
+                    value = getattr(item, col)
+                    widget = self._get_column_widget(view, col, value)
+                    row_widgets[col] = widget
+                except Exception as e:
+                    row_widgets[col] = f'<span class="text-danger">Error: {str(e)}</span>'
+            widgets[str(getattr(item, 'id', ''))] = row_widgets
+        return widgets
+    def _get_column_widget(self, view, column_name, value):
+        """Get the appropriate widget for a column value."""
+        if value is None:
+            return ''
+
+        # Handle different column types
+        if isinstance(value, (datetime.date, datetime.datetime)):
+            return value.strftime('%Y-%m-%d %H:%M:%S')
+        elif isinstance(value, bool):
+            return '<i class="fa fa-check text-success"></i>' if value else '<i class="fa fa-times text-danger"></i>'
+        elif isinstance(value, (int, float)):
+            return str(value)
+        elif hasattr(value, '__table__'):  # Related object
+            return str(value)
+        else:
+            return str(value)
+
+    def _get_search_widget(self, view):
+        """Generate search widget for the view."""
+        if not hasattr(view, 'search_columns'):
+            return None
+
+        return """
+        <div class="input-group">
+            <input type="text" class="form-control" placeholder="Search...">
+            <div class="input-group-append">
+                <button class="btn btn-outline-secondary" type="button">
+                    <i class="fa fa-search"></i>
+                </button>
+            </div>
+        </div>
+        """
 
     def _prepare_view_data(self, view):
         """Prepare data for a single view."""
@@ -146,14 +246,14 @@ class {{ table_name|capitalize }}MultipleView(MultipleView):
     @has_access
     def change_layout(self):
         """Handle layout changes."""
-        layout_form = LayoutForm(request.form)
+        layout_form = LayoutForm()
 
-        if request.method == 'POST' and layout_form.validate():
+        if request.method == 'POST' and layout_form.validate_on_submit():
             self.layout = layout_form.layout.data
             self.show_title = layout_form.show_title.data
             self.show_menu = layout_form.show_menu.data
             self.search_enabled = layout_form.search_enabled.data
-            return self.render_multiple()
+            return redirect(url_for(f'.{self.default_view}'))
 
         # Populate form with current values
         layout_form.layout.data = self.layout
@@ -181,9 +281,20 @@ class {{ table_name|capitalize }}MultipleView(MultipleView):
             for view in self.views:
                 view_data = self._prepare_view_data(view)
                 if view_data:
+                    # Add additional view metadata
+                    view_data.update({
+                        'model_name': view.datamodel.obj.__name__,
+                        'endpoint': view.endpoint,
+                        'can_add': 'can_add' in view.base_permissions,
+                        'can_edit': 'can_edit' in view.base_permissions,
+                        'can_delete': 'can_delete' in view.base_permissions,
+                        'can_show': 'can_show' in view.base_permissions,
+                    })
                     views_data.append(view_data)
 
-            # Prepare complete context
+            # Get custom view configuration
+            config = session.get('custom_view_config', {})
+
             context = {
                 'views': self.views,
                 'views_data': views_data,
@@ -196,7 +307,8 @@ class {{ table_name|capitalize }}MultipleView(MultipleView):
                 'base_template': self.base_template,
                 'actions': self.actions,
                 'filters': self._filters,
-                'page_size': self.page_size
+                'page_size': self.page_size,
+                'custom_config': config
             }
 
             return self.render_template(template, **context)
@@ -218,14 +330,57 @@ class {{ table_name|capitalize }}MultipleView(MultipleView):
             return view.list()
         abort(404)
 
+    @expose('/save_custom_view', methods=['POST'])
+    @has_access
+    def save_custom_view(self):
+        """Save custom view configuration."""
+        try:
+            config = {
+                'layout': request.form.get('layout'),
+                'visible_columns': request.form.getlist('visible_columns'),
+                'primary_color': request.form.get('primary_color'),
+                'secondary_color': request.form.get('secondary_color'),
+                'font_family': request.form.get('font_family'),
+                'font_size': request.form.get('font_size'),
+                'padding': request.form.get('padding'),
+                'margin': request.form.get('margin'),
+                'component_order': request.form.getlist('component_order')
+            }
+
+            # Save configuration to database or session
+            session['custom_view_config'] = config
+            flash('View configuration saved successfully', 'success')
+            return redirect(url_for(f'.{self.default_view}'))
+        except Exception as e:
+            flash(f'Error saving configuration: {str(e)}', 'error')
+            return redirect(url_for('.custom_view'))
+
+
     @expose('/custom/')
     @has_access
     def custom_view(self):
-        """Custom view implementation."""
+        """Custom view configuration page."""
+        # Get current configuration
+        config = session.get('custom_view_config', {})
+
+        # Get available columns from all views
+        available_columns = set()
+        print(views)
+        for view in self.views:
+            available_columns.update(view.list_columns)
+
         return self.render_template(
             'custom_view.html',
-            title="Custom View",
-            mywidget="Some custom data",
+            title="Customize View",
+            layout_options=LAYOUT_OPTIONS,
+            current_layout=self.layout,
+            available_columns=sorted(list(available_columns)),
+            visible_columns=config.get('visible_columns', list(available_columns)),
+            primary_color=config.get('primary_color', '#007bff'),
+            secondary_color=config.get('secondary_color', '#6c757d'),
+            font_size=config.get('font_size', 14),
+            padding=config.get('padding', 15),
+            margin=config.get('margin', 15),
             appbuilder=self.appbuilder,
             base_template=self.base_template
         )
@@ -313,7 +468,7 @@ class {{ table_name|capitalize }}MultipleView(MultipleView):
             if hasattr(view, 'post_delete'):
                 view.post_delete(item)
 
-class LayoutForm(FormWidget):
+class LayoutForm(DynamicForm):
     """Form for changing the layout configuration."""
     layout = SelectField(
         'Layout',

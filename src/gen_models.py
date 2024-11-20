@@ -77,6 +77,9 @@ def gen_models(metadata: MetaData, inspector: Any) -> List[str]:
     model_code.extend(gen_domains(inspector))
     model_code.extend(gen_enums(inspector))
 
+    # Generate miscellaneous tables (including FlaskSession)
+    model_code.extend(gen_misc_tables())
+
     # Identify association tables
     for table_name in inspector.get_table_names():
         if is_association_table(table_name, inspector):
@@ -916,6 +919,46 @@ def find_association_table(table1, table2, association_tables, inspector):
                 return assoc_table
     return None
 
+def gen_misc_tables() -> List[str]:
+    """
+    Generate code for miscellaneous tables needed by the application.
+    Currently includes:
+    1. FlaskSession table for persistent session storage
+
+    Returns:
+        List[str]: List of code strings for miscellaneous tables
+    """
+    misc_code = []
+
+    # Add header comment
+    misc_code.extend([
+        "\n# Miscellaneous Tables",
+        "# These tables are used by the application for various purposes\n"
+    ])
+
+    # Generate FlaskSession table
+    misc_code.extend([
+        "class FlaskSession(Model):",
+        f"{INDENT}__tablename__ = 'nx_sessions'",
+        "",
+        f"{INDENT}id = Column(String(256), primary_key=True)",
+        f"{INDENT}data = Column(LargeBinary)",
+        f"{INDENT}expiry = Column(DateTime, nullable=False)",
+        f"{INDENT}created = Column(DateTime, default=func.now())",
+        f"{INDENT}modified = Column(DateTime, default=func.now(), onupdate=func.now())",
+        "",
+        f"{INDENT}def __repr__(self):",
+        f"{INDENT}{INDENT}return f'<Session {{self.id}}>'",
+        "",
+        f"{INDENT}@classmethod",
+        f"{INDENT}def cleanup_expired(cls, db_session):",
+        f"{INDENT}{INDENT}\"\"\"Remove expired sessions from the database\"\"\"",
+        f"{INDENT}{INDENT}cls.query.filter(cls.expiry < func.now()).delete()",
+        f"{INDENT}{INDENT}db_session.commit()",
+        "\n"
+    ])
+
+    return misc_code
 
 def main():
     """Main execution function."""

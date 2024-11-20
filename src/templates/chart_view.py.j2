@@ -24,7 +24,9 @@ examples for different chart configurations, which should be customized
 based on the specific requirements of your application and data structure.
 """
 #}
+import logging
 from flask import current_app
+from sqlalchemy import func, case, cast, Integer, desc, and_, or_
 from flask_appbuilder.charts.views import ChartView
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder.models.group import aggregate_sum, aggregate_count, aggregate_avg
@@ -51,7 +53,7 @@ from flask_appbuilder.fieldwidgets import (
 from flask_babel import lazy_gettext as _
 from app import appbuilder, db
 from ..models import {{ table_name|capitalize }}
-
+log = logging.getLogger(__name__)
 
 class {{ table_name|capitalize }}ChartView(ChartView):
     datamodel = SQLAInterface({{ table_name|capitalize }})
@@ -60,26 +62,30 @@ class {{ table_name|capitalize }}ChartView(ChartView):
     chart_3d = True
     custom_template = ""
 
-    # Required properties for ChartView
-    group_by_columns = ['{{ date_columns[0].name }}']  # Add this line
+    # Define group by columns
+    group_by_columns = ['{{ date_columns[0].name }}']
 
+    # Define chart series
     definitions = [
         {
             "group": "{{ date_columns[0].name }}",
-            "series": [(aggregate_count, "{{ numeric_columns[0].name }}")],
+            "series": [(aggregate_count, "id")]
         }
     ]
 
-    # Add default formatters for the series
+    # Add formatters
     formatters_columns = {
-        "{{ date_columns[0].name }}": lambda x: x.strftime("%Y-%m-%d"),
-        "{{ numeric_columns[0].name }}": lambda x: f"{x:,.0f}"
+        "{{ date_columns[0].name }}": lambda x: x.strftime("%Y-%m-%d") if x else "Unknown",
+        "count": lambda x: f"{x:,.0f}"
     }
 
     label_columns = {
         "{{ date_columns[0].name }}": _("Date"),
-        "{{ numeric_columns[0].name }}": _("Count"),
+        "count": _("Total Count")
     }
+
+    # Remove the problematic base_filters and handle NULL values in get_data
+    # base_filters = [['{{ date_columns[0].name }}', 'is not', None]]  # Remove this line
 
     # Chart layout configuration
     chart_width = 400
@@ -87,80 +93,81 @@ class {{ table_name|capitalize }}ChartView(ChartView):
     chart_orientation = "horizontal"
 
     # Search columns for filtering
-    search_columns = ["{{ date_columns[0].name }}", "{{ numeric_columns[0].name }}"]
+    search_columns = ["{{ date_columns[0].name }}"]
 
-    # Base query for data retrieval
+    # Base order
     base_order = ("{{ date_columns[0].name }}", "asc")
-    # base_filters = [["{{ numeric_columns[0].name }}", ">", 0]]
 
-    # Add error handling for data retrieval
     def get_data(self):
+        """Get chart data with error handling and NULL value handling"""
         try:
-            data = super().get_data()
+            query = self.datamodel.session.query(
+                self.datamodel.obj.{{ date_columns[0].name }},
+                func.count(self.datamodel.obj.id).label('count')
+            ).filter(
+                self.datamodel.obj.{{ date_columns[0].name }}.isnot(None)
+            ).group_by(
+                self.datamodel.obj.{{ date_columns[0].name }}
+            ).order_by(
+                self.datamodel.obj.{{ date_columns[0].name }}
+            )
+
+            results = query.all()
+
+            data = []
+            for result in results:
+                date_val = result[0]
+                count_val = result[1]
+                if date_val:  # Only include non-null dates
+                    data.append({
+                        'name': self.formatters_columns['{{ date_columns[0].name }}'](date_val),
+                        'value': count_val
+                    })
+
             return data
+
         except Exception as e:
-            log.error(f"Error getting chart data: {str(e)}")
+            current_app.logger.error(f"Error getting chart data: {str(e)}")
             return []
 
-    #  Additional chart options with defaults
     chart_options = {
-        "colors": ["#FF0000", "#00FF00", "#0000FF"],
+        "colors": ["#3366CC", "#DC3912", "#FF9900", "#109618", "#990099"],
         "legend": {"position": "bottom"},
         "tooltip": {"trigger": "selection"},
         "height": 400,
         "width": 600,
         "orientation": "horizontal",
         "is3D": True,
-        "pieHole": 0.4
+        "pieHole": 0.4,
+        "sliceVisibilityThreshold": 0.01,
+        "chartArea": {
+            "left": 50,
+            "top": 50,
+            "width": "90%",
+            "height": "80%"
+        }
     }
 
-    # Time series configuration
-    chart_time_series = True
-    chart_time_series_format = "%Y-%m-%d"
-
-    # Specific configurations for different chart types
-    # Uncomment and modify as needed
-
-    # # Pie Chart specific options
-    # chart_type = "PieChart"
-    # chart_3d = True
-    # pie_chart_options = {
-    #     "pieHole": 0.4,
-    #     "slices": {
-    #         0: {"offset": 0.2},
-    #         1: {"offset": 0.1},
-    #     },
-    # }
-
-    # # Bar Chart specific options
-    # chart_type = "BarChart"
-    # chart_is_stacked = True
-    # bar_chart_options = {
-    #     "bars": "horizontal",
-    #     "isStacked": True,
-    # }
-
-    # # Line Chart specific options
-    # chart_type = "LineChart"
-    # line_chart_options = {
-    #     "curveType": "function",
-    #     "pointSize": 5,
-    # }
-
     def __init__(self, **kwargs):
+        """Initialize the chart view"""
         super({{ table_name|capitalize }}ChartView, self).__init__(**kwargs)
-        # Additional initialization if needed
         self.title = _("{{ table_name|capitalize }} Statistics")
 
     def pre_process_data(self, data):
-        """
-        Hook to pre-process the data before chart rendering
-        """
-        return data
+        """Pre-process data before rendering"""
+        try:
+            processed_data = []
+            for item in data:
+                if item.get('name') and item.get('value') is not None:
+                    processed_data.append({
+                        'name': str(item['name']),
+                        'value': float(item['value'])
+                    })
+            return processed_data
+        except Exception as e:
+            current_app.logger.error(f"Error pre-processing data: {str(e)}")
+            return []
 
-    # Export functionality
-    enable_export = True
-    export_formats = ["csv", "xlsx", "pdf"]
 
 """
 {%- if not single_file %}

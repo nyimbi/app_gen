@@ -1,0 +1,476 @@
+{% extends 'appbuilder/baselayout.html' %} {% block head_css %} {{ super() }}
+<!--
+This template provides:
+
+1. Layout Configuration:
+   - Layout type selection (tabs, grid, cards, etc.)
+   - Drag-and-drop component ordering
+   - Column visibility toggles
+
+2. Style Configuration:
+   - Color scheme customization
+   - Typography settings
+   - Spacing adjustments
+
+3. Live Preview:
+   - Real-time preview of changes
+   - Responsive design preview
+
+4. Additional Features:
+   - Save/Reset functionality
+   - Drag-and-drop interface
+   - Color pickers
+   - Font controls
+-->
+
+<style>
+    .custom-view-config {
+        padding: 20px;
+    }
+
+    .config-section {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+
+    .config-section h4 {
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .config-item {
+        margin-bottom: 15px;
+    }
+
+    .config-preview {
+        border: 2px dashed #ccc;
+        padding: 15px;
+        margin-top: 15px;
+        min-height: 150px;
+        border-radius: 8px;
+    }
+
+    .draggable-item {
+        background: #f8f9fa;
+        padding: 10px;
+        margin: 5px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        cursor: move;
+        user-select: none;
+    }
+
+    .draggable-item.dragging {
+        opacity: 0.5;
+    }
+
+    .drop-zone {
+        min-height: 100px;
+        border: 2px dashed #ccc;
+        padding: 10px;
+        margin: 10px 0;
+        border-radius: 4px;
+    }
+
+    .drop-zone.drag-over {
+        background-color: #e9ecef;
+        border-color: #6c757d;
+    }
+
+    .color-picker {
+        width: 100%;
+        padding: 5px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+    }
+
+    .layout-option {
+        display: inline-block;
+        padding: 10px;
+        margin: 5px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .layout-option.active {
+        background-color: #007bff;
+        color: white;
+        border-color: #0056b3;
+    }
+
+    .preview-container {
+        margin-top: 20px;
+        padding: 15px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+
+    @media (max-width: 768px) {
+        .custom-view-config {
+            padding: 10px;
+        }
+
+        .config-section {
+            margin-bottom: 15px;
+        }
+    }
+</style>
+{% endblock %} {% block content %}
+<div class="custom-view-config">
+    <div class="row">
+        <div class="col-md-12">
+            <h2>{{ title }}</h2>
+            <p class="text-muted">
+                Customize the appearance and behavior of your multiple view
+            </p>
+        </div>
+    </div>
+
+    <form
+        id="customViewForm"
+        method="post"
+        action="{{ url_for('.save_custom_view') }}"
+    >
+        <div class="row">
+            <!-- Layout Configuration -->
+            <div class="col-md-6">
+                <div class="config-section">
+                    <h4>Layout Settings</h4>
+
+                    <!-- Layout Type -->
+                    <div class="config-item">
+                        <label>Layout Type</label>
+                        <div class="layout-options">
+                            {% for key, value in layout_options.items() %}
+                            <div
+                                class="layout-option {% if current_layout == key %}active{% endif %}"
+                                data-layout="{{ key }}"
+                            >
+                                <i class="fa fa-{{ key }}-chart"></i> {{ value
+                                }}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <!-- Component Ordering -->
+                    <div class="config-item">
+                        <label>Component Order</label>
+                        <div class="drop-zone" id="componentOrder">
+                            <div
+                                class="draggable-item"
+                                draggable="true"
+                                data-component="search"
+                            >
+                                Search Bar
+                            </div>
+                            <div
+                                class="draggable-item"
+                                draggable="true"
+                                data-component="filters"
+                            >
+                                Filters
+                            </div>
+                            <div
+                                class="draggable-item"
+                                draggable="true"
+                                data-component="table"
+                            >
+                                Data Table
+                            </div>
+                            <div
+                                class="draggable-item"
+                                draggable="true"
+                                data-component="pagination"
+                            >
+                                Pagination
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Column Visibility -->
+                    <div class="config-item">
+                        <label>Visible Columns</label>
+                        <div id="columnSelector">
+                            {% for column in available_columns %}
+                            <div class="form-check">
+                                <input
+                                    type="checkbox"
+                                    class="form-check-input"
+                                    id="col_{{ column }}"
+                                    name="visible_columns"
+                                    value="{{ column }}"
+                                    {%
+                                    if
+                                    column
+                                    in
+                                    visible_columns
+                                    %}checked{%
+                                    endif
+                                    %}
+                                />
+                                <label
+                                    class="form-check-label"
+                                    for="col_{{ column }}"
+                                >
+                                    {{ column|title }}
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Style Configuration -->
+            <div class="col-md-6">
+                <div class="config-section">
+                    <h4>Style Settings</h4>
+
+                    <!-- Theme Colors -->
+                    <div class="config-item">
+                        <label>Color Scheme</label>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="small">Primary Color</label>
+                                <input
+                                    type="color"
+                                    class="color-picker"
+                                    name="primary_color"
+                                    value="{{ primary_color|default('#007bff') }}"
+                                />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="small">Secondary Color</label>
+                                <input
+                                    type="color"
+                                    class="color-picker"
+                                    name="secondary_color"
+                                    value="{{ secondary_color|default('#6c757d') }}"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Font Settings -->
+                    <div class="config-item">
+                        <label>Typography</label>
+                        <select class="form-control" name="font_family">
+                            <option value="system-ui">System Default</option>
+                            <option value="arial">Arial</option>
+                            <option value="helvetica">Helvetica</option>
+                            <option value="georgia">Georgia</option>
+                        </select>
+                        <div class="mt-2">
+                            <label class="small">Font Size</label>
+                            <input
+                                type="range"
+                                class="form-control-range"
+                                name="font_size"
+                                min="12"
+                                max="20"
+                                value="{{ font_size|default(14) }}"
+                            />
+                        </div>
+                    </div>
+
+                    <!-- Spacing and Layout -->
+                    <div class="config-item">
+                        <label>Spacing</label>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="small">Padding</label>
+                                <input
+                                    type="number"
+                                    class="form-control"
+                                    name="padding"
+                                    value="{{ padding|default(15) }}"
+                                    min="0"
+                                    max="50"
+                                />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="small">Margin</label>
+                                <input
+                                    type="number"
+                                    class="form-control"
+                                    name="margin"
+                                    value="{{ margin|default(15) }}"
+                                    min="0"
+                                    max="50"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Preview Section -->
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="config-section">
+                    <h4>Preview</h4>
+                    <div class="preview-container" id="layoutPreview">
+                        <!-- Preview content will be dynamically updated -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fa fa-save"></i> Save Changes
+                </button>
+                <button
+                    type="button"
+                    class="btn btn-secondary"
+                    onclick="resetDefaults()"
+                >
+                    <i class="fa fa-undo"></i> Reset to Defaults
+                </button>
+                <a
+                    href="{{ url_for('.list') }}"
+                    class="btn btn-outline-secondary"
+                >
+                    <i class="fa fa-times"></i> Cancel
+                </a>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %} {% block tail_js %} {{ super() }}
+<script>
+    // Drag and Drop functionality
+    document.addEventListener("DOMContentLoaded", function () {
+        const draggables = document.querySelectorAll(".draggable-item");
+        const dropZones = document.querySelectorAll(".drop-zone");
+
+        draggables.forEach((draggable) => {
+            draggable.addEventListener("dragstart", () => {
+                draggable.classList.add("dragging");
+            });
+
+            draggable.addEventListener("dragend", () => {
+                draggable.classList.remove("dragging");
+            });
+        });
+
+        dropZones.forEach((zone) => {
+            zone.addEventListener("dragover", (e) => {
+                e.preventDefault();
+                zone.classList.add("drag-over");
+                const draggable = document.querySelector(".dragging");
+                const afterElement = getDragAfterElement(zone, e.clientY);
+                if (afterElement) {
+                    zone.insertBefore(draggable, afterElement);
+                } else {
+                    zone.appendChild(draggable);
+                }
+            });
+
+            zone.addEventListener("dragleave", () => {
+                zone.classList.remove("drag-over");
+            });
+
+            zone.addEventListener("drop", () => {
+                zone.classList.remove("drag-over");
+                updatePreview();
+            });
+        });
+    });
+
+    // Helper function to determine drag position
+    function getDragAfterElement(container, y) {
+        const draggableElements = [
+            ...container.querySelectorAll(".draggable-item:not(.dragging)"),
+        ];
+
+        return draggableElements.reduce(
+            (closest, child) => {
+                const box = child.getBoundingClientRect();
+                const offset = y - box.top - box.height / 2;
+
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset: offset, element: child };
+                } else {
+                    return closest;
+                }
+            },
+            { offset: Number.NEGATIVE_INFINITY },
+        ).element;
+    }
+
+    // Layout preview updates
+    function updatePreview() {
+        const preview = document.getElementById("layoutPreview");
+        const layout = document.querySelector(".layout-option.active").dataset
+            .layout;
+        const components = [
+            ...document.querySelectorAll("#componentOrder .draggable-item"),
+        ].map((item) => item.dataset.component);
+
+        // Apply current settings to preview
+        preview.style.fontFamily = document.querySelector(
+            '[name="font_family"]',
+        ).value;
+        preview.style.fontSize =
+            document.querySelector('[name="font_size"]').value + "px";
+        preview.style.padding =
+            document.querySelector('[name="padding"]').value + "px";
+
+        // Update preview content
+        const previewHTML = generatePreviewHTML(layout, components);
+        preview.innerHTML = previewHTML;
+    }
+
+    // Generate preview HTML based on current settings
+    function generatePreviewHTML(layout, components) {
+        // Template for preview content
+        const templates = {
+            search: '<div class="search-preview">Search Bar Placeholder</div>',
+            filters: '<div class="filters-preview">Filters Placeholder</div>',
+            table: '<div class="table-preview">Table Placeholder</div>',
+            pagination:
+                '<div class="pagination-preview">Pagination Placeholder</div>',
+        };
+
+        return components.map((component) => templates[component]).join("\n");
+    }
+
+    // Reset to default settings
+    function resetDefaults() {
+        if (
+            confirm("Are you sure you want to reset all settings to defaults?")
+        ) {
+            document.getElementById("customViewForm").reset();
+            updatePreview();
+        }
+    }
+
+    // Event listeners for form controls
+    document.querySelectorAll(".layout-option").forEach((option) => {
+        option.addEventListener("click", function () {
+            document
+                .querySelectorAll(".layout-option")
+                .forEach((opt) => opt.classList.remove("active"));
+            this.classList.add("active");
+            updatePreview();
+        });
+    });
+
+    document.querySelectorAll("input, select").forEach((input) => {
+        input.addEventListener("change", updatePreview);
+    });
+
+    // Initial preview
+    updatePreview();
+</script>
+{% endblock %}

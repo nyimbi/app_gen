@@ -27,6 +27,8 @@ to tailor the wizard to your specific needs.
 """
 import os
 import logging
+import datetime
+from sqlalchemy.exc import SQLAlchemyError
 from flask import flash, redirect, url_for, session, request, current_app
 from flask_appbuilder import SimpleFormView, expose, action, has_access
 from flask_wtf import FlaskForm
@@ -88,7 +90,12 @@ from app import appbuilder, db
 from ..models import {{ table_name|capitalize }}
 
 logger = logging.getLogger(__name__)
-
+# CSRF protection
+form_widget_args = {
+    'csrf_token': {
+        'readonly': True
+    }
+}
 class {{ table_name|capitalize }}WizardView(SimpleFormView):
     model = {{ table_name|capitalize }}
     route_base = '/{{ table_name.lower() }}_wizard'
@@ -116,8 +123,23 @@ class {{ table_name|capitalize }}WizardView(SimpleFormView):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.session_key = f'{self.endpoint}_wizard_data'
         self.current_step = 1
         self.total_steps = len(self.steps_config)
+
+    def get_session_data(self):
+        """Get wizard data from session"""
+        return session.get(self.session_key, {})
+
+    def save_session_data(self, data):
+        """Save wizard data to session"""
+        session[self.session_key] = data
+        session.modified = True
+
+    def clear_session_data(self):
+        """Clear wizard data from session"""
+        session.pop(self.session_key, None)
+        session.modified = True
 
     def render_wizard_template(self, form=None, widgets=None):
         """Helper method to render wizard template with common context"""
@@ -141,6 +163,7 @@ class {{ table_name|capitalize }}WizardView(SimpleFormView):
             'is_optional_step': self.is_step_optional(self.current_step),
             'base_template': "appbuilder/base.html",
             'widgets': widgets or {},
+            'steps_config': self.steps_config,
         }
 
         return self.render_template(
@@ -182,65 +205,193 @@ class {{ table_name|capitalize }}WizardView(SimpleFormView):
 
 
     def generate_form(self, step):
-        """Generate a form instance for the current step"""
+        """Generate a form instance for the current step with enhanced validation"""
         class StepForm(FlaskForm):
             class Meta:
-                csrf = True  # Enable CSRF protection
+                csrf = True
+
+            def validate(self):
+                """Enhanced validation with custom error handling"""
+                if not super().validate():
+                    # Add form-wide error message if needed
+                    if not self.errors.get('_error'):
+                        self.errors['_error'] = ['Please correct the highlighted fields below.']
+                    return False
+                return True
 
         for column in self.steps_config[step - 1]:
-            field_type, widget, validators = self.get_field_config(column)
-            setattr(StepForm, column['name'], field_type(
-                _(column['name'].capitalize()),
-                widget=widget(),
-                validators=validators
-            ))
+            field_config = self.get_field_config(column)
+
+            if len(field_config) == 6:  # For foreign key fields
+                field_type, widget, validators, query_func, label_func, description = field_config
+                setattr(StepForm, column['name'], field_type(
+                    _(column['name'].capitalize()),
+                    query_factory=query_func,
+                    get_label=label_func,
+                    widget=widget(),
+                    validators=validators,
+                    description=description
+                ))
+            elif len(field_config) == 5:  # For fields with choices
+                field_type, widget, validators, choices, description = field_config
+                setattr(StepForm, column['name'], field_type(
+                    _(column['name'].capitalize()),
+                    choices=choices,
+                    widget=widget(),
+                    validators=validators,
+                    description=description
+                ))
+            else:  # For regular fields
+                field_type, widget, validators, description = field_config
+                setattr(StepForm, column['name'], field_type(
+                    _(column['name'].capitalize()),
+                    widget=widget(),
+                    validators=validators,
+                    description=description
+                ))
 
         form = StepForm()
         form.process(request.form)  # Process form data if any
         return form
 
     def get_field_config(self, column):
+        """Configure form field settings based on column definition
+
+        Args:
+            column (dict): Column configuration containing type, constraints, etc.
+
+        Returns:
+            tuple: Contains field_type, widget, validators, and additional configs
+            based on field type (e.g. query functions for foreign keys)
+        """
         field_type = StringField
         widget = BS3TextFieldWidget
         validators = []
+        description = column.get('description', '')
+        is_required = not column.get('nullable', True) or column.get('required', False)
 
-        if not column.get('nullable', True):
-            validators.append(DataRequired())
+        # Build detailed validation message with required field marker
+        required_msg = f"{column['name'].capitalize()} is required"
+        if is_required:
+            validators.append(DataRequired(message=f"{required_msg} *"))
+            description = f"* {description}" if description else "* Required"
+        else:
+            validators.append(Optional())
+            description = f"(Optional) {description}" if description else "(Optional)"
 
+        # Handle foreign keys first with enhanced label handling
+        if 'foreign_key' in column:
+            field_type = QuerySelectField
+            widget = Select2Widget
+            ref_table = column['foreign_key'].split('.')[0]
+            ref_model = self._get_referenced_model(ref_table)
+
+            def get_query():
+                return db.session.query(ref_model).order_by(ref_model.name)
+
+            def get_label(obj):
+                # Try common display attributes
+                display_attrs = ['display_name', 'name', 'title', 'label',
+                               'description', 'id']
+                for attr in display_attrs:
+                    if hasattr(obj, attr):
+                        return getattr(obj, attr)
+                return str(obj)
+
+            description = f"{description} (Select from list)"
+            return field_type, widget, validators, get_query, get_label, description
+
+        # Enhanced boolean field handling
+        if column['type'] == 'Boolean':
+            field_type = BooleanField
+            widget = CheckboxWidget
+            description = f"{description} (Check for Yes)" if description else "Check for Yes"
+            return field_type, widget, validators, description
+
+        # Enhanced enum handling with default option
+        if column['type'] == 'Enum':
+            field_type = SelectField
+            widget = Select2Widget
+            choices = column.get('choices', [])
+            if choices and not is_required:
+                choices.insert(0, ('', '-- Select an option --'))
+            description = f"{description} (Select one)" if description else "Select one"
+            return field_type, widget, validators, choices, description
+
+        # Enhanced length validation
         if 'max_length' in column:
-            validators.append(Length(max=column['max_length']))
+            max_len = column['max_length']
+            validators.append(Length(
+                max=max_len,
+                message=f"{column['name'].capitalize()} must be {max_len} characters or less"
+            ))
+            description = f"{description} (Max {max_len} characters)"
 
+        # Enhanced numeric field handling
         if column['type'] in ('Integer', 'BigInteger'):
             field_type = IntegerField
-            validators.append(NumberRange(min=column.get('min', -2147483648), max=column.get('max', 2147483647)))
+            min_val = column.get('min', -2147483648)
+            max_val = column.get('max', 2147483647)
+            validators.append(NumberRange(
+                min=min_val, max=max_val,
+                message=f"Enter a number between {min_val} and {max_val}"
+            ))
+            description = f"{description} (Whole number)" if description else "Enter a whole number"
+
         elif column['type'] in ('Float', 'Numeric', 'Decimal'):
             field_type = FloatField
+            if 'precision' in column:
+                description = f"{description} (Number with up to {column['precision']} decimal places)"
+            else:
+                description = f"{description} (Decimal number)" if description else "Enter a decimal number"
+
         elif column['type'] == 'Date':
             field_type = DateField
             widget = DatePickerWidget
-        elif column['type'] == 'Boolean':
-            field_type = SelectField
-            widget = Select2Widget
-            validators = [Optional()]
-        elif column['type'] == 'Enum':
-            field_type = SelectField
-            widget = Select2Widget
+            description = f"{description} (YYYY-MM-DD)" if description else "Format: YYYY-MM-DD"
 
+        elif column['type'] == 'Text':
+            field_type = TextAreaField
+            widget = BS3TextAreaFieldWidget
+            min_len = column.get('min_length', 0)
+            if min_len > 0:
+                validators.append(Length(
+                    min=min_len,
+                    message=f"Must be at least {min_len} characters"
+                ))
+                description = f"{description} (Min {min_len} characters)"
+
+        # Enhanced email validation
         if 'email' in column['name'].lower():
-            validators.append(Email())
+            validators.append(Email(message="Please enter a valid email address"))
+            description = f"{description} (e.g. user@example.com)" if description else "e.g. user@example.com"
 
+        # Enhanced password field
         if 'password' in column['name'].lower():
             widget = BS3PasswordFieldWidget
+            validators.extend([
+                Length(min=8, message="Password must be at least 8 characters"),
+                # Add custom password complexity validator
+                validators.Regexp(r'.*[A-Z]', message="Must contain uppercase letter"),
+                validators.Regexp(r'.*[a-z]', message="Must contain lowercase letter"),
+                validators.Regexp(r'.*[0-9]', message="Must contain number")
+            ])
+            description = "Must be 8+ chars with upper, lower & number"
 
-        return field_type, widget, validators
+        return field_type, widget, validators, description
 
-
-
-    def form_get(self, form):
-        if 'wizard_data' in session:
-            for field in form:
-                if field.name in session['wizard_data']:
-                    field.data = session['wizard_data'][field.name]
+    def _get_referenced_model(self, table_name):
+        """Helper method to get the model class for a given table name"""
+        for view in appbuilder.baseviews:
+            if hasattr(view, 'datamodel') and hasattr(view.datamodel, 'obj'):
+                if view.datamodel.obj.__tablename__ == table_name:
+                    return view.datamodel.obj
+        raise ValueError(f"Could not find model for table {table_name}")
+        def form_get(self, form):
+            if 'wizard_data' in session:
+                for field in form:
+                    if field.name in session['wizard_data']:
+                        field.data = session['wizard_data'][field.name]
 
     def form_post(self, form):
         self.update_session_data(form)
@@ -256,41 +407,83 @@ class {{ table_name|capitalize }}WizardView(SimpleFormView):
 
 
     def update_session_data(self, form):
-        """Update session with form data"""
+        """Update session with form data with improved handling"""
+        current_data = self.get_session_data()
+
         if 'wizard_data' not in session:
             session['wizard_data'] = {}
 
         form_data = {}
         for field in form:
             if field.name != 'csrf_token':
-                form_data[field.name] = field.data
+                # Handle different field types appropriately
+                if hasattr(field, 'data'):
+                    if isinstance(field.data, (datetime.date, datetime.datetime)):
+                        form_data[field.name] = field.data.isoformat() if field.data else None
+                    else:
+                        form_data[field.name] = field.data if field.data else None
+                else:
+                    form_data[field.name] = None
+
+        current_data.update(form_data)
+        self.save_session_data(current_data)
+
+        # Save last active step
+        session[f'{self.session_key}_last_step'] = self.current_step
 
         session['wizard_data'].update(form_data)
         session.modified = True
+        logger.debug(f"Updated session data: {session['wizard_data']}")
 
     @expose('/', methods=['GET', 'POST'])
     @has_access
     def this_form_get(self):
         """Initial entry point for the wizard"""
-        return redirect(url_for(f'{self.endpoint}.wizard', step=1))
-
+        last_step = session.get(f'{self.session_key}_last_step', 1)
+        return redirect(url_for(f'{self.endpoint}.wizard', step=last_step))
 
     def is_last_step(self):
         return self.current_step == self.total_steps
 
     def process_final_step(self):
+        """Process the final step and create database entry"""
         try:
+            # Create new instance of the model
             new_item = self.model()
-            for key, value in session['wizard_data'].items():
-                if hasattr(new_item, key):
-                    setattr(new_item, key, value)
+
+            # Debug logging
+            logger.info(f"Processing final step with data: {session.get('wizard_data', {})}")
+
+            # Get wizard data from session
+            wizard_data = session.get('wizard_data', {})
+            if not wizard_data:
+                logger.error("No wizard data found in session")
+                return False
+
+            # Set attributes on the model instance
+            for key, value in wizard_data.items():
+                if hasattr(new_item, key) and key != 'csrf_token':
+                    try:
+                        setattr(new_item, key, value)
+                        logger.debug(f"Set attribute {key}={value}")
+                    except Exception as e:
+                        logger.error(f"Error setting attribute {key}: {str(e)}")
+                        raise
+
+            # Add and commit to database
             db.session.add(new_item)
             db.session.commit()
+
+            # Clear wizard data from session
             session.pop('wizard_data', None)
+
+            logger.info(f"Successfully created new {self.model.__name__} with id {new_item.id}")
             return True
+
         except Exception as e:
             db.session.rollback()
             logger.error(f"Error saving data: {str(e)}")
+            flash(f"Error saving data: {str(e)}", 'error')
             return False
 
     def next_step(self):
@@ -332,7 +525,7 @@ class {{ table_name|capitalize }}WizardView(SimpleFormView):
     @expose('/wizard/<int:step>', methods=['GET', 'POST'])
     @has_access
     def wizard(self, step):
-        """Handle individual wizard steps"""
+        """Handle wizard steps with improved error handling"""
         if not (1 <= step <= self.total_steps):
             flash(_('Invalid step'), 'error')
             return redirect(url_for(f'{self.endpoint}.wizard', step=1))
@@ -340,13 +533,23 @@ class {{ table_name|capitalize }}WizardView(SimpleFormView):
         self.current_step = step
         form = self.generate_form(self.current_step)
 
+        # Pre-fill form with saved data
+        if request.method == 'GET':
+            saved_data = self.get_session_data()
+            for field in form:
+                if field.name in saved_data:
+                    field.data = saved_data[field.name]
+
         if request.method == 'POST':
             if form.validate():
+                # Update session with form data
                 self.update_session_data(form)
 
                 if self.is_last_step():
                     if self.process_final_step():
-                        flash(self.success_message, 'info')
+                        flash(self.success_message, 'success')
+                        # Clear session data after successful processing
+                        self.clear_session_data()
                         return self.get_redirect()
                     else:
                         flash(self.error_message, 'error')
@@ -356,9 +559,36 @@ class {{ table_name|capitalize }}WizardView(SimpleFormView):
                 next_step = self.current_step + 1
                 return redirect(url_for(f'{self.endpoint}.wizard', step=next_step))
             else:
-                flash(_('Form validation failed'), 'error')
+                error_fields = ', '.join(form.errors.keys())
+                flash(_(f'Please correct the errors in the following fields: {error_fields}'), 'error')
 
         return self.render_wizard_template(form=form)
+
+    # Add a method to clear incomplete wizards after a certain time
+    def cleanup_old_sessions(self):
+        """Clean up old wizard sessions"""
+        cleanup_threshold = datetime.utcnow() - timedelta(days=7)  # Adjust as needed
+        FlaskSession.query.filter(FlaskSession.modified < cleanup_threshold).delete()
+        db.session.commit()
+
+    # Add a method to save progress explicitly
+    @expose('/save-progress', methods=['POST'])
+    @has_access
+    def save_progress(self):
+        """Explicitly save current progress"""
+        form = self.generate_form(self.current_step)
+        if form.validate():
+            self.update_session_data(form)
+            flash(_('Progress saved successfully'), 'success')
+        return redirect(url_for(f'{self.endpoint}.wizard', step=self.current_step))
+
+    # Add a method to resume progress
+    @expose('/resume', methods=['GET'])
+    @has_access
+    def resume_progress(self):
+        """Resume from last saved step"""
+        last_step = session.get(f'{self.session_key}_last_step', 1)
+        return redirect(url_for(f'{self.endpoint}.wizard', step=last_step))
 
     # Custom action hooks
     def pre_process(self):
@@ -371,14 +601,17 @@ class {{ table_name|capitalize }}WizardView(SimpleFormView):
 
     def get_redirect(self):
         """Return the redirect URL after successful completion"""
-        return redirect(url_for('{{ table_name.lower() }}.list'))
+        try:
+            return redirect(url_for('{{ table_name.lower() }}.list'))
+        except Exception as e:
+            logger.error(f"Error in redirect: {str(e)}")
+            return redirect(url_for(f'{self.endpoint}.wizard', step=1))
 
-    # CSRF protection
-    form_widget_args = {
-        'csrf_token': {
-            'readonly': True
-        }
-    }
+    @expose('/debug', methods=['GET'])
+    @has_access
+    def debug_session(self):
+        """Debug endpoint to view session data"""
+        return str(session.get('wizard_data', {}))
 
 """
 {%- if not single_file %}

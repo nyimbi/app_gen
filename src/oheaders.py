@@ -26,11 +26,12 @@ from datetime import timedelta, datetime, date
 from sqlalchemy.orm import relationship, query, defer, deferred, column_property, mapper
 from sqlalchemy.schema import FetchedValue
 from sqlalchemy.ext.hybrid import hybrid_property, hybrid_method
-from sqlalchemy import (Column, Integer, String, ForeignKey,
-    Sequence, Float, Text, BigInteger, Date, SmallInteger,
-    DateTime, Time, Boolean, Index, CheckConstraint, Interval,
-    UniqueConstraint, ForeignKeyConstraint, PrimaryKeyConstraint, Numeric, LargeBinary, Table, func, Enum,
-    text)
+from sqlalchemy import (
+    create_engine, inspect, MetaData, Table, Column,  ForeignKey, Identity, Index,
+    Sequence, Float, Text, BigInteger, Date, Integer, String, SmallInteger,
+    DateTime, Time, Boolean,  Interval, Numeric, LargeBinary,Enum,
+    CheckConstraint, UniqueConstraint, ForeignKeyConstraint, PrimaryKeyConstraint, text, func
+)
 
 from sqlalchemy.dialects.postgresql import *
 from sqlalchemy.dialects.postgresql import (

@@ -1,0 +1,318 @@
+{% extends 'appbuilder/base.html' %} {% block head_css %} {{ super() }}
+<style>
+    .custom-dashboard {
+        padding: 20px;
+    }
+
+    .stat-card {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        padding: 20px;
+        margin-bottom: 20px;
+        transition: transform 0.2s;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    .stat-card .icon {
+        font-size: 2.5em;
+        margin-bottom: 10px;
+        color: #3498db;
+    }
+
+    .stat-card .stat-value {
+        font-size: 1.8em;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+
+    .stat-card .stat-label {
+        color: #666;
+        font-size: 0.9em;
+    }
+
+    .chart-container {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+
+    .action-buttons {
+        margin-bottom: 20px;
+    }
+
+    .action-buttons .btn {
+        margin-right: 10px;
+    }
+
+    .recent-activity {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+
+    .activity-item {
+        padding: 10px 0;
+        border-bottom: 1px solid #eee;
+    }
+
+    .activity-item:last-child {
+        border-bottom: none;
+    }
+
+    .activity-item .timestamp {
+        color: #666;
+        font-size: 0.9em;
+    }
+
+    .quick-filters {
+        margin-bottom: 20px;
+    }
+
+    .filter-chip {
+        display: inline-block;
+        padding: 5px 15px;
+        background: #f0f0f0;
+        border-radius: 20px;
+        margin-right: 10px;
+        margin-bottom: 10px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+
+    .filter-chip:hover {
+        background: #e0e0e0;
+    }
+
+    @media (max-width: 768px) {
+        .stat-card {
+            margin-bottom: 15px;
+        }
+
+        .action-buttons .btn {
+            margin-bottom: 10px;
+            width: 100%;
+        }
+    }
+</style>
+{% endblock %} {% block content %}
+<div class="custom-dashboard">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h2>{{ title }}</h2>
+            <div class="action-buttons">
+                <button class="btn btn-primary" onclick="refreshData()">
+                    <i class="fa fa-refresh"></i> Refresh Data
+                </button>
+                <button class="btn btn-secondary" onclick="exportData()">
+                    <i class="fa fa-download"></i> Export
+                </button>
+                <button class="btn btn-info" onclick="showSettings()">
+                    <i class="fa fa-cog"></i> Settings
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Quick Filters -->
+        <div class="col-md-12">
+            <div class="quick-filters">
+                <div class="filter-chip" onclick="applyFilter('today')">
+                    Today
+                </div>
+                <div class="filter-chip" onclick="applyFilter('week')">
+                    This Week
+                </div>
+                <div class="filter-chip" onclick="applyFilter('month')">
+                    This Month
+                </div>
+                <div class="filter-chip" onclick="applyFilter('custom')">
+                    Custom Range
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics Cards -->
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="icon">
+                    <i class="fa fa-users"></i>
+                </div>
+                <div class="stat-value" id="totalRecords">0</div>
+                <div class="stat-label">Total Records</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="icon">
+                    <i class="fa fa-clock-o"></i>
+                </div>
+                <div class="stat-value" id="recentActivity">0</div>
+                <div class="stat-label">Recent Activity</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="icon">
+                    <i class="fa fa-check-circle"></i>
+                </div>
+                <div class="stat-value" id="completedTasks">0</div>
+                <div class="stat-label">Completed</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="icon">
+                    <i class="fa fa-spinner"></i>
+                </div>
+                <div class="stat-value" id="pendingTasks">0</div>
+                <div class="stat-label">Pending</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <!-- Charts -->
+        <div class="col-md-8">
+            <div class="chart-container">
+                <canvas id="mainChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Recent Activity -->
+        <div class="col-md-4">
+            <div class="recent-activity">
+                <h4>Recent Activity</h4>
+                <div id="activityList">
+                    <!-- Activity items will be dynamically added here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} {% block tail_js %} {{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Initialize chart
+    const ctx = document.getElementById("mainChart").getContext("2d");
+    let mainChart = new Chart(ctx, {
+        type: "line",
+        data: {
+            labels: [],
+            datasets: [
+                {
+                    label: "Activity Over Time",
+                    data: [],
+                    borderColor: "#3498db",
+                    tension: 0.1,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+        },
+    });
+
+    // Function to refresh dashboard data
+    function refreshData() {
+        fetch('{{ url_for(".api_data") }}')
+            .then((response) => response.json())
+            .then((data) => {
+                updateDashboard(data);
+            })
+            .catch((error) => {
+                console.error("Error fetching data:", error);
+                showError("Failed to refresh data");
+            });
+    }
+
+    // Function to update dashboard with new data
+    function updateDashboard(data) {
+        // Update statistics
+        document.getElementById("totalRecords").textContent = data.reduce(
+            (sum, item) => sum + item.count,
+            0,
+        );
+
+        // Update chart
+        mainChart.data.labels = data.map((item) => item.name);
+        mainChart.data.datasets[0].data = data.map((item) => item.count);
+        mainChart.update();
+
+        // Update activity list
+        updateActivityList(data);
+    }
+
+    // Function to update activity list
+    function updateActivityList(data) {
+        const activityList = document.getElementById("activityList");
+        activityList.innerHTML = "";
+
+        data.forEach((item) => {
+            const activityItem = document.createElement("div");
+            activityItem.className = "activity-item";
+            activityItem.innerHTML = `
+                <div><strong>${item.name}</strong></div>
+                <div class="timestamp">Count: ${item.count}</div>
+            `;
+            activityList.appendChild(activityItem);
+        });
+    }
+
+    // Function to export data
+    function exportData() {
+        // Implementation for data export
+        alert("Export functionality will be implemented here");
+    }
+
+    // Function to show settings
+    function showSettings() {
+        // Implementation for settings modal
+        alert("Settings functionality will be implemented here");
+    }
+
+    // Function to apply filters
+    function applyFilter(filterType) {
+        const filters = {
+            today: "Showing data for today",
+            week: "Showing data for this week",
+            month: "Showing data for this month",
+            custom: "Select custom date range",
+        };
+
+        // Implementation for filtering
+        alert(filters[filterType]);
+    }
+
+    // Function to show error messages
+    function showError(message) {
+        const errorDiv = document.createElement("div");
+        errorDiv.className = "alert alert-danger alert-dismissible fade show";
+        errorDiv.innerHTML = `
+            ${message}
+            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+            </button>
+        `;
+        document.querySelector(".custom-dashboard").prepend(errorDiv);
+    }
+
+    // Initial load
+    document.addEventListener("DOMContentLoaded", function () {
+        refreshData();
+    });
+
+    // Refresh data periodically (every 5 minutes)
+    setInterval(refreshData, 300000);
+</script>
+{% endblock %}
