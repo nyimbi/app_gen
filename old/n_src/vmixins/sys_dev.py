@@ -53,7 +53,7 @@ def generate(prompt, mixin_description):
 
     chat = ChatAnthropic(model="claude-3-5-sonnet-20240620",
                          temperature=0,
-                         api_key="sk-ant-xx-xx","
+                         api_key="sk-ant-xx-xx",
                          max_tokens=8192)
 
     pprompt = prompt.format(mixin_description=mixin_description)
