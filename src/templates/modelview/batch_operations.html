@@ -1,0 +1,356 @@
+{% extends 'modelview/base.html' %} {% block content %}
+<div class="batch-operations-container">
+    {# Header Section #}
+    <div class="batch-header">
+        <h3>
+            <i class="fa fa-tasks"></i>
+            {{ _('Batch Operations') }}: {{ modelview_name }}
+        </h3>
+        <div class="selection-info">
+            <span class="selected-count">
+                {{ _('Selected Items') }}:
+                <strong>{{ selected_items|length }}</strong>
+            </span>
+            <button type="button" class="btn btn-link" id="view-selected">
+                {{ _('View Selection') }}
+            </button>
+        </div>
+    </div>
+
+    {# Operation Selection #}
+    <div class="operations-selector">
+        <div class="row">
+            <div class="col-md-3">
+                {# Available Operations List #}
+                <div class="list-group operations-list">
+                    {% for operation in available_operations %}
+                    <a
+                        href="#"
+                        class="list-group-item operation-item"
+                        data-operation="{{ operation.name }}"
+                    >
+                        <i class="fa fa-{{ operation.icon }}"></i>
+                        <span class="operation-name"
+                            >{{ operation.label }}</span
+                        >
+                        <span class="pull-right">
+                            <i class="fa fa-chevron-right"></i>
+                        </span>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="col-md-9">
+                {# Operation Forms Container #}
+                <div class="operation-forms">
+                    {% for operation in available_operations %}
+                    <div
+                        class="operation-form"
+                        id="form-{{ operation.name }}"
+                        style="display: none"
+                    >
+                        <div class="panel panel-default">
+                            <div class="panel-heading">
+                                <h4 class="panel-title">
+                                    <i class="fa fa-{{ operation.icon }}"></i>
+                                    {{ operation.label }}
+                                </h4>
+                            </div>
+                            <div class="panel-body">
+                                <form
+                                    method="post"
+                                    action="{{ url_for('.batch_operation', operation=operation.name) }}"
+                                    class="batch-operation-form"
+                                    enctype="multipart/form-data"
+                                >
+                                    {{ csrf_token() }} {# Operation Description
+                                    #} {% if operation.description %}
+                                    <div class="operation-description">
+                                        {{ operation.description }}
+                                    </div>
+                                    {% endif %} {# Operation Fields #} {% for
+                                    field in operation.fields %}
+                                    <div class="form-group">
+                                        <label>{{ field.label }}</label>
+                                        {% if field.type == 'text' %}
+                                        <input
+                                            type="text"
+                                            class="form-control"
+                                            name="{{ field.name }}"
+                                            {%
+                                            if
+                                            field.required
+                                            %}required{%
+                                            endif
+                                            %}
+                                            {%
+                                            if
+                                            field.placeholder
+                                            %}placeholder="{{ field.placeholder }}"
+                                            {%
+                                            endif
+                                            %}
+                                        />
+
+                                        {% elif field.type == 'select' %}
+                                        <select
+                                            class="form-control"
+                                            name="{{ field.name }}"
+                                            {%
+                                            if
+                                            field.required
+                                            %}required{%
+                                            endif
+                                            %}
+                                        >
+                                            <option value="">
+                                                {{ _('Select...') }}
+                                            </option>
+                                            {% for option in field.options %}
+                                            <option value="{{ option.value }}">
+                                                {{ option.label }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+
+                                        {% elif field.type == 'checkbox' %}
+                                        <div class="checkbox">
+                                            <label>
+                                                <input
+                                                    type="checkbox"
+                                                    name="{{ field.name }}"
+                                                    value="1"
+                                                />
+                                                {{ field.description }}
+                                            </label>
+                                        </div>
+
+                                        {% elif field.type == 'date' %}
+                                        <input
+                                            type="text"
+                                            class="form-control datepicker"
+                                            name="{{ field.name }}"
+                                            {%
+                                            if
+                                            field.required
+                                            %}required{%
+                                            endif
+                                            %}
+                                        />
+
+                                        {% elif field.type == 'file' %}
+                                        <input
+                                            type="file"
+                                            class="form-control"
+                                            name="{{ field.name }}"
+                                            {%
+                                            if
+                                            field.required
+                                            %}required{%
+                                            endif
+                                            %}
+                                            {%
+                                            if
+                                            field.accept
+                                            %}accept="{{ field.accept }}"
+                                            {%
+                                            endif
+                                            %}
+                                        />
+
+                                        {% elif field.type == 'textarea' %}
+                                        <textarea
+                                            class="form-control"
+                                            name="{{ field.name }}"
+                                            rows="{{ field.rows|default(3) }}"
+                                            {%
+                                            if
+                                            field.required
+                                            %}required{%
+                                            endif
+                                            %}
+                                            {%
+                                            if
+                                            field.placeholder
+                                            %}placeholder="{{ field.placeholder }}"
+                                            {%
+                                            endif
+                                            %}
+                                        ></textarea>
+                                        {% endif %} {% if field.help_text %}
+                                        <span class="help-block"
+                                            >{{ field.help_text }}</span
+                                        >
+                                        {% endif %}
+                                    </div>
+                                    {% endfor %} {# Operation Options #} {% if
+                                    operation.options %}
+                                    <div class="operation-options">
+                                        <h5>{{ _('Options') }}</h5>
+                                        {% for option in operation.options %}
+                                        <div class="checkbox">
+                                            <label>
+                                                <input
+                                                    type="checkbox"
+                                                    name="options[{{ option.name }}]"
+                                                    value="1"
+                                                />
+                                                {{ option.label }}
+                                            </label>
+                                            {% if option.help_text %}
+                                            <span class="help-block"
+                                                >{{ option.help_text }}</span
+                                            >
+                                            {% endif %}
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %} {# Preview Option #} {% if
+                                    operation.supports_preview %}
+                                    <div class="preview-option">
+                                        <div class="checkbox">
+                                            <label>
+                                                <input
+                                                    type="checkbox"
+                                                    name="preview"
+                                                    value="1"
+                                                    checked
+                                                />
+                                                {{ _('Preview changes before
+                                                applying') }}
+                                            </label>
+                                        </div>
+                                    </div>
+                                    {% endif %} {# Form Actions #}
+                                    <div class="form-actions">
+                                        <input
+                                            type="hidden"
+                                            name="selected_items"
+                                            value="{{ selected_items|tojson }}"
+                                        />
+                                        <button
+                                            type="submit"
+                                            class="btn btn-primary"
+                                        >
+                                            <i class="fa fa-check"></i>
+                                            {{
+                                            operation.submit_label|default(_('Apply'))
+                                            }}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="btn btn-default"
+                                            onclick="history.back()"
+                                        >
+                                            <i class="fa fa-times"></i> {{
+                                            _('Cancel') }}
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Selected Items Preview Modal #}
+    <div class="modal fade" id="selected-items-modal">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">
+                        &times;
+                    </button>
+                    <h4 class="modal-title">{{ _('Selected Items') }}</h4>
+                </div>
+                <div class="modal-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-bordered">
+                            <thead>
+                                <tr>
+                                    {% for column in list_columns %}
+                                    <th>{{ label_columns[column] }}</th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in selected_items %}
+                                <tr>
+                                    {% for column in list_columns %}
+                                    <td>{{ item[column]|safe }}</td>
+                                    {% endfor %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button
+                        type="button"
+                        class="btn btn-default"
+                        data-dismiss="modal"
+                    >
+                        {{ _('Close') }}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Operation Preview Modal #}
+    <div class="modal fade" id="operation-preview-modal">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">
+                        &times;
+                    </button>
+                    <h4 class="modal-title">{{ _('Operation Preview') }}</h4>
+                </div>
+                <div class="modal-body">
+                    <div class="preview-content"></div>
+                </div>
+                <div class="modal-footer">
+                    <button
+                        type="button"
+                        class="btn btn-primary"
+                        id="confirm-operation"
+                    >
+                        {{ _('Confirm') }}
+                    </button>
+                    <button
+                        type="button"
+                        class="btn btn-default"
+                        data-dismiss="modal"
+                    >
+                        {{ _('Cancel') }}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block tail_js %} {{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeBatchOperations({
+            operations: {{ available_operations|tojson }},
+            selectedItems: {{ selected_items|tojson }},
+            previewUrl: "{{ url_for('.preview_operation') }}",
+            csrf_token: "{{ csrf_token() }}",
+            translations: {
+                confirmOperation: "{{ _('Are you sure you want to perform this operation?') }}",
+                operationSuccess: "{{ _('Operation completed successfully') }}",
+                operationError: "{{ _('An error occurred during the operation') }}",
+                previewNotAvailable: "{{ _('Preview not available for this operation') }}"
+            }
+        });
+    });
+</script>
+{% endblock %}

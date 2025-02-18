@@ -1,0 +1,398 @@
+{% extends 'modelview/base.html' %} {% block content %}
+<div class="dashboard-container">
+    {# Header Section #}
+    <div class="dashboard-header">
+        <div class="title-section">
+            <h3>
+                <i class="fa fa-dashboard"></i>
+                {{ modelview_name }} {{ _('Dashboard') }}
+            </h3>
+        </div>
+
+        {# Time Range Selector #}
+        <div class="time-range-selector">
+            <div class="btn-group">
+                <button
+                    type="button"
+                    class="btn btn-default active"
+                    data-range="7d"
+                >
+                    {{ _('7 Days') }}
+                </button>
+                <button type="button" class="btn btn-default" data-range="30d">
+                    {{ _('30 Days') }}
+                </button>
+                <button type="button" class="btn btn-default" data-range="90d">
+                    {{ _('90 Days') }}
+                </button>
+                <button type="button" class="btn btn-default" data-range="1y">
+                    {{ _('1 Year') }}
+                </button>
+                <button
+                    type="button"
+                    class="btn btn-default"
+                    data-range="custom"
+                >
+                    {{ _('Custom') }}
+                </button>
+            </div>
+
+            {# Custom Date Range #}
+            <div class="custom-range-picker hidden">
+                <div class="input-group">
+                    <input
+                        type="text"
+                        class="form-control date-range"
+                        placeholder="{{ _('Select date range') }}"
+                    />
+                    <span class="input-group-btn">
+                        <button
+                            class="btn btn-default apply-range"
+                            type="button"
+                        >
+                            {{ _('Apply') }}
+                        </button>
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Main Dashboard Content #}
+    <div class="dashboard-content">
+        {# Key Metrics Row #}
+        <div class="metrics-row">
+            {% for metric in key_metrics %}
+            <div class="metric-card col-md-3">
+                <div class="metric-content">
+                    <div class="metric-header">
+                        <h4 class="metric-title">{{ metric.label }}</h4>
+                        {% if metric.help_text %}
+                        <i
+                            class="fa fa-question-circle"
+                            data-toggle="tooltip"
+                            title="{{ metric.help_text }}"
+                        ></i>
+                        {% endif %}
+                    </div>
+                    <div class="metric-value">{{ metric.value }}</div>
+                    <div class="metric-trend">
+                        {% if metric.trend > 0 %}
+                        <span class="trend-up">
+                            <i class="fa fa-arrow-up"></i> {{ metric.trend }}%
+                        </span>
+                        {% elif metric.trend < 0 %}
+                        <span class="trend-down">
+                            <i class="fa fa-arrow-down"></i> {{ metric.trend }}%
+                        </span>
+                        {% else %}
+                        <span class="trend-neutral">
+                            <i class="fa fa-minus"></i> {{ _('No change') }}
+                        </span>
+                        {% endif %}
+                        <span class="trend-period">vs previous period</span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        {# Charts Row #}
+        <div class="charts-row">
+            {# Time Series Chart #}
+            <div class="chart-card col-md-8">
+                <div class="card-header">
+                    <h4>{{ _('Trend Over Time') }}</h4>
+                    <div class="chart-controls">
+                        <select class="form-control metric-selector">
+                            {% for metric in time_series_metrics %}
+                            <option value="{{ metric.name }}">
+                                {{ metric.label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="timeSeriesChart"></canvas>
+                </div>
+            </div>
+
+            {# Distribution Chart #}
+            <div class="chart-card col-md-4">
+                <div class="card-header">
+                    <h4>{{ _('Distribution') }}</h4>
+                    <div class="chart-controls">
+                        <select class="form-control dimension-selector">
+                            {% for dimension in dimensions %}
+                            <option value="{{ dimension.name }}">
+                                {{ dimension.label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="distributionChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        {# Analysis Tabs #}
+        <div class="analysis-tabs">
+            <ul class="nav nav-tabs" role="tablist">
+                <li role="presentation" class="active">
+                    <a href="#breakdown" role="tab" data-toggle="tab">
+                        <i class="fa fa-table"></i> {{ _('Breakdown') }}
+                    </a>
+                </li>
+                <li role="presentation">
+                    <a href="#top-items" role="tab" data-toggle="tab">
+                        <i class="fa fa-list-ol"></i> {{ _('Top Items') }}
+                    </a>
+                </li>
+                <li role="presentation">
+                    <a href="#comparison" role="tab" data-toggle="tab">
+                        <i class="fa fa-balance-scale"></i> {{ _('Comparison')
+                        }}
+                    </a>
+                </li>
+            </ul>
+
+            <div class="tab-content">
+                {# Breakdown Tab #}
+                <div role="tabpanel" class="tab-pane active" id="breakdown">
+                    <div class="breakdown-controls">
+                        <select class="form-control dimension-selector">
+                            {% for dimension in dimensions %}
+                            <option value="{{ dimension.name }}">
+                                {{ dimension.label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <select class="form-control metric-selector" multiple>
+                            {% for metric in metrics %}
+                            <option value="{{ metric.name }}">
+                                {{ metric.label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="table-responsive">
+                        <table
+                            class="table table-hover table-bordered breakdown-table"
+                        >
+                            {# Table content will be loaded dynamically #}
+                        </table>
+                    </div>
+                </div>
+
+                {# Top Items Tab #}
+                <div role="tabpanel" class="tab-pane" id="top-items">
+                    <div class="top-items-controls">
+                        <select class="form-control metric-selector">
+                            {% for metric in metrics %}
+                            <option value="{{ metric.name }}">
+                                {{ metric.label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <select class="form-control limit-selector">
+                            <option value="5">Top 5</option>
+                            <option value="10">Top 10</option>
+                            <option value="20">Top 20</option>
+                            <option value="50">Top 50</option>
+                        </select>
+                    </div>
+                    <div class="top-items-list">
+                        {# Items will be loaded dynamically #}
+                    </div>
+                </div>
+
+                {# Comparison Tab #}
+                <div role="tabpanel" class="tab-pane" id="comparison">
+                    <div class="comparison-controls">
+                        <div class="period-selector">
+                            <label>{{ _('Compare') }}</label>
+                            <select class="form-control period-type">
+                                <option value="previous">
+                                    {{ _('Previous Period') }}
+                                </option>
+                                <option value="year">
+                                    {{ _('Same Period Last Year') }}
+                                </option>
+                                <option value="custom">
+                                    {{ _('Custom Period') }}
+                                </option>
+                            </select>
+                        </div>
+                        <div class="metrics-selector">
+                            <label>{{ _('Metrics') }}</label>
+                            <select
+                                class="form-control metric-selector"
+                                multiple
+                            >
+                                {% for metric in metrics %}
+                                <option value="{{ metric.name }}">
+                                    {{ metric.label }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="comparison-results">
+                        {# Results will be loaded dynamically #}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# Insights Panel #}
+        <div class="insights-panel">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h4 class="panel-title">
+                        <i class="fa fa-lightbulb"></i> {{ _('Key Insights') }}
+                    </h4>
+                </div>
+                <div class="panel-body">
+                    <div class="insights-list">
+                        {% for insight in insights %}
+                        <div class="insight-item insight-{{ insight.type }}">
+                            <div class="insight-icon">
+                                <i class="fa fa-{{ insight.icon }}"></i>
+                            </div>
+                            <div class="insight-content">
+                                <div class="insight-title">
+                                    {{ insight.title }}
+                                </div>
+                                <div class="insight-description">
+                                    {{ insight.description }}
+                                </div>
+                                {% if insight.action %}
+                                <div class="insight-action">
+                                    <a
+                                        href="{{ insight.action.url }}"
+                                        class="btn btn-sm btn-default"
+                                    >
+                                        {{ insight.action.label }}
+                                    </a>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Export Modal #}
+<div class="modal fade" id="export-modal">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    &times;
+                </button>
+                <h4 class="modal-title">{{ _('Export Dashboard') }}</h4>
+            </div>
+            <div class="modal-body">
+                <form id="export-form">
+                    <div class="form-group">
+                        <label>{{ _('Format') }}</label>
+                        <select name="format" class="form-control">
+                            <option value="pdf">PDF</option>
+                            <option value="excel">Excel</option>
+                            <option value="image">Image</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>{{ _('Content') }}</label>
+                        <div class="checkbox">
+                            <label>
+                                <input
+                                    type="checkbox"
+                                    name="include_metrics"
+                                    checked
+                                />
+                                {{ _('Include Metrics') }}
+                            </label>
+                        </div>
+                        <div class="checkbox">
+                            <label>
+                                <input
+                                    type="checkbox"
+                                    name="include_charts"
+                                    checked
+                                />
+                                {{ _('Include Charts') }}
+                            </label>
+                        </div>
+                        <div class="checkbox">
+                            <label>
+                                <input
+                                    type="checkbox"
+                                    name="include_breakdown"
+                                    checked
+                                />
+                                {{ _('Include Breakdown') }}
+                            </label>
+                        </div>
+                        <div class="checkbox">
+                            <label>
+                                <input
+                                    type="checkbox"
+                                    name="include_insights"
+                                    checked
+                                />
+                                {{ _('Include Insights') }}
+                            </label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button
+                    type="button"
+                    class="btn btn-primary"
+                    id="export-dashboard"
+                >
+                    <i class="fa fa-download"></i> {{ _('Export') }}
+                </button>
+                <button
+                    type="button"
+                    class="btn btn-default"
+                    data-dismiss="modal"
+                >
+                    {{ _('Cancel') }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block tail_js %} {{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/moment"></script>
+<script src="https://cdn.jsdelivr.net/npm/daterangepicker"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeDashboard({
+            metrics: {{ metrics|tojson }},
+            dimensions: {{ dimensions|tojson }},
+            dataUrl: "{{ url_for('.dashboard_data') }}",
+            exportUrl: "{{ url_for('.export_dashboard') }}",
+            initialRange: '7d',
+            refreshInterval: {{ refresh_interval|default(300) }},
+            translations: {
+                loadError: "{{ _('Error loading dashboard data') }}",
+                exportError: "{{ _('Error exporting dashboard') }}",
+                noData: "{{ _('No data available') }}"
+            }
+        });
+    });
+</script>
+{% endblock %}

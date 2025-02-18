@@ -1,0 +1,383 @@
+{% extends 'modelview/base.html' %} {% block content %}
+<div class="model-list-container">
+    {# List Header #}
+    <div class="list-header">
+        {# Primary Actions #}
+        <div class="primary-actions">
+            {% if can_add %}
+            <a
+                href="{{ url_for('.add') }}"
+                class="btn btn-primary"
+                role="button"
+            >
+                <i class="fa fa-plus"></i> {{ _('Add') }} {{ modelview_name }}
+            </a>
+            {% endif %} {# Bulk Actions Dropdown #} {% if actions %}
+            <div class="btn-group">
+                <button
+                    type="button"
+                    class="btn btn-default dropdown-toggle"
+                    data-toggle="dropdown"
+                >
+                    <i class="fa fa-tasks"></i> {{ _('Bulk Actions') }}
+                    <span class="caret"></span>
+                </button>
+                <ul class="dropdown-menu">
+                    {% for action in actions %}
+                    <li>
+                        <a
+                            href="#"
+                            class="bulk-action"
+                            data-action="{{ action.name }}"
+                            data-confirmation="{{ action.confirmation }}"
+                            data-icon="{{ action.icon }}"
+                        >
+                            <i class="fa fa-{{ action.icon }}"></i> {{
+                            action.text }}
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %} {# Export Actions #} {% if can_export %}
+            <div class="btn-group">
+                <button
+                    type="button"
+                    class="btn btn-default dropdown-toggle"
+                    data-toggle="dropdown"
+                >
+                    <i class="fa fa-download"></i> {{ _('Export') }}
+                    <span class="caret"></span>
+                </button>
+                <ul class="dropdown-menu">
+                    {% for export_type in export_types %}
+                    <li>
+                        <a
+                            href="#"
+                            class="export-action"
+                            data-type="{{ export_type }}"
+                        >
+                            <i class="fa fa-file-{{ export_type }}-o"></i>
+                            {{ export_type|upper }}
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+
+        {# Search & Filter Section #}
+        <div class="search-filter-section">
+            {# Quick Search #}
+            <div class="quick-search">
+                <input
+                    type="text"
+                    class="form-control"
+                    placeholder="{{ _('Quick Search...') }}"
+                    data-search-columns="{{ search_columns|tojson }}"
+                />
+                <i class="fa fa-search search-icon"></i>
+            </div>
+
+            {# Filters #}
+            <div class="filter-container">
+                <form class="filter-form" method="get">
+                    <div class="active-filters">
+                        {% for filter in active_filters %}
+                        <div
+                            class="filter-tag"
+                            data-filter-id="{{ filter.id }}"
+                        >
+                            <span class="filter-name"
+                                >{{ filter.label }}: {{ filter.value }}</span
+                            >
+                            <i class="fa fa-times remove-filter"></i>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <button
+                        type="button"
+                        class="btn btn-default"
+                        data-toggle="modal"
+                        data-target="#advanced-search-modal"
+                    >
+                        <i class="fa fa-filter"></i> {{ _('Advanced Filter') }}
+                    </button>
+                </form>
+            </div>
+
+            {# View Options #}
+            <div class="view-options">
+                {# Display Density #}
+                <div class="btn-group">
+                    <button
+                        type="button"
+                        class="btn btn-default active"
+                        data-density="comfortable"
+                    >
+                        <i class="fa fa-th-large"></i>
+                    </button>
+                    <button
+                        type="button"
+                        class="btn btn-default"
+                        data-density="compact"
+                    >
+                        <i class="fa fa-th"></i>
+                    </button>
+                </div>
+
+                {# Column Visibility #}
+                <div class="btn-group">
+                    <button
+                        type="button"
+                        class="btn btn-default dropdown-toggle"
+                        data-toggle="dropdown"
+                    >
+                        <i class="fa fa-columns"></i>
+                        <span class="caret"></span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-right column-picker">
+                        {% for column in all_columns %}
+                        <li>
+                            <label>
+                                <input
+                                    type="checkbox"
+                                    value="{{ column }}"
+                                    {%
+                                    if
+                                    column
+                                    in
+                                    list_columns
+                                    %}checked{%
+                                    endif
+                                    %}
+                                />
+                                {{ label_columns[column] }}
+                            </label>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Main List Content #}
+    <div class="list-content">
+        <form id="bulk-action-form" method="post">
+            <div class="table-responsive">
+                <table
+                    class="table table-hover table-bordered"
+                    data-sortable="true"
+                    data-pagination="true"
+                    data-page-size="{{ page_size }}"
+                >
+                    <thead>
+                        <tr>
+                            {# Bulk Selection #} {% if actions %}
+                            <th class="select-all-column">
+                                <input type="checkbox" class="select-all" />
+                            </th>
+                            {% endif %} {# Data Columns #} {% for column in
+                            list_columns %} {% set sort_url =
+                            get_sort_url(column) %}
+                            <th
+                                class="column-header {% if sort_url.selected %}sorted-{{ sort_url.direction }}{% endif %}"
+                                data-field="{{ column }}"
+                                data-sortable="{{ column in sortable_columns }}"
+                                data-type="{{ column_types.get(column, 'text') }}"
+                            >
+                                <div class="column-title">
+                                    {{ label_columns[column] }} {% if column in
+                                    sortable_columns %}
+                                    <i
+                                        class="fa fa-sort{% if sort_url.selected %}-{{ sort_url.direction }}{% endif %}"
+                                    ></i>
+                                    {% endif %}
+                                </div>
+
+                                {% if column in filterable_columns %}
+                                <div class="column-filter">
+                                    <input
+                                        type="text"
+                                        class="form-control input-sm"
+                                        placeholder="{{ _('Filter...') }}"
+                                        data-column="{{ column }}"
+                                    />
+                                </div>
+                                {% endif %}
+                            </th>
+                            {% endfor %} {# Actions Column #}
+                            <th class="actions-column">{{ _('Actions') }}</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for item in items %}
+                        <tr
+                            data-id="{{ pk_get(item) }}"
+                            {%
+                            if
+                            has_workflow
+                            %}data-state="{{ item.state }}"
+                            {%
+                            endif
+                            %}
+                            class="{% if item.is_active == False %}inactive{% endif %}"
+                        >
+                            {# Bulk Selection #} {% if actions %}
+                            <td class="select-column">
+                                <input
+                                    type="checkbox"
+                                    name="rowid"
+                                    value="{{ pk_get(item) }}"
+                                />
+                            </td>
+                            {% endif %} {# Data Columns #} {% for column in
+                            list_columns %}
+                            <td
+                                class="column-{{ column }} type-{{ column_types.get(column, 'text') }}"
+                            >
+                                {% set value = item[column] %} {% set field_type
+                                = field_types.get(column, 'text') %} {% if
+                                column in formatters_columns %} {{ value|safe }}
+                                {% else %} {{ render_field_value(column, value,
+                                field_type) }} {% endif %}
+                            </td>
+                            {% endfor %} {# Actions Column #}
+                            <td class="actions-column">
+                                <div class="btn-group">
+                                    {% if can_show %}
+                                    <a
+                                        href="{{ url_for('.show', pk=pk_get(item)) }}"
+                                        class="btn btn-sm btn-default"
+                                        title="{{ _('View') }}"
+                                    >
+                                        <i class="fa fa-eye"></i>
+                                    </a>
+                                    {% endif %} {% if can_edit %}
+                                    <a
+                                        href="{{ url_for('.edit', pk=pk_get(item)) }}"
+                                        class="btn btn-sm btn-default"
+                                        title="{{ _('Edit') }}"
+                                    >
+                                        <i class="fa fa-edit"></i>
+                                    </a>
+                                    {% endif %} {# More Actions Dropdown #}
+                                    <button
+                                        type="button"
+                                        class="btn btn-sm btn-default dropdown-toggle"
+                                        data-toggle="dropdown"
+                                    >
+                                        <i class="fa fa-ellipsis-v"></i>
+                                    </button>
+                                    <ul
+                                        class="dropdown-menu dropdown-menu-right"
+                                    >
+                                        {% if has_workflow %}
+                                        <li class="dropdown-header">
+                                            {{ _('Workflow') }}
+                                        </li>
+                                        {% for action in
+                                        get_workflow_actions(item) %}
+                                        <li>
+                                            <a
+                                                href="#"
+                                                class="workflow-action"
+                                                data-action="{{ action.name }}"
+                                                data-item-id="{{ pk_get(item) }}"
+                                            >
+                                                <i
+                                                    class="fa fa-{{ action.icon }}"
+                                                ></i>
+                                                {{ action.label }}
+                                            </a>
+                                        </li>
+                                        {% endfor %}
+                                        <li class="divider"></li>
+                                        {% endif %} {% if has_versioning %}
+                                        <li>
+                                            <a
+                                                href="{{ url_for('.history', pk=pk_get(item)) }}"
+                                            >
+                                                <i class="fa fa-history"></i> {{
+                                                _('History') }}
+                                            </a>
+                                        </li>
+                                        {% endif %} {% if can_delete %}
+                                        <li>
+                                            <a
+                                                href="#"
+                                                class="delete-item"
+                                                data-id="{{ pk_get(item) }}"
+                                            >
+                                                <i class="fa fa-trash"></i> {{
+                                                _('Delete') }}
+                                            </a>
+                                        </li>
+                                        {% endif %}
+                                    </ul>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td
+                                colspan="{{ list_columns|length + (1 if actions else 0) + 1 }}"
+                                class="text-center no-records"
+                            >
+                                {{ _('No records found') }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </form>
+    </div>
+
+    {# Pagination #}
+    <div class="list-footer">
+        <div class="pagination-info">
+            {{ _('Showing %(start)s to %(end)s of %(total)s entries',
+            start=pagination.start, end=pagination.end, total=pagination.total)
+            }}
+        </div>
+
+        <div class="page-size-selector">
+            <select class="form-control input-sm">
+                <option value="10">10</option>
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+            </select>
+            <span>{{ _('entries per page') }}</span>
+        </div>
+
+        {{ render_pagination(pagination) }}
+    </div>
+</div>
+
+{# Modals #} {% include 'modelview/modals/advanced_search.html' %} {% include
+'modelview/modals/export_options.html' %} {% include
+'modelview/modals/bulk_edit.html' %} {% if has_workflow %} {% include
+'modelview/modals/workflow_action.html' %} {% endif %} {% endblock %} {% block
+tail_js %} {{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize list view components
+        initializeListView({
+            hasWorkflow: {{ has_workflow|tojson }},
+            hasVersioning: {{ has_versioning|tojson }},
+            canExport: {{ can_export|tojson }},
+            searchColumns: {{ search_columns|tojson }},
+            filterableColumns: {{ filterable_columns|tojson }},
+            columnTypes: {{ column_types|tojson }},
+            pageSize: {{ page_size }},
+            sortableColumns: {{ sortable_columns|tojson }},
+            baseUrl: "{{ url_for('.list') }}"
+        });
+    });
+</script>
+{% endblock %}

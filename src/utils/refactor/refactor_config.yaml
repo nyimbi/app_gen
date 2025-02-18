@@ -1,0 +1,109 @@
+# Webscraper refactoring configuration
+version: "1.0"
+project_name: "WebScraper"
+project_description: "Advanced web scraping library"
+
+modules:
+  exceptions:
+    description: "Exception classes"
+    classes:
+      - ScraperException
+      - ContentExtractionError
+      - ValidationError
+      - NetworkError
+    dependencies: []
+
+  base:
+    description: "Base types and interfaces"
+    classes:
+      - MonitorInterface
+      - ScrapedContent
+      - WebScraperConfig
+      - MetricPoint
+      - ValidationResult
+    dependencies: []
+
+  monitor:
+    description: "Performance monitoring and metrics"
+    classes:
+      - ScraperMonitor
+      - PerformanceMonitor
+    dependencies:
+      - base
+
+  content:
+    description: "Content processing and analysis"
+    classes:
+      - SmartContentExtractor
+      - ContentProcessor
+      - ContentAnalyzer
+      - ContentPipeline
+      - ContentValidator
+      - HTMLCleaner
+      - ContentFilter
+      - MinLengthFilter
+      - LanguageFilter
+      - QualityFilter
+    dependencies:
+      - base
+
+  core:
+    description: "Core scraping functionality"
+    classes:
+      - WebScraper
+      - AsyncWebScraper
+      - ConcurrentScraper
+      - ResilientScraper
+      - URLDiscovery
+      - RateLimiter
+      - RateLimit
+    dependencies:
+      - base
+      - monitor
+      - content
+
+  cache:
+    description: "Caching implementations"
+    classes:
+      - CacheManager
+      - DistributedCache
+      - HierarchicalCache
+    dependencies:
+      - base
+
+  utils:
+    description: "Utility classes"
+    classes:
+      - ResultProcessor
+      - ProxyManager
+      - ErrorHandler
+    dependencies:
+      - base
+
+ai_assist:
+  enabled: true
+  openai_api_key: "your-api-key"
+  model: "gpt-4"
+  temperature: 0.7
+  generate_docs: true
+  generate_tests: true
+  fix_errors: true
+  optimize_code: true
+  max_retries: 3
+  timeout: 30
+
+settings:
+  format_code: true
+  generate_docs: true
+  check_dependencies: true
+  validate_structure: true
+
+dependencies:
+  - aiohttp>=3.8.0
+  - beautifulsoup4>=4.9.0
+  - readability-lxml>=0.8.1
+  - redis>=4.0.0
+  - nltk>=3.6.0
+  - prometheus_client>=0.12.0
+  - langdetect>=1.0.9
+  - pyyaml>=5.4.0

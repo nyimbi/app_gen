@@ -1,0 +1,63 @@
+{# src/templates/chart_widget.html #} {% extends "appbuilder/base.html" %} {%
+block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="panel panel-primary">
+                <div class="panel-heading">
+                    <h3 class="panel-title">{{ chart_title }}</h3>
+                </div>
+                <div class="panel-body">
+                    {% if error %}
+                    <div class="alert alert-danger">{{ error }}</div>
+                    {% elif not data %}
+                    <div class="alert alert-info">
+                        {{ _('No data available') }}
+                    </div>
+                    {% else %}
+                    <div id="chart_div"></div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} {% block tail_js %} {{ super() }} {% if data and not error %}
+<script
+    type="text/javascript"
+    src="https://www.gstatic.com/charts/loader.js"
+></script>
+<script type="text/javascript">
+    google.charts.load('current', {'packages':['corechart']});
+    google.charts.setOnLoadCallback(drawChart);
+
+    function drawChart() {
+        try {
+            var data = new google.visualization.DataTable();
+            data.addColumn('string', '{{ _("Date") }}');
+            data.addColumn('number', '{{ _("Count") }}');
+
+            {% for item in data %}
+            data.addRow(['{{ item.name|safe }}', {{ item.value }}]);
+            {% endfor %}
+
+            var options = {{ chart_options|tojson|safe }};
+            var chart = new google.visualization.{{ chart_type }}(
+                document.getElementById('chart_div')
+            );
+            chart.draw(data, options);
+        } catch (error) {
+            console.error('Error drawing chart:', error);
+            document.getElementById('chart_div').innerHTML =
+                '<div class="alert alert-danger">{{ _("Error drawing chart") }}</div>';
+        }
+    }
+
+    window.addEventListener('resize', function() {
+        if (this.resizeTO) clearTimeout(this.resizeTO);
+        this.resizeTO = setTimeout(function() {
+            drawChart();
+        }, 500);
+    });
+</script>
+{% endif %} {% endblock %}

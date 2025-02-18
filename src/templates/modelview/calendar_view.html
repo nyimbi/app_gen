@@ -1,0 +1,359 @@
+{% extends 'modelview/base.html' %} {% block content %}
+<div class="calendar-view-container">
+    {# Calendar Header #}
+    <div class="calendar-header">
+        <div class="header-left">
+            {# View Navigation #}
+            <div class="btn-group view-selector">
+                <button type="button" class="btn btn-default" data-view="month">
+                    {{ _('Month') }}
+                </button>
+                <button type="button" class="btn btn-default" data-view="week">
+                    {{ _('Week') }}
+                </button>
+                <button type="button" class="btn btn-default" data-view="day">
+                    {{ _('Day') }}
+                </button>
+                <button
+                    type="button"
+                    class="btn btn-default"
+                    data-view="agenda"
+                >
+                    {{ _('Agenda') }}
+                </button>
+            </div>
+
+            {# Period Navigation #}
+            <div class="btn-group period-nav">
+                <button type="button" class="btn btn-default" id="prev-period">
+                    <i class="fa fa-chevron-left"></i>
+                </button>
+                <button
+                    type="button"
+                    class="btn btn-default"
+                    id="current-period"
+                >
+                    {{ _('Today') }}
+                </button>
+                <button type="button" class="btn btn-default" id="next-period">
+                    <i class="fa fa-chevron-right"></i>
+                </button>
+            </div>
+
+            {# Current Period Display #}
+            <span class="current-period-label">
+                <h3 id="period-display"></h3>
+            </span>
+        </div>
+
+        <div class="header-right">
+            {# Calendar Controls #}
+            <div class="calendar-controls">
+                {# Category Filter #}
+                <div class="category-filter">
+                    <select class="form-control" multiple id="category-select">
+                        {% for category in categories %}
+                        <option
+                            value="{{ category.id }}"
+                            data-color="{{ category.color }}"
+                            {%
+                            if
+                            category.selected
+                            %}selected{%
+                            endif
+                            %}
+                        >
+                            {{ category.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                {# Display Options #}
+                <div class="btn-group">
+                    <button
+                        type="button"
+                        class="btn btn-default"
+                        id="refresh-calendar"
+                    >
+                        <i class="fa fa-refresh"></i>
+                    </button>
+                    <button
+                        type="button"
+                        class="btn btn-default"
+                        data-toggle="modal"
+                        data-target="#calendar-settings-modal"
+                    >
+                        <i class="fa fa-cog"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Main Calendar Content #}
+    <div class="calendar-content">
+        <div class="calendar-sidebar">
+            {# Mini Calendar #}
+            <div class="mini-calendar" id="mini-calendar"></div>
+
+            {# Quick Add Form #} {% if can_add %}
+            <div class="quick-add-form">
+                <h4>{{ _('Quick Add') }}</h4>
+                <form id="quick-add-event-form">
+                    <div class="form-group">
+                        <input
+                            type="text"
+                            class="form-control"
+                            placeholder="{{ _('Event title...') }}"
+                            name="title"
+                            required
+                        />
+                    </div>
+                    <div class="form-group">
+                        <div class="input-group">
+                            <input
+                                type="text"
+                                class="form-control datepicker"
+                                placeholder="{{ _('Start date') }}"
+                                name="start_date"
+                                required
+                            />
+                            <span class="input-group-addon">
+                                <i class="fa fa-calendar"></i>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="input-group">
+                            <input
+                                type="text"
+                                class="form-control datepicker"
+                                placeholder="{{ _('End date') }}"
+                                name="end_date"
+                            />
+                            <span class="input-group-addon">
+                                <i class="fa fa-calendar"></i>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <select class="form-control" name="category">
+                            {% for category in categories %}
+                            <option
+                                value="{{ category.id }}"
+                                data-color="{{ category.color }}"
+                            >
+                                {{ category.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <i class="fa fa-plus"></i> {{ _('Add Event') }}
+                    </button>
+                </form>
+            </div>
+            {% endif %} {# Calendar Legend #}
+            <div class="calendar-legend">
+                <h4>{{ _('Legend') }}</h4>
+                {% for category in categories %}
+                <div class="legend-item">
+                    <span
+                        class="color-dot"
+                        style="background-color: {{ category.color }}"
+                    ></span>
+                    <span class="category-name">{{ category.name }}</span>
+                    <span class="category-count">{{ category.count }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        {# Main Calendar Grid #}
+        <div class="calendar-grid" id="calendar-main"></div>
+    </div>
+</div>
+
+{# Event Details Modal #}
+<div class="modal fade" id="event-details-modal">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    &times;
+                </button>
+                <h4 class="modal-title">{{ _('Event Details') }}</h4>
+            </div>
+            <div class="modal-body">
+                <div class="event-details">
+                    {# Event details will be loaded dynamically #}
+                </div>
+            </div>
+            <div class="modal-footer">
+                {% if can_edit %}
+                <button type="button" class="btn btn-primary edit-event">
+                    <i class="fa fa-edit"></i> {{ _('Edit') }}
+                </button>
+                {% endif %} {% if can_delete %}
+                <button type="button" class="btn btn-danger delete-event">
+                    <i class="fa fa-trash"></i> {{ _('Delete') }}
+                </button>
+                {% endif %}
+                <button
+                    type="button"
+                    class="btn btn-default"
+                    data-dismiss="modal"
+                >
+                    {{ _('Close') }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Event Edit Modal #}
+<div class="modal fade" id="event-edit-modal">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    &times;
+                </button>
+                <h4 class="modal-title">{{ _('Edit Event') }}</h4>
+            </div>
+            <div class="modal-body">
+                <form id="event-edit-form">
+                    {# Event edit form will be loaded dynamically #}
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary save-event">
+                    <i class="fa fa-save"></i> {{ _('Save') }}
+                </button>
+                <button
+                    type="button"
+                    class="btn btn-default"
+                    data-dismiss="modal"
+                >
+                    {{ _('Cancel') }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Calendar Settings Modal #}
+<div class="modal fade" id="calendar-settings-modal">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    &times;
+                </button>
+                <h4 class="modal-title">{{ _('Calendar Settings') }}</h4>
+            </div>
+            <div class="modal-body">
+                <form id="calendar-settings-form">
+                    {# Display Settings #}
+                    <h5>{{ _('Display Settings') }}</h5>
+                    <div class="form-group">
+                        <label>{{ _('First Day of Week') }}</label>
+                        <select class="form-control" name="first_day">
+                            <option value="0">{{ _('Sunday') }}</option>
+                            <option value="1">{{ _('Monday') }}</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>{{ _('Time Format') }}</label>
+                        <select class="form-control" name="time_format">
+                            <option value="12">12-hour</option>
+                            <option value="24">24-hour</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>{{ _('Default View') }}</label>
+                        <select class="form-control" name="default_view">
+                            <option value="month">{{ _('Month') }}</option>
+                            <option value="week">{{ _('Week') }}</option>
+                            <option value="day">{{ _('Day') }}</option>
+                            <option value="agenda">{{ _('Agenda') }}</option>
+                        </select>
+                    </div>
+
+                    {# Event Display #}
+                    <h5>{{ _('Event Display') }}</h5>
+                    <div class="checkbox">
+                        <label>
+                            <input type="checkbox" name="show_weekends" />
+                            {{ _('Show weekends') }}
+                        </label>
+                    </div>
+                    <div class="checkbox">
+                        <label>
+                            <input type="checkbox" name="show_week_numbers" />
+                            {{ _('Show week numbers') }}
+                        </label>
+                    </div>
+
+                    {# Notifications #}
+                    <h5>{{ _('Notifications') }}</h5>
+                    <div class="checkbox">
+                        <label>
+                            <input type="checkbox" name="event_reminders" />
+                            {{ _('Enable event reminders') }}
+                        </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button
+                    type="button"
+                    class="btn btn-primary"
+                    id="save-settings"
+                >
+                    {{ _('Save Settings') }}
+                </button>
+                <button
+                    type="button"
+                    class="btn btn-default"
+                    data-dismiss="modal"
+                >
+                    {{ _('Cancel') }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block tail_js %} {{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeCalendar({
+            events: {{ events|tojson }},
+            categories: {{ categories|tojson }},
+            settings: {{ calendar_settings|tojson }},
+            urls: {
+                eventDetails: "{{ url_for('.event_details') }}",
+                saveEvent: "{{ url_for('.save_event') }}",
+                deleteEvent: "{{ url_for('.delete_event') }}",
+                moveEvent: "{{ url_for('.move_event') }}",
+                saveSettings: "{{ url_for('.save_calendar_settings') }}"
+            },
+            permissions: {
+                canAdd: {{ can_add|tojson }},
+                canEdit: {{ can_edit|tojson }},
+                canDelete: {{ can_delete|tojson }}
+            },
+            translations: {
+                saveError: "{{ _('Error saving event') }}",
+                deleteError: "{{ _('Error deleting event') }}",
+                moveError: "{{ _('Error moving event') }}",
+                confirmDelete: "{{ _('Are you sure you want to delete this event?') }}"
+            }
+        });
+    });
+</script>
+{% endblock %}

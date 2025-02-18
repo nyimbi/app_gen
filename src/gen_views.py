@@ -116,6 +116,8 @@ class ViewGenerator:
     def get_relationship_info(self, table: Table) -> List[Dict[str, Any]]:
         relationships = []
         for fk in table.foreign_keys:
+            if fk.column.table.name.startswith('ab_'):
+                continue
             relationships.append(
                 {
                     "constrained_column": fk.parent.name,
@@ -144,6 +146,37 @@ class ViewGenerator:
     def generate_model_view(self, table: Table):
         template = self.jinja_env.get_template("model_view.py.j2")
         columns = self.get_column_info(table)
+        fieldsets = self.group_fields_into_fieldsets(columns)
+        # Use the same fieldsets for show view
+        show_fieldsets = fieldsets.copy()
+        # Generate description columns
+        description_columns = {}
+        for col in columns:
+            col_name = col["name"]
+            description_columns[col_name] = f"Description for {col_name}"
+
+        # Generate label columns
+        label_columns = {}
+        for col in columns:
+            col_name = col["name"]
+            # Convert snake_case to Title Case
+            label = col_name.replace('_', ' ').title()
+            label_columns[col_name] = label
+
+        fieldset_icons = {
+            'Basic Information': 'fa-info-circle',
+            'Contact Details': 'fa-address-book',
+            'Location': 'fa-map-marker',
+            'Dates & Times': 'fa-calendar',
+            'Financial': 'fa-dollar-sign',
+            'Status & Settings': 'fa-cogs',
+            'Media': 'fa-images',
+            'Notes & Description': 'fa-sticky-note',
+            'Relationships': 'fa-link',
+            'System Fields': 'fa-database',
+            'Additional Information': 'fa-plus-circle'
+        }
+
         relationships = self.relationships.get(table.name, [])
 
         list_columns = [col["name"] for col in columns if not col["primary_key"]][:10]
@@ -156,14 +189,22 @@ class ViewGenerator:
                 form_fields[col["name"]] = {"widget": widget, "validators": validators}
 
         view_code = template.render(
-            table_name=table.name,
-            columns=columns,
-            relationships=relationships,
-            list_columns=list_columns,
-            form_fields=form_fields,
-            config=self.config,
-            single_file=self.single_file,
-        )
+                table_name=table.name,
+                columns=columns,
+                fieldsets=fieldsets,
+                show_fieldsets=show_fieldsets,
+                fieldset_icons=fieldset_icons,
+                relationships=relationships,
+                list_columns=list_columns,
+                form_fields=form_fields,
+                config=self.config,
+                single_file=self.single_file,
+                description_columns=description_columns,  # Add this
+                label_columns=label_columns,  # Add this
+                add_columns=list_columns,  # Add this
+                edit_columns=list_columns,  # Add this
+                show_columns=list_columns,  # Add this
+            )
 
         if self.single_file:
             self.all_views_code += view_code + "\n\n"
@@ -464,6 +505,8 @@ class ViewGenerator:
         # Use views_info from generate_views
         views_info = []
         for table in self.metadata.tables.values():
+            if table.name.startswith('ab_'):
+                continue
             relationships = self.get_relationship_info(table)
             view_info = {
                 'name': table.name,
@@ -558,6 +601,8 @@ appbuilder.security_manager_class = MySecurityManager
     def generate_api_views(self):
         template = self.jinja_env.get_template("api_view.py.j2")
         for table_name in self.metadata.tables:
+            if table_name.startswith('ab_'):
+                continue
             table = self.metadata.tables[table_name]
             columns = self.get_column_info(table)
 
@@ -613,6 +658,73 @@ appbuilder.security_manager_class = MySecurityManager
         print(f"Templates copied successfully to: {templates_dir}")
 
 
+    def group_fields_into_fieldsets(self, columns):
+        """Group fields into logical fieldsets based on naming patterns and types"""
+        fieldsets = {
+            'Basic Information': [],
+            'Contact Details': [],
+            'Location': [],
+            'Dates & Times': [],
+            'Financial': [],
+            'Status & Settings': [],
+            'Relationships': [],
+            'Media': [],
+            'Notes & Description': [],
+            'System Fields': [],
+            'Additional Information': []
+        }
+
+        for column in columns:
+            name = column['name'].lower()
+
+            # Skip primary keys and system fields
+            if column['primary_key'] or name in ['created_at', 'updated_at', 'created_by', 'updated_by']:
+                fieldsets['System Fields'].append(column['name'])
+                continue
+
+            # Contact details
+            if any(word in name for word in ['email', 'phone', 'contact', 'mobile', 'fax']):
+                fieldsets['Contact Details'].append(column['name'])
+
+            # Location fields
+            elif any(word in name for word in ['address', 'city', 'state', 'country', 'postal', 'zip']):
+                fieldsets['Location'].append(column['name'])
+
+            # Date and time fields
+            elif any(word in name for word in ['date', 'time', 'schedule', 'deadline']):
+                fieldsets['Dates & Times'].append(column['name'])
+
+            # Financial fields
+            elif any(word in name for word in ['amount', 'price', 'cost', 'fee', 'payment', 'balance']):
+                fieldsets['Financial'].append(column['name'])
+
+            # Status fields
+            elif any(word in name for word in ['status', 'active', 'enabled', 'flag', 'type']):
+                fieldsets['Status & Settings'].append(column['name'])
+
+            # Media fields
+            elif any(word in name for word in ['photo', 'image', 'file', 'document', 'attachment']):
+                fieldsets['Media'].append(column['name'])
+
+            # Description fields
+            elif any(word in name for word in ['note', 'description', 'comment', 'detail']):
+                fieldsets['Notes & Description'].append(column['name'])
+
+            # Basic information (name, title, code etc)
+            elif any(word in name for word in ['name', 'title', 'code', 'id', 'key', 'ref']):
+                fieldsets['Basic Information'].append(column['name'])
+
+            # Foreign key relationships
+            elif name.endswith('_id'):
+                fieldsets['Relationships'].append(column['name'])
+
+            # Everything else
+            else:
+                fieldsets['Additional Information'].append(column['name'])
+
+        # Remove empty fieldsets
+        return {k: v for k, v in fieldsets.items() if v}
+
     def generate_views(self):
         views_info = []
 
@@ -624,6 +736,8 @@ appbuilder.security_manager_class = MySecurityManager
 
         for table_name in self.metadata.tables:
             table = self.metadata.tables[table_name]
+            if table_name.startswith('ab_'):
+                continue
             relationships = self.get_relationship_info(table)
             view_info = {
                 'name': table_name,

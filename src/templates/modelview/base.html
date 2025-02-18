@@ -1,0 +1,164 @@
+{% extends "appbuilder/base.html" %} {% block head_css %} {{ super() }} {# Core
+CSS #}
+<link
+    href="{{ url_for('static', filename='css/modelview/core.css') }}"
+    rel="stylesheet"
+/>
+<link
+    href="{{ url_for('static', filename='css/modelview/fieldsets.css') }}"
+    rel="stylesheet"
+/>
+<link
+    href="{{ url_for('static', filename='css/modelview/forms.css') }}"
+    rel="stylesheet"
+/>
+
+{# Third-party libraries #}
+<link
+    href="https://cdnjs.cloudflare.com/ajax/libs/jsoneditor/9.9.2/jsoneditor.min.css"
+    rel="stylesheet"
+/>
+<link
+    href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css"
+    rel="stylesheet"
+/>
+<link
+    href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css"
+    rel="stylesheet"
+/>
+<link
+    href="https://cdnjs.cloudflare.com/ajax/libs/dropzone/5.9.3/min/dropzone.min.css"
+    rel="stylesheet"
+/>
+
+{# Custom components #}
+<link
+    href="{{ url_for('static', filename='css/modelview/components/workflow.css') }}"
+    rel="stylesheet"
+/>
+<link
+    href="{{ url_for('static', filename='css/modelview/components/version.css') }}"
+    rel="stylesheet"
+/>
+<link
+    href="{{ url_for('static', filename='css/modelview/components/audit.css') }}"
+    rel="stylesheet"
+/>
+{% endblock %} {% block tail_js %} {{ super() }} {# Core JavaScript #}
+<script src="{{ url_for('static', filename='js/modelview/core.js') }}"></script>
+<script src="{{ url_for('static', filename='js/modelview/fieldsets.js') }}"></script>
+<script src="{{ url_for('static', filename='js/modelview/forms.js') }}"></script>
+
+{# Third-party libraries #}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsoneditor/9.9.2/jsoneditor.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dropzone/5.9.3/min/dropzone.min.js"></script>
+
+{# Custom components #}
+<script src="{{ url_for('static', filename='js/modelview/components/workflow.js') }}"></script>
+<script src="{{ url_for('static', filename='js/modelview/components/version.js') }}"></script>
+<script src="{{ url_for('static', filename='js/modelview/components/audit.js') }}"></script>
+{% endblock %} {# Common Macros #} {% macro render_field_value(field_name,
+value, field_type) %} {% if field_type == 'json' %}
+<div class="json-viewer" data-json="{{ value|tojson }}"></div>
+{% elif field_type == 'currency' %}
+<span class="currency-value">{{ template_macros.render_currency(value) }}</span>
+{% elif field_type == 'number' %}
+<span class="number-value">{{ template_macros.render_number(value) }}</span>
+{% elif field_type == 'datetime' %}
+<span class="datetime-value">{{ template_macros.render_datetime(value) }}</span>
+{% elif field_type == 'date' %}
+<span class="date-value">{{ template_macros.render_date(value) }}</span>
+{% elif field_type == 'file' %} {{ render_file_field(value) }} {% elif
+field_type == 'image' %} {{ render_image_field(value) }} {% elif field_type ==
+'status' %} {{ render_status_badge(value) }} {% elif field_type == 'related' %}
+{{ render_related_link(value, field_name) }} {% else %} {{ value }} {% endif %}
+{% endmacro %} {% macro render_file_field(value) %} {% if value %}
+<div class="file-preview">
+    <i class="fa fa-file"></i>
+    <a href="{{ url_for('static', filename=value) }}" target="_blank">
+        {{ value|filename }}
+    </a>
+</div>
+{% endif %} {% endmacro %} {% macro render_image_field(value) %} {% if value %}
+<div class="image-preview">
+    <img
+        src="{{ url_for('static', filename=value) }}"
+        alt="Preview"
+        class="img-thumbnail"
+        data-full="{{ url_for('static', filename=value) }}"
+    />
+</div>
+{% endif %} {% endmacro %} {% macro render_status_badge(value) %}
+<span class="badge badge-{{ value|status_class }}"> {{ value|title }} </span>
+{% endmacro %} {% macro render_related_link(value, field_name) %} {% if value %}
+<a
+    href="{{ url_for(field_name|model_view, pk=value.id) }}"
+    class="related-link"
+>
+    {{ value|string }}
+</a>
+{% endif %} {% endmacro %} {% macro render_workflow_actions(item) %} {% if
+has_workflow and item.state %}
+<div class="workflow-actions">
+    <span class="current-state badge badge-{{ item.state|state_class }}">
+        {{ item.state|title }}
+    </span>
+    {% for action in available_transitions(item) %}
+    <button
+        type="button"
+        class="btn btn-sm btn-{{ action.style|default('default') }}"
+        data-toggle="modal"
+        data-target="#transition-modal"
+        data-transition="{{ action.name }}"
+        data-item-id="{{ item.id }}"
+    >
+        <i class="fa fa-{{ action.icon }}"></i>
+        {{ action.label }}
+    </button>
+    {% endfor %}
+</div>
+{% endif %} {% endmacro %} {% macro render_version_info(item) %} {% if
+has_versioning and item.version %}
+<div class="version-info">
+    <span class="version-number">v{{ item.version }}</span>
+    <span class="version-date">{{ item.version_date|datetime }}</span>
+    {% if item.version > 1 %}
+    <a href="{{ url_for('.history', pk=item.id) }}" class="btn btn-sm btn-info">
+        <i class="fa fa-history"></i> History
+    </a>
+    {% endif %}
+</div>
+{% endif %} {% endmacro %} {% macro render_audit_info(item) %} {% if
+has_audit_log %}
+<div class="audit-info">
+    <small class="text-muted">
+        Created: {{ item.created_at|datetime }} by {{ item.created_by|user_link
+        }} {% if item.updated_at %}
+        <br />
+        Updated: {{ item.updated_at|datetime }} by {{ item.updated_by|user_link
+        }} {% endif %}
+    </small>
+</div>
+{% endif %} {% endmacro %} {# Common Modals #} {% block modals %} {# Workflow
+Transition Modal #} {% if has_workflow %} {% include
+'modelview/modals/workflow_transition.html' %} {% endif %} {# Version Comparison
+Modal #} {% if has_versioning %} {% include
+'modelview/modals/version_compare.html' %} {% endif %} {# File Preview Modal #}
+{% if has_file_upload %} {% include 'modelview/modals/file_preview.html' %} {%
+endif %} {# Batch Operation Modal #} {% include
+'modelview/modals/batch_operation.html' %} {# Advanced Search Modal #} {%
+include 'modelview/modals/advanced_search.html' %} {% endblock %} {# Page Layout
+Components #} {% block messages %} {{ super() }}
+<div id="ajax-messages"></div>
+{% endblock %} {% block sidebar %} {{ super() }} {% if has_dynamic_filters %} {%
+include 'modelview/components/dynamic_filters.html' %} {% endif %} {% endblock
+%} {% block content_wrapper %} {% block breadcrumb %} {% include
+'modelview/components/breadcrumb.html' %} {% endblock %} {% block page_header %}
+{% include 'modelview/components/page_header.html' %} {% endblock %}
+
+<div class="content-wrapper">{% block content %} {% endblock %}</div>
+
+{% block page_footer %} {% include 'modelview/components/page_footer.html' %} {%
+endblock %} {% endblock %}

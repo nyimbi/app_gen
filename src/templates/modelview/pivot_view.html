@@ -1,0 +1,406 @@
+{% extends 'modelview/base.html' %} {% block content %}
+<div class="pivot-view-container">
+    {# Pivot Header #}
+    <div class="pivot-header">
+        <div class="header-left">
+            <h3>
+                <i class="fa fa-table"></i>
+                {{ modelview_name }} {{ _('Pivot Analysis') }}
+            </h3>
+        </div>
+
+        <div class="header-right">
+            {# View Controls #}
+            <div class="pivot-controls">
+                <button
+                    type="button"
+                    class="btn btn-primary"
+                    id="apply-analysis"
+                >
+                    <i class="fa fa-refresh"></i> {{ _('Apply') }}
+                </button>
+                <div class="btn-group">
+                    <button
+                        type="button"
+                        class="btn btn-default"
+                        id="save-view"
+                        title="{{ _('Save View') }}"
+                    >
+                        <i class="fa fa-save"></i>
+                    </button>
+                    <button
+                        type="button"
+                        class="btn btn-default"
+                        id="load-view"
+                        title="{{ _('Load Saved View') }}"
+                    >
+                        <i class="fa fa-folder-open"></i>
+                    </button>
+                </div>
+                <div class="btn-group">
+                    <button
+                        type="button"
+                        class="btn btn-default dropdown-toggle"
+                        data-toggle="dropdown"
+                    >
+                        <i class="fa fa-download"></i> {{ _('Export') }}
+                        <span class="caret"></span>
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li>
+                            <a href="#" data-export-type="excel">
+                                <i class="fa fa-file-excel-o"></i> Excel
+                            </a>
+                        </li>
+                        <li>
+                            <a href="#" data-export-type="csv">
+                                <i class="fa fa-file-text-o"></i> CSV
+                            </a>
+                        </li>
+                        <li>
+                            <a href="#" data-export-type="pdf">
+                                <i class="fa fa-file-pdf-o"></i> PDF
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Main Content #}
+    <div class="pivot-content">
+        {# Configuration Panel #}
+        <div class="config-panel">
+            {# Field Selection #}
+            <div class="panel panel-default field-selection">
+                <div class="panel-heading">
+                    <h4 class="panel-title">{{ _('Available Fields') }}</h4>
+                </div>
+                <div class="panel-body">
+                    <div class="available-fields">
+                        {% for field in available_fields %}
+                        <div
+                            class="field-item"
+                            draggable="true"
+                            data-field="{{ field.name }}"
+                            data-type="{{ field.type }}"
+                        >
+                            <i class="fa fa-{{ field.icon }}"></i>
+                            {{ field.label }}
+                            <span class="field-type">{{ field.type }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            {# Analysis Configuration #}
+            <div class="panel panel-default analysis-config">
+                <div class="panel-heading">
+                    <h4 class="panel-title">
+                        {{ _('Analysis Configuration') }}
+                    </h4>
+                </div>
+                <div class="panel-body">
+                    {# Rows #}
+                    <div class="config-section">
+                        <h5>{{ _('Rows') }}</h5>
+                        <div class="row-fields field-drop-zone">
+                            {# Row fields will be dropped here #}
+                        </div>
+                    </div>
+
+                    {# Columns #}
+                    <div class="config-section">
+                        <h5>{{ _('Columns') }}</h5>
+                        <div class="column-fields field-drop-zone">
+                            {# Column fields will be dropped here #}
+                        </div>
+                    </div>
+
+                    {# Values #}
+                    <div class="config-section">
+                        <h5>{{ _('Values') }}</h5>
+                        <div class="value-fields field-drop-zone">
+                            {# Value fields will be dropped here #}
+                        </div>
+                    </div>
+
+                    {# Filters #}
+                    <div class="config-section">
+                        <h5>{{ _('Filters') }}</h5>
+                        <div class="filter-fields field-drop-zone">
+                            {# Filter fields will be dropped here #}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# Advanced Options #}
+            <div class="panel panel-default advanced-options">
+                <div class="panel-heading">
+                    <h4 class="panel-title">{{ _('Advanced Options') }}</h4>
+                </div>
+                <div class="panel-body">
+                    {# Aggregation Settings #}
+                    <div class="form-group">
+                        <label>{{ _('Default Aggregation') }}</label>
+                        <select class="form-control" id="default-aggregation">
+                            <option value="sum">{{ _('Sum') }}</option>
+                            <option value="avg">{{ _('Average') }}</option>
+                            <option value="count">{{ _('Count') }}</option>
+                            <option value="min">{{ _('Minimum') }}</option>
+                            <option value="max">{{ _('Maximum') }}</option>
+                        </select>
+                    </div>
+
+                    {# Display Options #}
+                    <div class="form-group">
+                        <label>{{ _('Number Format') }}</label>
+                        <select class="form-control" id="number-format">
+                            <option value="plain">1234.56</option>
+                            <option value="currency">$1,234.56</option>
+                            <option value="percent">123.46%</option>
+                        </select>
+                    </div>
+
+                    {# Advanced Settings #}
+                    <div class="checkbox">
+                        <label>
+                            <input type="checkbox" id="show-totals" />
+                            {{ _('Show totals') }}
+                        </label>
+                    </div>
+                    <div class="checkbox">
+                        <label>
+                            <input type="checkbox" id="show-subtotals" />
+                            {{ _('Show subtotals') }}
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# Results Panel #}
+        <div class="results-panel">
+            {# Results Toolbar #}
+            <div class="results-toolbar">
+                <div class="view-controls">
+                    <div class="btn-group">
+                        <button
+                            type="button"
+                            class="btn btn-default active"
+                            data-view="table"
+                        >
+                            <i class="fa fa-table"></i> {{ _('Table') }}
+                        </button>
+                        <button
+                            type="button"
+                            class="btn btn-default"
+                            data-view="chart"
+                        >
+                            <i class="fa fa-bar-chart"></i> {{ _('Chart') }}
+                        </button>
+                    </div>
+                </div>
+
+                <div class="display-controls">
+                    <button
+                        type="button"
+                        class="btn btn-default"
+                        id="expand-all"
+                    >
+                        <i class="fa fa-plus-square"></i> {{ _('Expand All') }}
+                    </button>
+                    <button
+                        type="button"
+                        class="btn btn-default"
+                        id="collapse-all"
+                    >
+                        <i class="fa fa-minus-square"></i> {{ _('Collapse All')
+                        }}
+                    </button>
+                </div>
+            </div>
+
+            {# Results Content #}
+            <div class="results-content">
+                {# Table View #}
+                <div class="table-view">
+                    <div class="pivot-table-container">
+                        {# Pivot table will be rendered here #}
+                    </div>
+                </div>
+
+                {# Chart View #}
+                <div class="chart-view" style="display: none">
+                    <div class="chart-container">
+                        <canvas id="pivot-chart"></canvas>
+                    </div>
+                    <div class="chart-controls">
+                        <div class="form-group">
+                            <label>{{ _('Chart Type') }}</label>
+                            <select class="form-control" id="chart-type">
+                                <option value="bar">
+                                    {{ _('Bar Chart') }}
+                                </option>
+                                <option value="line">
+                                    {{ _('Line Chart') }}
+                                </option>
+                                <option value="pie">
+                                    {{ _('Pie Chart') }}
+                                </option>
+                                <option value="scatter">
+                                    {{ _('Scatter Plot') }}
+                                </option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Save View Modal #}
+<div class="modal fade" id="save-view-modal">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    &times;
+                </button>
+                <h4 class="modal-title">{{ _('Save View') }}</h4>
+            </div>
+            <div class="modal-body">
+                <form id="save-view-form">
+                    <div class="form-group">
+                        <label>{{ _('View Name') }}</label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            name="view_name"
+                            required
+                        />
+                    </div>
+                    <div class="form-group">
+                        <label>{{ _('Description') }}</label>
+                        <textarea
+                            class="form-control"
+                            name="description"
+                            rows="3"
+                        ></textarea>
+                    </div>
+                    <div class="checkbox">
+                        <label>
+                            <input type="checkbox" name="is_default" />
+                            {{ _('Set as default view') }}
+                        </label>
+                    </div>
+                    <div class="checkbox">
+                        <label>
+                            <input type="checkbox" name="is_public" />
+                            {{ _('Make public') }}
+                        </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button
+                    type="button"
+                    class="btn btn-primary"
+                    id="save-view-confirm"
+                >
+                    {{ _('Save') }}
+                </button>
+                <button
+                    type="button"
+                    class="btn btn-default"
+                    data-dismiss="modal"
+                >
+                    {{ _('Cancel') }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Load View Modal #}
+<div class="modal fade" id="load-view-modal">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    &times;
+                </button>
+                <h4 class="modal-title">{{ _('Load Saved View') }}</h4>
+            </div>
+            <div class="modal-body">
+                <div class="saved-views-list">
+                    {% for view in saved_views %}
+                    <div class="saved-view-item" data-view-id="{{ view.id }}">
+                        <div class="view-info">
+                            <h5>{{ view.name }}</h5>
+                            {% if view.description %}
+                            <p>{{ view.description }}</p>
+                            {% endif %}
+                            <div class="view-meta">
+                                <span class="created-by">
+                                    {{ _('By') }} {{ view.created_by|user_link
+                                    }}
+                                </span>
+                                <span class="created-at">
+                                    {{ view.created_at|datetime }}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="view-actions">
+                            <button
+                                type="button"
+                                class="btn btn-sm btn-danger delete-view"
+                                title="{{ _('Delete View') }}"
+                            >
+                                <i class="fa fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block tail_js %} {{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/pivottable@2.23.0/dist/pivot.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        initializePivotView({
+            fields: {{ available_fields|tojson }},
+            data: {{ initial_data|tojson }},
+            savedViews: {{ saved_views|tojson }},
+            config: {
+                defaultAggregation: "{{ default_aggregation }}",
+                numberFormat: "{{ number_format }}",
+                showTotals: {{ show_totals|tojson }},
+                showSubtotals: {{ show_subtotals|tojson }}
+            },
+            urls: {
+                getData: "{{ url_for('.get_pivot_data') }}",
+                saveView: "{{ url_for('.save_pivot_view') }}",
+                deleteView: "{{ url_for('.delete_pivot_view') }}",
+                export: "{{ url_for('.export_pivot_data') }}"
+            },
+            translations: {
+                noData: "{{ _('No data available') }}",
+                loadError: "{{ _('Error loading data') }}",
+                saveError: "{{ _('Error saving view') }}",
+                deleteError: "{{ _('Error deleting view') }}",
+                exportError: "{{ _('Error exporting data') }}"
+            }
+        });
+    });
+</script>
+{% endblock %}

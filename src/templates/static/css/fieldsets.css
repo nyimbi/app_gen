@@ -1,0 +1,80 @@
+.form-fieldset {
+    margin-bottom: 20px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.fieldset-header {
+    padding: 10px 15px;
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #ddd;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+}
+
+.fieldset-header i {
+    margin-right: 10px;
+}
+
+.fieldset-title {
+    flex-grow: 1;
+    font-weight: 600;
+}
+
+.fieldset-toggle-icon::after {
+    content: "▼";
+    transition: transform 0.3s;
+}
+
+.fieldset-content {
+    padding: 15px;
+    transition: all 0.3s ease-in-out;
+}
+
+.fieldset-content.collapsed {
+    display: none;
+}
+
+.fieldset-description {
+    margin-bottom: 15px;
+    color: #6c757d;
+    font-style: italic;
+}
+
+/* Fieldset type-specific styling */
+.fieldset-basic-information {
+    border-color: #28a745;
+}
+.fieldset-contact-details {
+    border-color: #007bff;
+}
+.fieldset-location {
+    border-color: #6610f2;
+}
+.fieldset-dates-times {
+    border-color: #fd7e14;
+}
+.fieldset-financial {
+    border-color: #20c997;
+}
+.fieldset-status-settings {
+    border-color: #dc3545;
+}
+.fieldset-media {
+    border-color: #6c757d;
+}
+.fieldset-notes-description {
+    border-color: #17a2b8;
+}
+.fieldset-relationships {
+    border-color: #ffc107;
+}
+.fieldset-system-fields {
+    border-color: #343a40;
+}
+.fieldset-additional-information {
+    border-color: #6c757d;
+}

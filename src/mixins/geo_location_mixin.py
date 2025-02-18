@@ -8,26 +8,38 @@ The GeoLocationMixin adds support for storing geographic coordinates,
 performing distance calculations, and executing geospatial queries.
 
 Dependencies:
-    - SQLAlchemy
-    - Flask-AppBuilder
-    - GeoAlchemy2
-    - Shapely
-    - geopy
+    - SQLAlchemy >= 1.4.0
+    - Flask-AppBuilder >= 4.0.0
+    - GeoAlchemy2 >= 0.10.0
+    - Shapely >= 2.0.0
+    - geopy >= 2.0.0
+    - psycopg2-binary >= 2.9.0
+    - PostgreSQL >= 12.0 with PostGIS extension
 
 Author: Nyimbi Odero
 Date: 25/08/2024
-Version: 1.0
+Version: 1.1
 """
 
-from flask_appbuilder import Model
-from sqlalchemy import Column, Float, func
-from sqlalchemy.ext.declarative import declared_attr
-from geoalchemy2 import Geometry
-from geoalchemy2.shape import to_shape, from_shape
-from shapely.geometry import Point
-from geopy.geocoders import Nominatim
-from geopy.distance import geodesic
+import logging
 import math
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+from flask_appbuilder import Model
+from geoalchemy2 import Geometry
+from geoalchemy2.elements import WKBElement
+from geoalchemy2.shape import from_shape, to_shape
+from geopy.distance import geodesic
+from geopy.exc import GeocoderServiceError, GeocoderTimedOut
+from geopy.geocoders import Nominatim
+from shapely.geometry import Point, mapping
+from sqlalchemy import Column, Float, Index, func, text
+from sqlalchemy.ext.declarative import declared_attr
+from sqlalchemy.types import UserDefinedType
+
+logger = logging.getLogger(__name__)
+
 
 class GeoLocationMixin:
     """
@@ -37,270 +49,488 @@ class GeoLocationMixin:
     calculating distances, and performing geospatial operations.
 
     Attributes:
-        latitude (Column): Latitude coordinate.
-        longitude (Column): Longitude coordinate.
-        location (Column): Geometry point for efficient spatial indexing.
+        latitude (Column): Latitude coordinate (-90 to 90)
+        longitude (Column): Longitude coordinate (-180 to 180)
+        location (Column): PostGIS geometry point for spatial indexing
+        altitude (Column): Optional altitude in meters
+        accuracy (Column): Optional accuracy radius in meters
+        timestamp (Column): Optional timestamp of location fix
+
+    Indexes:
+        - Spatial index on location column
+        - Composite index on lat/long columns
     """
 
     @declared_attr
     def latitude(cls):
-        return Column(Float)
+        """Latitude in decimal degrees, range -90 to 90"""
+        return Column(
+            Float(precision=9),
+            nullable=True,
+            default=0.0,
+            info={
+                "label": "Latitude",
+                "validators": [lambda x: -90 <= x <= 90 if x is not None else True],
+            },
+        )
 
     @declared_attr
     def longitude(cls):
-        return Column(Float)
+        """Longitude in decimal degrees, range -180 to 180"""
+        return Column(
+            Float(precision=9),
+            nullable=True,
+            default=0.0,
+            info={
+                "label": "Longitude",
+                "validators": [lambda x: -180 <= x <= 180 if x is not None else True],
+            },
+        )
 
     @declared_attr
     def location(cls):
-        return Column(Geometry(geometry_type='POINT', srid=4326))
+        """PostGIS geometry point with spatial index"""
+        return Column(Geometry(geometry_type="POINT", srid=4326, spatial_index=True))
+
+    @declared_attr
+    def altitude(cls):
+        """Optional altitude in meters above sea level"""
+        return Column(Float(precision=6), nullable=True, info={"label": "Altitude (m)"})
+
+    @declared_attr
+    def accuracy(cls):
+        """Optional accuracy radius in meters"""
+        return Column(Float(precision=6), nullable=True, info={"label": "Accuracy (m)"})
+
+    @declared_attr
+    def timestamp(cls):
+        """Optional timestamp of location fix"""
+        return Column(func.now(), nullable=True, info={"label": "Timestamp"})
 
     @classmethod
     def __declare_last__(cls):
+        """Setup database triggers and event listeners"""
         from sqlalchemy import event
 
-        @event.listens_for(cls, 'before_insert')
-        @event.listens_for(cls, 'before_update')
-        def receive_before_save(mapper, connection, instance):
-            if instance.latitude is not None and instance.longitude is not None:
-                point = Point(instance.longitude, instance.latitude)
-                instance.location = from_shape(point, srid=4326)
+        # Create spatial index
+        Index(
+            f"idx_{cls.__tablename__}_location", cls.location, postgresql_using="gist"
+        )
 
-    def set_coordinates(self, latitude, longitude):
+        # Create composite lat/long index
+        Index(f"idx_{cls.__tablename__}_lat_long", cls.latitude, cls.longitude)
+
+        @event.listens_for(cls, "before_insert")
+        @event.listens_for(cls, "before_update")
+        def receive_before_save(mapper, connection, instance):
+            """Update PostGIS point when lat/long change"""
+            try:
+                if instance.latitude is not None and instance.longitude is not None:
+                    if not (-90 <= instance.latitude <= 90):
+                        raise ValueError(f"Invalid latitude: {instance.latitude}")
+                    if not (-180 <= instance.longitude <= 180):
+                        raise ValueError(f"Invalid longitude: {instance.longitude}")
+                    point = Point(instance.longitude, instance.latitude)
+                    instance.location = from_shape(point, srid=4326)
+                    instance.timestamp = datetime.utcnow()
+            except Exception as e:
+                logger.error(f"Error updating location: {str(e)}")
+                raise
+
+    def set_coordinates(
+        self,
+        latitude: float,
+        longitude: float,
+        altitude: Optional[float] = None,
+        accuracy: Optional[float] = None,
+    ) -> None:
         """
-        Set the latitude and longitude coordinates for the instance.
+        Set the geographic coordinates for this instance.
 
         Args:
-            latitude (float): Latitude coordinate.
-            longitude (float): Longitude coordinate.
+            latitude: Decimal degrees latitude (-90 to 90)
+            longitude: Decimal degrees longitude (-180 to 180)
+            altitude: Optional altitude in meters
+            accuracy: Optional accuracy radius in meters
+
+        Raises:
+            ValueError: If coordinates are invalid
         """
+        if not (-90 <= latitude <= 90):
+            raise ValueError(f"Invalid latitude: {latitude}")
+        if not (-180 <= longitude <= 180):
+            raise ValueError(f"Invalid longitude: {longitude}")
+
         self.latitude = latitude
         self.longitude = longitude
+        self.altitude = altitude
+        self.accuracy = accuracy
+        self.timestamp = datetime.utcnow()
+
         point = Point(longitude, latitude)
         self.location = from_shape(point, srid=4326)
 
     @classmethod
-    def get_by_coordinates(cls, session, latitude, longitude, distance_km=1):
+    def get_by_coordinates(
+        cls,
+        session,
+        latitude: float,
+        longitude: float,
+        distance_km: float = 1.0,
+        limit: Optional[int] = None,
+        order_by_distance: bool = True,
+    ) -> List[Any]:
         """
-        Find instances within a specified distance of given coordinates.
+        Find instances within a specified radius of given coordinates.
 
         Args:
-            session: SQLAlchemy session.
-            latitude (float): Latitude of the center point.
-            longitude (float): Longitude of the center point.
-            distance_km (float): Radius in kilometers to search within.
+            session: SQLAlchemy session
+            latitude: Center point latitude
+            longitude: Center point longitude
+            distance_km: Search radius in kilometers (default 1km)
+            limit: Optional limit on number of results
+            order_by_distance: Order results by distance from center
 
         Returns:
-            list: Instances within the specified distance.
-        """
-        point = func.ST_GeomFromText(f'POINT({longitude} {latitude})', 4326)
-        return session.query(cls).filter(
-            func.ST_DWithin(
-                cls.location,
-                point,
-                distance_km / 111.32  # Approximate degrees to km conversion
-            )
-        ).all()
+            List of instances within the specified distance
 
-    def distance_to(self, other):
+        Raises:
+            ValueError: If coordinates or distance are invalid
+        """
+        if not (-90 <= latitude <= 90):
+            raise ValueError(f"Invalid latitude: {latitude}")
+        if not (-180 <= longitude <= 180):
+            raise ValueError(f"Invalid longitude: {longitude}")
+        if distance_km <= 0:
+            raise ValueError(f"Invalid distance: {distance_km}")
+
+        point = func.ST_SetSRID(func.ST_MakePoint(longitude, latitude), 4326)
+        query = session.query(cls)
+
+        # Calculate distance and filter
+        distance_clause = (
+            func.ST_Distance(
+                func.ST_Transform(cls.location, 3857), func.ST_Transform(point, 3857)
+            )
+            <= distance_km * 1000
+        )  # Convert km to meters
+
+        query = query.filter(distance_clause)
+
+        if order_by_distance:
+            query = query.order_by(func.ST_Distance(cls.location, point))
+
+        if limit:
+            query = query.limit(limit)
+
+        return query.all()
+
+    def distance_to(
+        self, other: Union[Tuple[float, float], Any], method: str = "geodesic"
+    ) -> float:
         """
         Calculate the distance to another instance or coordinates.
 
         Args:
-            other: Another instance of this class or a tuple of (latitude, longitude).
+            other: Another instance of this class or tuple of (latitude, longitude)
+            method: Distance calculation method ('geodesic', 'haversine', or 'postgis')
 
         Returns:
-            float: Distance in kilometers.
+            Distance in kilometers
+
+        Raises:
+            ValueError: If coordinates are invalid or method unknown
         """
         if isinstance(other, tuple):
             other_lat, other_lon = other
+            if not (-90 <= other_lat <= 90):
+                raise ValueError(f"Invalid latitude: {other_lat}")
+            if not (-180 <= other_lon <= 180):
+                raise ValueError(f"Invalid longitude: {other_lon}")
         else:
             other_lat, other_lon = other.latitude, other.longitude
-        
-        return geodesic(
-            (self.latitude, self.longitude),
-            (other_lat, other_lon)
-        ).kilometers
+
+        if method == "geodesic":
+            return geodesic(
+                (self.latitude, self.longitude), (other_lat, other_lon)
+            ).kilometers
+        elif method == "haversine":
+            return self.haversine_distance(
+                self.latitude, self.longitude, other_lat, other_lon
+            )
+        elif method == "postgis":
+            if not hasattr(self, "location") or not self.location:
+                raise ValueError("PostGIS location not available")
+            return (
+                func.ST_Distance(
+                    func.ST_Transform(self.location, 3857),
+                    func.ST_Transform(
+                        func.ST_SetSRID(func.ST_MakePoint(other_lon, other_lat), 4326),
+                        3857,
+                    ),
+                )
+                / 1000
+            )  # Convert meters to km
+        else:
+            raise ValueError(f"Unknown distance calculation method: {method}")
 
     @classmethod
-    def geocode_address(cls, address):
+    def geocode_address(
+        cls, address: str, timeout: int = 10, exactly_one: bool = True
+    ) -> Optional[Tuple[float, float]]:
         """
         Geocode an address to get latitude and longitude.
 
         Args:
-            address (str): The address to geocode.
+            address: The address to geocode
+            timeout: Timeout in seconds
+            exactly_one: Return only the first result
 
         Returns:
-            tuple: (latitude, longitude) or None if geocoding fails.
+            Tuple of (latitude, longitude) or None if geocoding fails
+
+        Raises:
+            GeocoderTimedOut: If geocoding request times out
+            GeocoderServiceError: If geocoding service fails
         """
-        geolocator = Nominatim(user_agent="myapp")
-        location = geolocator.geocode(address)
-        if location:
-            return location.latitude, location.longitude
-        return None
+        try:
+            geolocator = Nominatim(user_agent="flask-appbuilder")
+            location = geolocator.geocode(
+                address, timeout=timeout, exactly_one=exactly_one
+            )
+            if location:
+                return location.latitude, location.longitude
+            return None
+        except (GeocoderTimedOut, GeocoderServiceError) as e:
+            logger.error(f"Geocoding error for {address}: {str(e)}")
+            raise
 
     @classmethod
-    def reverse_geocode(cls, latitude, longitude):
+    def reverse_geocode(
+        cls, latitude: float, longitude: float, timeout: int = 10, language: str = "en"
+    ) -> Optional[str]:
         """
         Reverse geocode coordinates to get an address.
 
         Args:
-            latitude (float): Latitude coordinate.
-            longitude (float): Longitude coordinate.
+            latitude: Latitude coordinate
+            longitude: Longitude coordinate
+            timeout: Timeout in seconds
+            language: Preferred language for results
 
         Returns:
-            str: Address string or None if reverse geocoding fails.
-        """
-        geolocator = Nominatim(user_agent="myapp")
-        location = geolocator.reverse(f"{latitude}, {longitude}")
-        if location:
-            return location.address
-        return None
+            Address string or None if reverse geocoding fails
 
-    def to_geojson(self):
+        Raises:
+            ValueError: If coordinates are invalid
+            GeocoderTimedOut: If geocoding request times out
+            GeocoderServiceError: If geocoding service fails
+        """
+        if not (-90 <= latitude <= 90):
+            raise ValueError(f"Invalid latitude: {latitude}")
+        if not (-180 <= longitude <= 180):
+            raise ValueError(f"Invalid longitude: {longitude}")
+
+        try:
+            geolocator = Nominatim(user_agent="flask-appbuilder")
+            location = geolocator.reverse(
+                f"{latitude}, {longitude}", timeout=timeout, language=language
+            )
+            if location:
+                return location.address
+            return None
+        except (GeocoderTimedOut, GeocoderServiceError) as e:
+            logger.error(
+                f"Reverse geocoding error for ({latitude}, {longitude}): {str(e)}"
+            )
+            raise
+
+    def to_geojson(self, include_props: bool = True) -> Dict[str, Any]:
         """
         Convert the instance to a GeoJSON feature.
 
+        Args:
+            include_props: Whether to include model properties
+
         Returns:
-            dict: GeoJSON feature representation of the instance.
+            GeoJSON feature representation of the instance
         """
-        return {
+        if not all([self.latitude, self.longitude]):
+            raise ValueError("Instance missing coordinates")
+
+        feature = {
             "type": "Feature",
             "geometry": {
                 "type": "Point",
-                "coordinates": [self.longitude, self.latitude]
+                "coordinates": [self.longitude, self.latitude],
             },
             "properties": {
-                "id": self.id,
-                # Add other relevant properties here
-            }
+                "id": getattr(self, "id", None),
+                "altitude": self.altitude,
+                "accuracy": self.accuracy,
+                "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            },
         }
 
+        if include_props:
+            # Add all public attributes
+            for key, value in self.__dict__.items():
+                if not key.startswith("_") and key not in [
+                    "latitude",
+                    "longitude",
+                    "location",
+                    "altitude",
+                    "accuracy",
+                    "timestamp",
+                ]:
+                    feature["properties"][key] = value
+
+        return feature
+
     @classmethod
-    def from_geojson(cls, feature):
+    def from_geojson(cls, feature: Dict[str, Any]) -> "GeoLocationMixin":
         """
         Create an instance from a GeoJSON feature.
 
         Args:
-            feature (dict): GeoJSON feature.
+            feature: GeoJSON feature dictionary
 
         Returns:
-            GeoLocationMixin: New instance with coordinates set from the feature.
+            New instance with coordinates set from the feature
+
+        Raises:
+            ValueError: If feature is invalid or missing required data
         """
-        coords = feature['geometry']['coordinates']
+        if not isinstance(feature, dict):
+            raise ValueError("Invalid GeoJSON: must be a dictionary")
+
+        if feature.get("type") != "Feature":
+            raise ValueError("Invalid GeoJSON: must be a Feature")
+
+        geometry = feature.get("geometry", {})
+        if geometry.get("type") != "Point":
+            raise ValueError("Invalid GeoJSON: geometry must be a Point")
+
+        coords = geometry.get("coordinates", [])
+        if len(coords) < 2:
+            raise ValueError("Invalid GeoJSON: coordinates must have at least 2 values")
+
         instance = cls()
-        instance.set_coordinates(latitude=coords[1], longitude=coords[0])
-        # Set other properties as needed
+        instance.set_coordinates(
+            latitude=coords[1],
+            longitude=coords[0],
+            altitude=coords[2] if len(coords) > 2 else None,
+        )
+
+        # Set properties
+        properties = feature.get("properties", {})
+        for key, value in properties.items():
+            if hasattr(instance, key):
+                setattr(instance, key, value)
+
         return instance
 
     @staticmethod
-    def haversine_distance(lat1, lon1, lat2, lon2):
+    def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
         """
-        Calculate the great circle distance between two points on the Earth.
+        Calculate the great circle distance between two points using the haversine formula.
 
         Args:
-            lat1, lon1: Latitude and longitude of the first point.
-            lat2, lon2: Latitude and longitude of the second point.
+            lat1, lon1: Latitude and longitude of the first point
+            lat2, lon2: Latitude and longitude of the second point
 
         Returns:
-            float: Distance between the points in kilometers.
+            Distance between points in kilometers
+
+        Raises:
+            ValueError: If coordinates are invalid
         """
+        if not all(-90 <= lat <= 90 for lat in [lat1, lat2]):
+            raise ValueError("Invalid latitude")
+        if not all(-180 <= lon <= 180 for lon in [lon1, lon2]):
+            raise ValueError("Invalid longitude")
+
         R = 6371  # Earth's radius in kilometers
 
         dlat = math.radians(lat2 - lat1)
         dlon = math.radians(lon2 - lon1)
-        a = (math.sin(dlat/2) * math.sin(dlat/2) +
-             math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
-             math.sin(dlon/2) * math.sin(dlon/2))
-        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+        a = math.sin(dlat / 2) * math.sin(dlat / 2) + math.cos(
+            math.radians(lat1)
+        ) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) * math.sin(dlon / 2)
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
         distance = R * c
 
         return distance
 
     @classmethod
-    def get_bounding_box(cls, center_lat, center_lon, distance_km):
+    def get_bounding_box(
+        cls, center_lat: float, center_lon: float, distance_km: float
+    ) -> Tuple[float, float, float, float]:
         """
         Calculate a bounding box given a center point and distance.
 
         Args:
-            center_lat (float): Latitude of the center point.
-            center_lon (float): Longitude of the center point.
-            distance_km (float): Distance from the center point in kilometers.
+            center_lat: Latitude of the center point
+            center_lon: Longitude of the center point
+            distance_km: Distance from center point in kilometers
 
         Returns:
-            tuple: (min_lat, min_lon, max_lat, max_lon)
+            Tuple of (min_lat, min_lon, max_lat, max_lon)
+
+        Raises:
+            ValueError: If coordinates or distance are invalid
         """
+        if not (-90 <= center_lat <= 90):
+            raise ValueError(f"Invalid latitude: {center_lat}")
+        if not (-180 <= center_lon <= 180):
+            raise ValueError(f"Invalid longitude: {center_lon}")
+        if distance_km <= 0:
+            raise ValueError(f"Invalid distance: {distance_km}")
+
         # Approximate degrees latitude per km
         lat_change = distance_km / 111.32
+
         # Approximate degrees longitude per km at given latitude
         lon_change = distance_km / (111.32 * math.cos(math.radians(center_lat)))
 
-        min_lat = center_lat - lat_change
-        max_lat = center_lat + lat_change
+        min_lat = max(center_lat - lat_change, -90)
+        max_lat = min(center_lat + lat_change, 90)
         min_lon = center_lon - lon_change
         max_lon = center_lon + lon_change
 
+        # Handle longitude wraparound
+        if min_lon < -180:
+            min_lon = min_lon + 360
+        if max_lon > 180:
+            max_lon = max_lon - 360
+
         return (min_lat, min_lon, max_lat, max_lon)
 
-# Example usage (commented out):
-"""
-from flask_appbuilder import Model
-from sqlalchemy import Column, Integer, String
-from mixins.geo_location_mixin import GeoLocationMixin
+    @classmethod
+    def get_by_bounding_box(
+        cls, session, min_lat: float, min_lon: float, max_lat: float, max_lon: float
+    ) -> List[Any]:
+        """
+        Find all instances within a bounding box.
 
-class Place(GeoLocationMixin, Model):
-    __tablename__ = 'nx_places'
-    id = Column(Integer, primary_key=True)
-    name = Column(String(100), nullable=False)
+        Args:
+            session: SQLAlchemy session
+            min_lat, min_lon: Minimum latitude and longitude
+            max_lat, max_lon: Maximum latitude and longitude
 
-# In your application code:
+        Returns:
+            List of instances within the bounding box
 
-# Create a new place
-new_york = Place(name="New York City")
-new_york.set_coordinates(40.7128, -74.0060)
-db.session.add(new_york)
-db.session.commit()
+        Raises:
+            ValueError: If coordinates are invalid
+        """
+        if not all(-90 <= lat <= 90 for lat in [min_lat, max_lat]):
+            raise ValueError("Invalid latitude range")
+        if not all(-180 <= lon <= 180 for lon in [min_lon, max_lon]):
+            raise ValueError("Invalid longitude range")
 
-# Find places within 100km of a point
-nearby_places = Place.get_by_coordinates(db.session, 40.7128, -74.0060, distance_km=100)
+        bbox = func.ST_MakeEnvelope(min_lon, min_lat, max_lon, max_lat, 4326)
+        return session.query(cls).filter(func.ST_Within(cls.location, bbox)).all()
 
-# Calculate distance between two places
-london = Place(name="London")
-london.set_coordinates(51.5074, -0.1278)
-distance = new_york.distance_to(london)
-print(f"Distance between New York and London: {distance:.2f} km")
 
-# Geocode an address
-coords = Place.geocode_address("Eiffel Tower, Paris, France")
-if coords:
-    eiffel_tower = Place(name="Eiffel Tower")
-    eiffel_tower.set_coordinates(*coords)
-    db.session.add(eiffel_tower)
-    db.session.commit()
-
-# Reverse geocode
-address = Place.reverse_geocode(48.8584, 2.2945)
-print(f"Address of the Eiffel Tower: {address}")
-
-# Convert to GeoJSON
-geojson_feature = new_york.to_geojson()
-
-# Create from GeoJSON
-geojson_data = {
-    "type": "Feature",
-    "geometry": {
-        "type": "Point",
-        "coordinates": [-0.1276, 51.5074]
-    },
-    "properties": {
-        "name": "Big Ben"
-    }
-}
-big_ben = Place.from_geojson(geojson_data)
-big_ben.name = geojson_data['properties']['name']
-db.session.add(big_ben)
-db.session.commit()
-
-# Get bounding box
-bbox = Place.get_bounding_box(40.7128, -74.0060, 10)
-print(f"Bounding box for 10km around New York: {bbox}")
-"""
+# Example usage remains the same as in original

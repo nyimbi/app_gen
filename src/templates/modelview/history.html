@@ -1,0 +1,378 @@
+{% extends 'modelview/base.html' %} {% block content %}
+<div class="history-view-container">
+    {# Header Section #}
+    <div class="history-header">
+        <div class="title-section">
+            <h3>
+                <i class="fa fa-history"></i>
+                {{ _('History') }}: {{ item }}
+            </h3>
+            <div class="item-meta">
+                <span class="version-count">
+                    {{ _('Versions') }}: {{ versions|length }}
+                </span>
+                <span class="date-range">
+                    {{ _('From') }} {{ versions[-1].created_at|datetime }} {{
+                    _('to') }} {{ versions[0].created_at|datetime }}
+                </span>
+            </div>
+        </div>
+
+        {# History Controls #}
+        <div class="history-controls">
+            {# Version Compare #}
+            <div class="btn-group">
+                <button
+                    type="button"
+                    class="btn btn-default"
+                    id="compare-versions"
+                    disabled
+                >
+                    <i class="fa fa-exchange"></i> {{ _('Compare Versions') }}
+                </button>
+                {% if can_restore %}
+                <button
+                    type="button"
+                    class="btn btn-warning"
+                    id="restore-version"
+                    disabled
+                >
+                    <i class="fa fa-clock-o"></i> {{ _('Restore Version') }}
+                </button>
+                {% endif %}
+            </div>
+
+            {# View Options #}
+            <div class="btn-group">
+                <button
+                    type="button"
+                    class="btn btn-default active"
+                    data-view="timeline"
+                >
+                    <i class="fa fa-stream"></i> {{ _('Timeline') }}
+                </button>
+                <button type="button" class="btn btn-default" data-view="grid">
+                    <i class="fa fa-table"></i> {{ _('Grid') }}
+                </button>
+            </div>
+
+            {# Filter Options #}
+            <div class="btn-group">
+                <button
+                    type="button"
+                    class="btn btn-default dropdown-toggle"
+                    data-toggle="dropdown"
+                >
+                    <i class="fa fa-filter"></i> {{ _('Filter') }}
+                    <span class="caret"></span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-right">
+                    <li>
+                        <a href="#" class="filter-option" data-filter="all">
+                            <i class="fa fa-circle"></i> {{ _('All Changes') }}
+                        </a>
+                    </li>
+                    {% for action_type in action_types %}
+                    <li>
+                        <a
+                            href="#"
+                            class="filter-option"
+                            data-filter="{{ action_type }}"
+                        >
+                            <i
+                                class="fa fa-{{ action_icons[action_type] }}"
+                            ></i>
+                            {{ action_labels[action_type] }}
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    {# Main Content #}
+    <div class="history-content">
+        {# Timeline View #}
+        <div class="timeline-view">
+            {% for version in versions %}
+            <div
+                class="timeline-entry"
+                data-version="{{ version.version }}"
+                data-action="{{ version.action_type }}"
+            >
+                {# Version Header #}
+                <div class="version-header">
+                    <div class="version-info">
+                        <span class="version-number"
+                            >v{{ version.version }}</span
+                        >
+                        <span class="version-date">
+                            {{ version.created_at|datetime }}
+                        </span>
+                        {% if version.user %}
+                        <span class="version-user">
+                            {{ version.user|user_link }}
+                        </span>
+                        {% endif %}
+                    </div>
+                    <div class="version-actions">
+                        <label class="version-select">
+                            <input
+                                type="checkbox"
+                                name="version"
+                                value="{{ version.version }}"
+                            />
+                        </label>
+                        <div class="btn-group">
+                            <button
+                                type="button"
+                                class="btn btn-xs btn-default view-details"
+                                data-version="{{ version.version }}"
+                            >
+                                <i class="fa fa-eye"></i>
+                            </button>
+                            {% if can_restore %}
+                            <button
+                                type="button"
+                                class="btn btn-xs btn-warning restore-version"
+                                data-version="{{ version.version }}"
+                            >
+                                <i class="fa fa-clock-o"></i>
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                {# Version Changes #}
+                <div class="version-changes">
+                    <div class="changes-summary">
+                        <span
+                            class="action-badge action-{{ version.action_type }}"
+                        >
+                            <i
+                                class="fa fa-{{ action_icons[version.action_type] }}"
+                            ></i>
+                            {{ action_labels[version.action_type] }}
+                        </span>
+                        <span class="changes-count">
+                            {{ version.changes|length }} {{ _('changes') }}
+                        </span>
+                    </div>
+
+                    <div class="changes-details">
+                        {% for field, change in version.changes.items() %}
+                        <div class="field-change">
+                            <div class="field-name">
+                                {{ label_columns[field] }}
+                            </div>
+                            <div class="change-values">
+                                <div class="old-value">
+                                    {% if change.old is none %}
+                                    <em>{{ _('Empty') }}</em>
+                                    {% else %} {{ render_field_value(field,
+                                    change.old, field_types[field]) }} {% endif
+                                    %}
+                                </div>
+                                <div class="change-arrow">
+                                    <i class="fa fa-arrow-right"></i>
+                                </div>
+                                <div class="new-value">
+                                    {% if change.new is none %}
+                                    <em>{{ _('Empty') }}</em>
+                                    {% else %} {{ render_field_value(field,
+                                    change.new, field_types[field]) }} {% endif
+                                    %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    {% if version.comment %}
+                    <div class="version-comment">
+                        <i class="fa fa-comment"></i>
+                        {{ version.comment }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        {# Grid View #}
+        <div class="grid-view hidden">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover">
+                    <thead>
+                        <tr>
+                            <th class="version-col">{{ _('Version') }}</th>
+                            <th class="date-col">{{ _('Date') }}</th>
+                            <th class="user-col">{{ _('User') }}</th>
+                            <th class="action-col">{{ _('Action') }}</th>
+                            <th class="changes-col">{{ _('Changes') }}</th>
+                            <th class="controls-col">{{ _('Controls') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for version in versions %}
+                        <tr
+                            data-version="{{ version.version }}"
+                            data-action="{{ version.action_type }}"
+                        >
+                            <td class="version-col">
+                                <span class="version-number"
+                                    >v{{ version.version }}</span
+                                >
+                            </td>
+                            <td class="date-col">
+                                {{ version.created_at|datetime }}
+                            </td>
+                            <td class="user-col">
+                                {% if version.user %} {{ version.user|user_link
+                                }} {% endif %}
+                            </td>
+                            <td class="action-col">
+                                <span
+                                    class="action-badge action-{{ version.action_type }}"
+                                >
+                                    <i
+                                        class="fa fa-{{ action_icons[version.action_type] }}"
+                                    ></i>
+                                    {{ action_labels[version.action_type] }}
+                                </span>
+                            </td>
+                            <td class="changes-col">
+                                <div class="changes-summary">
+                                    {{ version.changes|length }} {{ _('changes')
+                                    }}
+                                    <button
+                                        type="button"
+                                        class="btn btn-xs btn-link view-details"
+                                        data-version="{{ version.version }}"
+                                    >
+                                        {{ _('View Details') }}
+                                    </button>
+                                </div>
+                            </td>
+                            <td class="controls-col">
+                                <div class="btn-group">
+                                    <label class="btn btn-xs btn-default">
+                                        <input
+                                            type="checkbox"
+                                            name="version"
+                                            value="{{ version.version }}"
+                                        />
+                                        {{ _('Select') }}
+                                    </label>
+                                    {% if can_restore %}
+                                    <button
+                                        type="button"
+                                        class="btn btn-xs btn-warning restore-version"
+                                        data-version="{{ version.version }}"
+                                    >
+                                        <i class="fa fa-clock-o"></i>
+                                        {{ _('Restore') }}
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Version Details Modal #}
+<div class="modal fade" id="version-details-modal">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    &times;
+                </button>
+                <h4 class="modal-title">{{ _('Version Details') }}</h4>
+            </div>
+            <div class="modal-body">
+                <div class="version-details-content"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Version Compare Modal #}
+<div class="modal fade" id="version-compare-modal">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    &times;
+                </button>
+                <h4 class="modal-title">{{ _('Compare Versions') }}</h4>
+            </div>
+            <div class="modal-body">
+                <div class="compare-versions-content"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Restore Confirmation Modal #}
+<div class="modal fade" id="restore-confirm-modal">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    &times;
+                </button>
+                <h4 class="modal-title">{{ _('Confirm Restore') }}</h4>
+            </div>
+            <div class="modal-body">
+                <p>{{ _('Are you sure you want to restore this version?') }}</p>
+                <div class="alert alert-warning">
+                    {{ _('This will override the current version of the
+                    record.') }}
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button
+                    type="button"
+                    class="btn btn-warning"
+                    id="confirm-restore"
+                >
+                    <i class="fa fa-clock-o"></i> {{ _('Restore') }}
+                </button>
+                <button
+                    type="button"
+                    class="btn btn-default"
+                    data-dismiss="modal"
+                >
+                    {{ _('Cancel') }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block tail_js %} {{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeHistoryView({
+            compareUrl: "{{ url_for('.compare_versions') }}",
+            restoreUrl: "{{ url_for('.restore_version') }}",
+            detailsUrl: "{{ url_for('.version_details') }}",
+            canRestore: {{ can_restore|tojson }},
+            translations: {
+                compareError: "{{ _('Error comparing versions') }}",
+                restoreError: "{{ _('Error restoring version') }}",
+                restoreSuccess: "{{ _('Version restored successfully') }}",
+                selectVersions: "{{ _('Please select two versions to compare') }}"
+            }
+        });
+    });
+</script>
+{% endblock %}

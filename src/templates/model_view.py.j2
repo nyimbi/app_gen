@@ -1,6 +1,6 @@
 {#
-This template includes:
-
+ModelView Template for Flask-AppBuilder
+Features:
 1. Basic view configuration (titles, route base)
 2. List view configuration (columns, widgets, filters)
 3. Show view configuration
@@ -13,200 +13,1387 @@ This template includes:
 10. Export functionality
 11. Column exclusions for different operations
 12. Description columns
-13. A custom action (toggle_active)
-14. Custom methods for post-add, post-update, and pre-delete operations
-15. Method to override the default route base
-16. A custom API method
-17. View registration with AppBuilder (for non-single-file mode)
+13. Custom actions
+14. Advanced search
+15. Bulk operations
+16. File handling
+17. JSON field support
+18. Workflow support
+19. Version control
+20. Dynamic forms
+21. Custom field types
+22. Error handling
+23. Security features
+24. Audit logging
+25. API integration
 #}
+
 {%- if not single_file %}
-from flask import flash, redirect, url_for, current_app
+from datetime import datetime, date
+from functools import wraps
+import csv
+import io
+import json
+import logging
+import os
+from typing import Dict, List, Any, Optional, Union, Callable
+
+from flask import (
+    abort, flash, redirect, url_for, send_file,
+    current_app, request, Response, Markup, g
+)
 from flask_appbuilder import ModelView, expose, action, has_access
 from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.actions import action
-from flask_appbuilder.security.decorators import has_access
-from werkzeug.utils import secure_filename
+from flask_appbuilder.filemanager import get_file_original_name
 from flask_appbuilder.models.sqla.filters import (
-    FilterGreater, FilterEqualFunction, FilterStartsWith, FilterContains, FilterNotEqual,
-    FilterEndsWith, FilterGreater, FilterNotEndsWith, FilterRelationManyToManyEqual, FilterRelationOneToManyEqual,
-    FilterRelationOneToManyNotEqual, FilterSmaller, SQLAFilterConverter
-    )
-from flask_wtf import FlaskForm
-from wtforms import (
-    BooleanField,
-    DateField,
-    DateTimeField,
-    DecimalField,
-    FloatField,
-    IntegerField,
-    StringField,
-    TextAreaField,
+    FilterGreater, FilterEqualFunction, FilterStartsWith, FilterContains,
+    FilterEndsWith, FilterNotEndsWith, FilterRelationManyToManyEqual,
+    FilterRelationOneToManyEqual, FilterRelationOneToManyNotEqual,
+    FilterSmaller, BaseFilter
 )
+from sqlalchemy import or_, and_, func, types as sa_types
+from sqlalchemy.types import (
+    JSON, DateTime, Numeric, Date, Time, Enum, String,
+    Text, Integer, Boolean
+)
+from sqlalchemy.dialects.postgresql import JSONB, ARRAY
+from werkzeug.utils import secure_filename
 from wtforms import validators
 from wtforms.validators import DataRequired, Optional, Length, NumberRange, Email
-from wtforms import StringField, IntegerField, FloatField, DateField, SelectField, BooleanField, PasswordField
-from flask_appbuilder.fields import EnumField, QuerySelectField, QuerySelectMultipleField, AJAXSelectField
-from flask_appbuilder.fieldwidgets import (
-    BS3TextFieldWidget, BS3PasswordFieldWidget, BS3TextAreaFieldWidget, Select2Widget, DatePickerWidget
-)
-from flask_appbuilder.widgets import (
-    ListWidget, ShowWidget, FormWidget, ListBlock, ListItem, ListLinkWidget, ListThumbnail, ShowBlockWidget
-)
-from flask_appbuilder.fieldwidgets import (
-     BS3TextFieldWidget,
-     BS3PasswordFieldWidget,
-     BS3TextAreaFieldWidget,
-     Select2Widget,
-     Select2ManyWidget,
-     DatePickerWidget,
-     DateTimePickerWidget,
-     # TimePickerWidget,
-     # BS3DateTimePickerWidget,
-     # ColorPickerWidget,
-     # FileUploadFieldWidget,
-     Select2AJAXWidget,
-     Select2SlaveAJAXWidget,
-     # BS3DateTimeFieldWidget,
-     # BS3DateFieldWidget,
-     # CheckboxWidget,
-     # BS3FileUploadFieldWidget
- )
+from dateutil.parser import parse
+
 from flask_babel import lazy_gettext as _
+from .nx_widgets import (
+    RangeSliderWidget, TagInputWidget, JSONEditorWidget, MarkdownEditorWidget,
+    GeoPointWidget, CurrencyInputWidget, PhoneNumberWidget, RatingWidget,
+    DurationWidget, RelationshipGraphWidget, FileUploadFieldWidget,
+    ColorPickerWidget, DateRangePickerWidget, RichTextEditorWidget,
+    MultiSelectWidget, TimePickerWidget, CheckBoxWidget, SwitchWidget,
+    StarRatingWidget, ToggleButtonWidget, SliderWidget, AutocompleteWidget,
+    PasswordStrengthWidget
+)
+from .validators import (
+    MoneyValidator, PhoneValidator, AddressValidator, JSONValidator,
+    ColorValidator
+)
+from .formatters import (
+    currency_formatter, phone_formatter, address_formatter,
+    json_formatter, color_formatter
+)
+
 from app import appbuilder, db
 from ..models import {{ table_name|capitalize }}
+
+log = logging.getLogger(__name__)
 {%- endif %}
 
-class {{ table_name|capitalize }}ModelView(ModelView):
-    datamodel = SQLAInterface({{ table_name|capitalize }})
+# Decorators
+def handle_errors(f):
+    """Enhanced error handling decorator"""
+    @wraps(f)
+    def wrapper(self, *args, **kwargs):
+        try:
+            return f(self, *args, **kwargs)
+        except PermissionError as e:
+            flash(str(e), "danger")
+            logging.error(f"Permission error in {f.__name__}: {str(e)}")
+            return redirect(self.get_redirect())
+        except ValueError as e:
+            flash(str(e), "warning")
+            logging.warning(f"Validation error in {f.__name__}: {str(e)}")
+            return redirect(self.get_redirect())
+        except Exception as e:
+            flash(str(e), "error")
+            logging.error(f"Error in {f.__name__}: {str(e)}")
+            return redirect(self.get_redirect())
+    return wrapper
 
-    # Basic configuration
+def require_feature(feature_name):
+    """Decorator to check if feature is enabled"""
+    def decorator(f):
+        @wraps(f)
+        def wrapper(self, *args, **kwargs):
+            if not getattr(self, f'has_{feature_name}', False):
+                flash(f"{feature_name} feature is not enabled", "warning")
+                return redirect(self.get_redirect())
+            return f(self, *args, **kwargs)
+        return wrapper
+    return decorator
+
+def audit_log(action_type):
+    """Decorator to log actions"""
+    def decorator(f):
+        @wraps(f)
+        def wrapper(self, *args, **kwargs):
+            result = f(self, *args, **kwargs)
+            self._log_action(action_type, args[0] if args else None)
+            return result
+        return wrapper
+    return decorator
+
+class {{ table_name|capitalize }}ModelView(ModelView):
+    """
+    ModelView for {{ table_name|capitalize }}
+
+    This view provides a complete interface for managing {{ table_name }} records,
+    including advanced features like workflow management, versioning, and dynamic forms.
+    """
+
+    # Basic Configuration
+    datamodel = SQLAInterface({{ table_name|capitalize }})
     route_base = "/{{ table_name.lower() }}"
+
+    # Template Configuration
+    template_folder = "modelview"
+    templates = {
+        'list': "list.html",
+        'add': "form.html",
+        'edit': "form.html",
+        'show': "show.html",
+        'import': "import.html",
+        'import_review': "import_review.html",
+        'advanced_search': "advanced_search.html",
+        'history': "history.html",
+    }
+
+    # View Titles
     list_title = "{{ table_name|capitalize }} List"
     show_title = "{{ table_name|capitalize }} Details"
     add_title = "Add {{ table_name|capitalize }}"
     edit_title = "Edit {{ table_name|capitalize }}"
-    custom_template = ""
 
-    # List view configuration
+    # Column & Field Configurations
+    {% if field_type_config %}
+    field_type_config = {{ field_type_config|tojson }}
+    {% endif %}
+
+    # List View Configuration
     list_columns = {{ list_columns }}
     list_widget = ListWidget
-    label_columns = {
-        {%- for column in columns -%}
-        "{{ column.name }}": _("{{ column.label|capitalize }}"),
-        {%- endfor -%}
-    }
     search_columns = {{ list_columns }}
+    base_filters = []
     base_order = ("id", "asc")
-    base_filters = [["id", FilterGreater, 0]]
-
-    # Show view configuration
-    show_columns = {{ list_columns }}
-    show_widget = ShowWidget
-
-    # Add and Edit form configuration
-    add_columns = [
-        {%- for column in columns if not column.primary_key -%}
-        "{{ column.name }}",
-        {%- endfor -%}
-    ]
-    edit_columns = [
-        {%- for column in columns if not column.primary_key -%}
-        "{{ column.name }}",
-        {%- endfor -%}
-    ]
-    add_widget = FormWidget
-    edit_widget = FormWidget
-
-    # Form field configurations
-
-    {%- for column_name, field_info in form_fields.items() %}
-    {{ column_name }} = {
-        "widget": {{ field_info.widget }},
-        "validators": [{{ field_info.validators|join(', ') }}],
-        "description": _("Enter {{ column_name|replace('_', ' ')|capitalize }}"),}
-    {%- endfor %}
-
-    # Related views (for relationships)
-    {%- for relationship in relationships %}
-    # related_views = [
-    #    ({{ relationship.referred_table|capitalize }}ModelView), #, "{{ relationship.constrained_column }}"),
-    # ]
-    {%- endfor %}
-
-    # Custom queries
-    # base_query = db.session.query({{ table_name|capitalize }}).filter({{ table_name|capitalize }}.is_active == True)
-
-    # Pagination settings
     page_size = 20
-    can_set_page_size = True
 
-    # CRUD operation permissions
+    # Form View Configurations
+    add_columns = {{ add_columns }}
+    edit_columns = {{ edit_columns }}
+    show_columns = {{ show_columns }}
+
+    # Labels & Descriptions
+    label_columns = {{ label_columns }}
+    description_columns = {{ description_columns }}
+
+    # Fieldsets Configuration
+    {% if fieldsets %}
+    fieldsets = {{ fieldsets|tojson }}
+    show_fieldsets = {{ show_fieldsets|tojson }}
+    {% endif %}
+
+    # Permissions Configuration
     can_create = True
     can_edit = True
     can_delete = True
     can_show = True
-
-    # Export functionality
     can_export = True
-    export_types = ["csv", "json", "yaml", "xlsx"]
 
-    # Additional view options
-    search_exclude_columns = ["password", "secret_key"]
-    add_exclude_columns = ["created_at", "updated_at"]
-    edit_exclude_columns = ["created_at", "updated_at"]
-    show_exclude_columns = []
-    description_columns = {
-        {%- for column in columns -%}
-        "{{ column.name }}": _("Description for {{ column.name }}"),
-        {%- endfor -%}
+    # Search Configuration
+    search_exclude_columns = ["password", "secret", "key", "token"]
+    search_filters = {}
+    search_form_query_rel_fields = {}
+    search_case_sensitive = False
+
+    # Export Configuration
+    export_types = ["csv", "json", "yaml", "xlsx"]
+    export_max_rows = 100000
+
+    # File Upload Configuration
+    {% if has_file_upload %}
+    upload_config = {
+        'allowed_extensions': {
+            'image': ['jpg', 'jpeg', 'png', 'gif'],
+            'document': ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'],
+            'media': ['mp3', 'mp4', 'avi', 'mov']
+        },
+        'max_size': 10 * 1024 * 1024,  # 10MB
+        'upload_folder': 'uploads/',
+        'preserve_filename': False,
+        'thumbnail_size': (200, 200)
+    }
+    {% endif %}
+
+    # Workflow Configuration
+    {% if has_workflow %}
+    workflow = Workflow(
+        name='{{ table_name|lower }}_workflow',
+        states=[
+            State(
+                'draft',
+                description=_('Draft'),
+                is_initial=True,
+                ui_color='secondary',
+                metadata={'actions': ['submit', 'delete']}
+            ),
+            State(
+                'submitted',
+                description=_('Submitted'),
+                required_roles=['reviewer'],
+                ui_color='primary',
+                metadata={'actions': ['approve', 'reject']}
+            ),
+            State(
+                'approved',
+                description=_('Approved'),
+                required_roles=['approver'],
+                ui_color='success',
+                metadata={'actions': ['revoke']}
+            ),
+            State(
+                'rejected',
+                description=_('Rejected'),
+                is_final=True,
+                ui_color='danger',
+                metadata={'actions': ['resubmit']}
+            )
+        ],
+        transitions=[
+            Transition(
+                'submit',
+                source='draft',
+                dest='submitted',
+                conditions=[lambda obj, user: obj.is_complete()],
+                validation_message=_("Item must be complete before submission")
+            ),
+            Transition(
+                'approve',
+                source='submitted',
+                dest='approved',
+                required_roles=['approver']
+            ),
+            Transition(
+                'reject',
+                source='submitted',
+                dest='rejected',
+                required_roles=['approver']
+            ),
+            Transition(
+                'revoke',
+                source='approved',
+                dest='draft',
+                required_roles=['approver']
+            ),
+            Transition(
+                'resubmit',
+                source='rejected',
+                dest='submitted'
+            )
+        ],
+        notification_config={
+            'email': {
+                'templates': {
+                    'submitted': 'emails/item_submitted.html',
+                    'approved': 'emails/item_approved.html',
+                    'rejected': 'emails/item_rejected.html'
+                },
+                'recipients': ['admin@example.com']
+            },
+            'webhook': {
+                'url': 'https://api.example.com/webhooks/workflow',
+                'events': ['state_change']
+            }
+        },
+        metadata={
+            'version': '1.0',
+            'department': '{{ table_name|capitalize }}',
+            'audit_required': True
+        },
+        error_state='draft',
+        max_retries=3,
+        history_limit=1000
+    )
+    {% endif %}
+
+    # Version Control Configuration
+    {% if has_versioning %}
+    versioning_config = {
+        'enabled': True,
+        'track_changes': True,
+        'track_who': True,
+        'track_when': True,
+        'ignore_fields': ['updated_at', 'created_at'],
+        'diff_format': 'detailed',
+        'max_versions': 100,
+        'restore_enabled': True
+    }
+    {% endif %}
+
+    # Dynamic Form Configuration
+    {% if has_dynamic_forms %}
+    dynamic_form_config = {
+        'enabled': True,
+        'conditional_fields': {{ conditional_fields|tojson if conditional_fields else '{}' }},
+        'calculated_fields': {{ calculated_fields|tojson if calculated_fields else '{}' }},
+        'dependent_fields': {{ dependent_fields|tojson if dependent_fields else '{}' }},
+        'field_groups': {{ field_groups|tojson if field_groups else '{}' }}
+    }
+    {% endif %}
+
+    # Custom Field Types
+    custom_field_types = {
+        'money': {
+            'widget': MoneyWidget(),
+            'validator': MoneyValidator(),
+            'formatter': currency_formatter
+        },
+        'phone': {
+            'widget': PhoneWidget(),
+            'validator': PhoneValidator(),
+            'formatter': phone_formatter
+        },
+        'address': {
+            'widget': AddressWidget(),
+            'validator': AddressValidator(),
+            'formatter': address_formatter
+        },
+        'rich_text': {
+            'widget': CKEditorWidget(),
+            'validator': None,
+            'formatter': lambda x: Markup(x)
+        },
+        'json_editor': {
+            'widget': JSONEditorWidget(),
+            'validator': JSONValidator(),
+            'formatter': json_formatter
+        },
+        'color_picker': {
+            'widget': ColorPickerWidget(),
+            'validator': ColorValidator(),
+            'formatter': color_formatter
+        }
     }
 
-    # Custom actions
-    @action("toggle_active", "Toggle Active", "Are you sure you want to toggle the active status?", "fa-check")
-    def toggle_active(self, items):
-        for item in items:
-            item.active = not item.active
-            db.session.add(item)
-        db.session.commit()
-        flash("Toggled active status for selected items", "success")
+    def __init__(self, **kwargs):
+        """Initialize the view with proper validation and feature detection"""
+        super().__init__(**kwargs)
+        self._validate_required_configs()
+        self._init_features()
+        self._init_formatters()
+        self._init_validators()
+
+    def _validate_required_configs(self):
+        """Validate that required configurations are present"""
+        required = ['list_columns', 'label_columns']
+        for config in required:
+            if not hasattr(self, config):
+                raise ValueError(f"Missing required configuration: {config}")
+
+    def _init_features(self):
+        """Initialize enabled features"""
+        self.has_file_upload = hasattr(self, 'upload_config')
+        self.has_workflow = hasattr(self, 'workflow_config')
+        self.has_versioning = hasattr(self, 'versioning_config')
+        self.has_dynamic_forms = hasattr(self, 'dynamic_form_config')
+
+    def _init_formatters(self):
+        """Initialize field formatters"""
+        self.formatters_columns = {}
+        for column in self.list_columns:
+            formatter = self._get_formatter(column)
+            if formatter:
+                self.formatters_columns[column] = formatter
+
+    def _init_validators(self):
+        """Initialize field validators"""
+        self.validators_columns = {}
+        for column in self.add_columns + self.edit_columns:
+            validators = self._get_validators(column)
+            if validators:
+                self.validators_columns[column] = validators
+
+    # Field Type Utils
+    def _get_field_config(self, field_name: str) -> dict:
+        """Get field configuration with fallbacks"""
+        try:
+            return self.field_type_config.get(field_name, {})
+        except AttributeError:
+            return {}
+
+    def _get_formatter(self, field_name: str) -> Optional[Callable]:
+        """Get field formatter with fallback"""
+        try:
+            field_config = self._get_field_config(field_name)
+            formatter = field_config.get('formatter')
+            if formatter:
+                return getattr(self, formatter, None) or formatter
+        except Exception as e:
+            log.warning(f"Error getting formatter for {field_name}: {str(e)}")
+        return None
+
+    def _get_validators(self, field_name: str) -> List[Callable]:
+        """Get field validators"""
+        validators = []
+        try:
+            field_config = self._get_field_config(field_name)
+            field_validators = field_config.get('validators', [])
+            for validator in field_validators:
+                if isinstance(validator, str):
+                    validator_func = getattr(validators, validator, None)
+                    if validator_func:
+                        validators.append(validator_func())
+                else:
+                    validators.append(validator)
+        except Exception as e:
+            log.warning(f"Error getting validators for {field_name}: {str(e)}")
+        return validators
+
+    # Form Processing
+    def _process_form_field(self, field_name: str, value: Any) -> Any:
+        """Process form field value based on field type"""
+        field_config = self._get_field_config(field_name)
+        field_type = field_config.get('type')
+
+        if field_type == 'json':
+            return self._process_json_field(value)
+        elif field_type == 'file':
+            return self._process_file_field(field_name, value)
+        elif field_type == 'date':
+            return self._process_date_field(value)
+        elif field_type == 'datetime':
+            return self._process_datetime_field(value)
+
+        return value
+
+    @handle_errors
+    def _process_json_field(self, value: str) -> dict:
+        """Process JSON field value"""
+        if not value:
+            return None
+        return json.loads(value)
+
+    @handle_errors
+    def _process_file_field(self, field_name: str, file_data: Any) -> str:
+        """Process file upload field"""
+        if not file_data:
+            return None
+
+        if not self.has_file_upload:
+            raise ValueError("File upload not configured")
+
+        return self._handle_file_upload(field_name, file_data)
+
+    @handle_errors
+    def _process_date_field(self, value: str) -> date:
+        """Process date field value"""
+        if not value:
+            return None
+        return parse(value).date()
+
+    @handle_errors
+    def _process_datetime_field(self, value: str) -> datetime:
+        """Process datetime field value"""
+        if not value:
+            return None
+        return parse(value)
+
+    # Form Validation
+    def _validate_form(self, form: Any, is_edit: bool = False) -> None:
+        """Validate form data"""
+        self._validate_required_fields(form)
+        self._validate_field_types(form)
+        self._validate_unique_constraints(form, is_edit)
+        self._validate_custom_rules(form)
+
+    def _validate_required_fields(self, form: Any) -> None:
+        """Validate required fields"""
+        for field_name in self.add_columns:
+            field_config = self._get_field_config(field_name)
+            if field_config.get('required', False):
+                if not getattr(form, field_name).data:
+                    raise ValueError(f"{field_name} is required")
+
+    def _validate_field_types(self, form: Any) -> None:
+        """Validate field types"""
+        for field_name in self.add_columns:
+            value = getattr(form, field_name).data
+            if value is not None:
+                self._validate_field_type(field_name, value)
+
+    def _validate_unique_constraints(self, form: Any, is_edit: bool) -> None:
+        """Validate unique constraints"""
+        for field_name in self.add_columns:
+            field_config = self._get_field_config(field_name)
+            if field_config.get('unique', False):
+                value = getattr(form, field_name).data
+                if value is not None:
+                    self._check_unique_constraint(field_name, value, is_edit)
+
+    def _validate_custom_rules(self, form: Any) -> None:
+        """Validate custom business rules"""
+        for validator in self.validators_columns.get(form.name, []):
+            validator(form)
+
+
+    # CRUD Operations
+    @handle_errors
+    @audit_log('create')
+    def pre_add(self, item: Any) -> None:
+        """Pre-process item before adding"""
+        self._process_fields(item)
+        self._handle_workflow_state(item, 'create')
+        if self.has_versioning:
+            self._init_version(item)
+
+    @handle_errors
+    @audit_log('update')
+    def pre_update(self, item: Any) -> None:
+        """Pre-process item before updating"""
+        self._process_fields(item)
+        self._handle_workflow_state(item, 'update')
+        if self.has_versioning:
+            self._track_changes(item)
+
+    @handle_errors
+    @audit_log('delete')
+    def pre_delete(self, item: Any) -> None:
+        """Pre-process item before deletion"""
+        self._check_delete_constraints(item)
+        if self.has_versioning:
+            self._archive_version(item)
+
+    def _process_fields(self, item: Any) -> None:
+        """Process all fields based on their types"""
+        for field_name in self.add_columns:
+            value = getattr(item, field_name, None)
+            if value is not None:
+                processed_value = self._process_form_field(field_name, value)
+                setattr(item, field_name, processed_value)
+
+    # File Handling
+    @require_feature('file_upload')
+    def _handle_file_upload(self, field_name: str, file_data: Any) -> str:
+        """Handle file upload with proper validation and processing"""
+        if not file_data:
+            return None
+
+        filename = secure_filename(file_data.filename)
+        ext = filename.rsplit('.', 1)[1].lower()
+
+        # Validate file type
+        field_config = self._get_field_config(field_name)
+        allowed_types = field_config.get('allowed_extensions',
+                                       self.upload_config['allowed_extensions']['document'])
+
+        if ext not in allowed_types:
+            raise ValueError(f"Invalid file type. Allowed: {allowed_types}")
+
+        # Validate file size
+        if file_data.content_length > self.upload_config['max_size']:
+            raise ValueError(f"File too large. Max size: {self.upload_config['max_size']} bytes")
+
+        # Generate unique filename
+        if not self.upload_config['preserve_filename']:
+            filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{filename}"
+
+        # Save file
+        file_path = os.path.join(self.upload_config['upload_folder'], filename)
+        file_data.save(file_path)
+
+        # Process image if necessary
+        if field_name.endswith(('_img', '_photo')):
+            self._process_image(file_path)
+
+        return filename
+
+    def _process_image(self, file_path: str) -> None:
+        """Process uploaded image (resize, create thumbnail, etc.)"""
+        try:
+            from PIL import Image
+            img = Image.open(file_path)
+
+            # Create thumbnail
+            thumb_size = self.upload_config['thumbnail_size']
+            img.thumbnail(thumb_size)
+
+            # Save thumbnail
+            thumb_path = file_path.rsplit('.', 1)[0] + '_thumb.' + file_path.rsplit('.', 1)[1]
+            img.save(thumb_path)
+        except Exception as e:
+            log.warning(f"Error processing image {file_path}: {str(e)}")
+
+    # Workflow Management
+@require_feature('workflow')
+def _handle_workflow_state(self, item: Any, action: str) -> None:
+    """Handle workflow state transitions"""
+    if not hasattr(item, 'state'):
+        return
+
+    if action == 'create':
+        initial_state = next(
+            (state for state in self.workflow.states if state.is_initial),
+            None
+        )
+        if initial_state:
+            item.state = initial_state.name
+    elif action == 'update':
+        self._validate_workflow_transition(item)
+
+@require_feature('workflow')
+def _validate_workflow_transition(self, item: Any) -> None:
+    """Validate workflow state transition"""
+    if not hasattr(item, '_original_state'):
+        return
+
+    current_state = item._original_state
+    new_state = item.state
+
+    if current_state == new_state:
+        return
+
+    # Find valid transition
+    transition = next(
+        (t for t in self.workflow.transitions
+         if current_state in t.source and t.dest == new_state),
+        None
+    )
+
+    if not transition:
+        raise ValueError(
+            f"Invalid state transition: {current_state} -> {new_state}"
+        )
+
+    # Check permissions
+    if not self._check_transition_permissions(transition):
+        raise ValueError("You don't have permission for this transition")
+
+def _check_transition_permissions(self, transition: Transition) -> bool:
+    """Check if user has permission for workflow transition"""
+    if not transition.required_roles:
+        return True
+
+    return any(
+        self.appbuilder.sm.has_role(role)
+        for role in transition.required_roles
+    )
+
+    @expose('/transition/<pk>/<trigger>')
+    @has_access
+    @handle_errors
+    def transition_state(self, pk: Any, trigger: str) -> Response:
+        """Handle workflow state transition"""
+        item = self.datamodel.get(pk)
+        if not item:
+            abort(404)
+
+        # Find transition
+        transition = next(
+            (t for t in self.workflow.transitions
+            if t.trigger == trigger and item.state in t.source),
+            None
+        )
+
+        if not transition or not self._check_transition_permissions(transition):
+            flash(_('Transition not allowed'), 'error')
+            return redirect(self.get_redirect())
+
+        try:
+            # Execute transition
+            result = item.trigger_event(trigger, g.user)
+            if result:
+                flash(_('State updated successfully'), 'success')
+            else:
+                flash(_('State update failed'), 'error')
+        except Exception as e:
+            flash(str(e), 'error')
+
         return redirect(self.get_redirect())
 
-    # Custom methods
+    @expose('/transition/<pk>/<transition>')
     @has_access
-    def post_add(self, item):
-        """
-        Perform actions after an item is added.
-        """
-        # Custom logic here
-        pass
+    @handle_errors
+    def transition_state(self, pk: Any, transition: str) -> Response:
+        """Handle workflow state transition"""
+        item = self.datamodel.get(pk)
+        if not item:
+            abort(404)
 
+        if not self._can_transition(item, transition):
+            flash(_('Transition not allowed'), 'error')
+            return redirect(self.get_redirect())
+
+        try:
+            new_state = self.workflow_config['transitions'][transition]['to']
+            item.state = new_state
+            self.datamodel.session.commit()
+
+            self._log_action('transition', item)
+            flash(_('State updated successfully'), 'success')
+        except Exception as e:
+            flash(str(e), 'error')
+
+        return redirect(self.get_redirect())
+
+    # Version Control
+    @require_feature('versioning')
+    def _init_version(self, item: Any) -> None:
+        """Initialize version tracking for new item"""
+        item.version = 1
+        item.version_date = datetime.now()
+        item.version_user_id = g.user.id if hasattr(g, 'user') else None
+
+    @require_feature('versioning')
+    def _track_changes(self, item: Any) -> None:
+        """Track changes for version control"""
+        changes = self._get_changes(item)
+        if changes:
+            self._create_version(item, changes)
+
+    def _get_changes(self, item: Any) -> dict:
+        """Get changes between current and previous state"""
+        if not hasattr(item, '_original_state'):
+            return {}
+
+        changes = {}
+        for field in self.edit_columns:
+            old_value = getattr(item._original_state, field, None)
+            new_value = getattr(item, field, None)
+            if old_value != new_value:
+                changes[field] = {
+                    'old': old_value,
+                    'new': new_value
+                }
+        return changes
+
+    @require_feature('versioning')
+    def _create_version(self, item: Any, changes: dict) -> None:
+        """Create new version record"""
+        version_cls = self._get_version_class()
+        version = version_cls(
+            item_id=item.id,
+            version=item.version + 1,
+            changes=changes,
+            created_at=datetime.now(),
+            created_by=g.user.id if hasattr(g, 'user') else None
+        )
+        self.datamodel.session.add(version)
+        item.version = version.version
+        item.version_date = version.created_at
+
+
+    # API Endpoints
+    @expose('/api', methods=['GET'])
+    @has_access_api
+    @handle_errors
+    def api_list(self) -> Response:
+        """API endpoint for list view"""
+        query = self._get_base_query()
+        query = self._apply_filters(query)
+        query = self._apply_search(query)
+        query = self._apply_ordering(query)
+
+        # Pagination
+        page = request.args.get('page', 1, type=int)
+        page_size = request.args.get('page_size', self.page_size, type=int)
+        total_count = query.count()
+        items = query.offset((page - 1) * page_size).limit(page_size).all()
+
+        return self.response(200, {
+            'data': [self._serialize_item(item) for item in items],
+            'total_count': total_count,
+            'page': page,
+            'page_size': page_size,
+            'total_pages': (total_count + page_size - 1) // page_size
+        })
+
+    def response(self, code: int, data: dict) -> Response:
+        """Standardized API response"""
+        return Response(
+            json.dumps(data),
+            status=code,
+            mimetype="application/json"
+        )
+
+    def error_response(self, message: str, code: int = 400) -> Response:
+        """Standardized error response"""
+        return self.response(code, {"message": message})
+
+    @expose('/api/<pk>', methods=['GET'])
+    @has_access_api
+    @handle_errors
+    def api_show(self, pk: Any) -> Response:
+        """API endpoint for show view"""
+        item = self.datamodel.get(pk)
+        if not item:
+            return self.response(404, {'message': 'Not found'})
+        return self.response(200, self._serialize_item(item))
+
+    @expose('/api', methods=['POST'])
+    @has_access_api
+    @handle_errors
+    def api_add(self) -> Response:
+        """API endpoint for adding items"""
+        if not request.is_json:
+            return self.response(400, {'message': 'JSON required'})
+
+        data = request.get_json()
+        try:
+            item = self.datamodel.obj(**data)
+            self.pre_add(item)
+            self.datamodel.add(item)
+            self.post_add(item)
+            return self.response(201, self._serialize_item(item))
+        except Exception as e:
+            return self.response(400, {'message': str(e)})
+
+    @expose('/api/<pk>', methods=['PUT'])
+    @has_access_api
+    @handle_errors
+    def api_edit(self, pk: Any) -> Response:
+        """API endpoint for editing items"""
+        if not request.is_json:
+            return self.response(400, {'message': 'JSON required'})
+
+        item = self.datamodel.get(pk)
+        if not item:
+            return self.response(404, {'message': 'Not found'})
+
+        data = request.get_json()
+        try:
+            for key, value in data.items():
+                setattr(item, key, value)
+            self.pre_update(item)
+            self.datamodel.edit(item)
+            self.post_update(item)
+            return self.response(200, self._serialize_item(item))
+        except Exception as e:
+            return self.response(400, {'message': str(e)})
+
+    @expose('/api/<pk>', methods=['DELETE'])
+    @has_access_api
+    @handle_errors
+    def api_delete(self, pk: Any) -> Response:
+        """API endpoint for deleting items"""
+        item = self.datamodel.get(pk)
+        if not item:
+            return self.response(404, {'message': 'Not found'})
+
+        try:
+            self.pre_delete(item)
+            self.datamodel.delete(item)
+            self.post_delete(item)
+            return self.response(200, {'message': 'Deleted successfully'})
+        except Exception as e:
+            return self.response(400, {'message': str(e)})
+
+    def _serialize_item(self, item: Any) -> dict:
+        """Serialize item for API response"""
+        data = {}
+        for column in self.show_columns:
+            value = getattr(item, column, None)
+            formatter = self.formatters_columns.get(column)
+            if formatter:
+                value = formatter(value)
+            data[column] = value
+        return data
+
+    @expose('/api/docs')
+    @has_access_api
+    def api_docs(self) -> Response:
+        """Generate API documentation"""
+        return self.render_template(
+            'api_docs.html',
+            endpoints=self._get_api_endpoints(),
+            model=self.datamodel.obj,
+            filters=self._get_filter_definitions()
+        )
+
+
+    # Import/Export Functionality
+    @expose('/import', methods=['GET', 'POST'])
     @has_access
-    def post_update(self, item):
-        """
-        Perform actions after an item is updated.
-        """
-        # Custom logic here
-        pass
+    @handle_errors
+    def import_data(self) -> Response:
+        """Import data from file"""
+        if request.method == 'POST':
+            if 'file' not in request.files:
+                flash(_('No file uploaded'), 'error')
+                return redirect(url_for(f'.{self.import_data.__name__}'))
 
+            file = request.files['file']
+            try:
+                results = self._process_import_file(file)
+                return self.render_template(
+                    'import_review.html',
+                    results=results,
+                    config=self.import_config
+                )
+            except Exception as e:
+                flash(str(e), 'error')
+
+        return self.render_template(
+            'import.html',
+            config=self.import_config
+        )
+
+    def _process_import_file(self, file: Any) -> List[dict]:
+        """Process import file based on format"""
+        filename = secure_filename(file.filename)
+        ext = filename.rsplit('.', 1)[1].lower()
+
+        if ext == 'csv':
+            return self._process_csv_import(file)
+        elif ext == 'xlsx':
+            return self._process_excel_import(file)
+        elif ext == 'json':
+            return self._process_json_import(file)
+        else:
+            raise ValueError(f"Unsupported file format: {ext}")
+
+    def _process_csv_import(self, file: Any) -> List[dict]:
+        """Process CSV import file"""
+        results = []
+        reader = csv.DictReader(file.stream.read().decode('utf-8').splitlines())
+
+        for row in reader:
+            try:
+                processed_row = self._process_import_row(row)
+                results.append({
+                    'row': row,
+                    'status': 'success',
+                    'processed': processed_row
+                })
+            except Exception as e:
+                results.append({
+                    'row': row,
+                    'status': 'error',
+                    'error': str(e)
+                })
+
+        return results
+
+    def _process_import_row(self, row: dict) -> dict:
+        """Process single import row"""
+        processed = {}
+        for field, value in row.items():
+            field_name = field.lower().strip()
+            if field_name in self.add_columns:
+                processed[field_name] = self._process_import_field(field_name, value)
+        return processed
+
+    def _process_import_field(self, field_name: str, value: Any) -> Any:
+        """Process single import field"""
+        if not value:
+            return None
+
+        field_config = self._get_field_config(field_name)
+        field_type = field_config.get('type', 'string')
+
+        try:
+            if field_type == 'integer':
+                return int(value)
+            elif field_type == 'float':
+                return float(value)
+            elif field_type == 'boolean':
+                return value.lower() in ('true', 'yes', '1', 'on')
+            elif field_type == 'date':
+                return parse(value).date()
+            elif field_type == 'datetime':
+                return parse(value)
+            elif field_type == 'json':
+                return json.loads(value)
+            else:
+                return str(value)
+        except Exception as e:
+            raise ValueError(f"Error processing field {field_name}: {str(e)}")
+
+    @expose('/export/<export_type>')
     @has_access
-    def pre_delete(self, item):
-        """
-        Perform actions before an item is deleted.
-        """
-        # Custom logic here
-        pass
+    @handle_errors
+    def export(self, export_type: str) -> Response:
+        """Export data to file"""
+        query = self._get_base_query()
+        query = self._apply_filters(query)
+        query = self._apply_search(query)
+        query = self._apply_ordering(query)
 
-    # Override default route base
-    @classmethod
-    def set_route_base(cls, app, route_base):
-        cls.route_base = route_base
+        items = query.limit(self.export_max_rows).all()
 
-    # Custom API methods
-    @has_access
-    @expose("/api/custom_method", methods=["GET"])
-    def custom_api_method(self):
-        # Custom API logic here
-        pass
+        if export_type == 'csv':
+            return self._export_csv(items)
+        elif export_type == 'xlsx':
+            return self._export_excel(items)
+        elif export_type == 'json':
+            return self._export_json(items)
+        else:
+            abort(400, f"Unsupported export type: {export_type}")
+
+    def _export_csv(self, items: List[Any]) -> Response:
+        """Export data to CSV"""
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        # Write headers
+        writer.writerow([self.label_columns.get(col, col) for col in self.list_columns])
+
+        # Write data
+        for item in items:
+            row = []
+            for column in self.list_columns:
+                value = getattr(item, column, None)
+                formatter = self.formatters_columns.get(column)
+                if formatter:
+                    value = formatter(value)
+                row.append(str(value) if value is not None else '')
+            writer.writerow(row)
+
+        output.seek(0)
+        return send_file(
+            io.BytesIO(output.getvalue().encode('utf-8')),
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name=f'{self.__class__.__name__}_export_{datetime.now():%Y%m%d_%H%M%S}.csv'
+        )
+
+
+    def _export_json(self, items: List[Any]) -> Response:
+        """Export to JSON"""
+        data = [self._serialize_item(item) for item in items]
+        return send_file(
+            io.BytesIO(json.dumps(data, indent=2).encode()),
+            mimetype='application/json',
+            as_attachment=True,
+            download_name=f'{self.__class__.__name__}_{datetime.now():%Y%m%d}.json'
+        )
+
+    def _export_yaml(self, items: List[Any]) -> Response:
+        """Export to YAML"""
+        data = [self._serialize_item(item) for item in items]
+        return send_file(
+            io.BytesIO(yaml.dump(data).encode()),
+            mimetype='application/x-yaml',
+            as_attachment=True,
+            download_name=f'{self.__class__.__name__}_{datetime.now():%Y%m%d}.yaml'
+        )
+
+
+    # Advanced Search Functionality
+    def _apply_search(self, query: Any) -> Any:
+        """Apply search filters to query"""
+        search_value = request.args.get('search', None)
+        if search_value:
+            search_queries = []
+            for column in self.search_columns:
+                col_obj = getattr(self.datamodel.obj, column, None)
+                if col_obj is not None:
+                    search_queries.extend(
+                        self._build_search_queries(col_obj, search_value)
+                    )
+            if search_queries:
+                query = query.filter(or_(*search_queries))
+        return query
+
+    def _build_search_queries(self, column: Any, search_value: str) -> List[Any]:
+        """Build search queries based on column type"""
+        queries = []
+        if isinstance(column.type, (String, Text)):
+            if not self.search_case_sensitive:
+                queries.append(
+                    func.lower(column).like(f"%{search_value.lower()}%")
+                )
+            else:
+                queries.append(column.like(f"%{search_value}%"))
+        elif isinstance(column.type, (Integer, Numeric)):
+            try:
+                val = float(search_value)
+                queries.append(column == val)
+            except ValueError:
+                pass
+        elif isinstance(column.type, (Date, DateTime)):
+            try:
+                date_val = parse(search_value)
+                queries.append(column == date_val)
+            except ValueError:
+                pass
+        return queries
+
+    # Event Handlers
+    def _init_event_handlers(self) -> None:
+        """Initialize event handlers"""
+        self.before_request_handlers = []
+        self.after_request_handlers = []
+        self.before_create_handlers = []
+        self.after_create_handlers = []
+        self.before_update_handlers = []
+        self.after_update_handlers = []
+        self.before_delete_handlers = []
+        self.after_delete_handlers = []
+
+    def before_request(self, f: Callable) -> Callable:
+        """Decorator to register before request handler"""
+        self.before_request_handlers.append(f)
+        return f
+
+    def after_request(self, f: Callable) -> Callable:
+        """Decorator to register after request handler"""
+        self.after_request_handlers.append(f)
+        return f
+
+    def _run_event_handlers(self, handlers: List[Callable], *args, **kwargs) -> None:
+        """Run registered event handlers"""
+        for handler in handlers:
+            try:
+                handler(*args, **kwargs)
+            except Exception as e:
+                log.error(f"Error in event handler {handler.__name__}: {str(e)}")
+
+    # Audit Logging
+    def _log_action(self, action_type: str, item: Any) -> None:
+        """Log model changes"""
+        if not hasattr(self.datamodel.obj, 'audit_log'):
+            return
+
+        try:
+            log_entry = {
+                'action': action_type,
+                'timestamp': datetime.now(),
+                'user_id': g.user.id if hasattr(g, 'user') else None,
+                'item_id': getattr(item, 'id', None),
+                'changes': self._get_changes(item),
+                'table_name': self.datamodel.obj.__tablename__,
+                'ip_address': request.remote_addr,
+                'user_agent': request.user_agent.string,
+            }
+
+            audit_log = self.datamodel.obj.audit_log(**log_entry)
+            self.datamodel.session.add(audit_log)
+            self.datamodel.session.commit()
+        except Exception as e:
+            log.error(f"Error logging action: {str(e)}")
+
+    # Cache Management
+    def _get_cache_key(self, *args, **kwargs) -> str:
+        """Generate cache key"""
+        key_parts = [
+            self.__class__.__name__,
+            request.path,
+            str(sorted(request.args.items())),
+            str(args),
+            str(sorted(kwargs.items()))
+        ]
+        return ':'.join(key_parts)
+
+    def _get_cached_data(self, cache_key: str, callback: Callable) -> Any:
+        """Get or set cached data"""
+        if not current_app.config.get('CACHE_ENABLED', False):
+            return callback()
+
+        cached = current_app.cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        data = callback()
+        current_app.cache.set(
+            cache_key,
+            data,
+            timeout=current_app.config.get('CACHE_DEFAULT_TIMEOUT', 300)
+        )
+        return data
+
+    def _invalidate_cache(self, *patterns: str) -> None:
+        """Invalidate cache entries matching patterns"""
+        if not current_app.config.get('CACHE_ENABLED', False):
+            return
+
+        try:
+            for pattern in patterns:
+                current_app.cache.delete_pattern(pattern)
+        except Exception as e:
+            log.error(f"Error invalidating cache: {str(e)}")
+
+    # Custom Actions
+    @action("merge_selected", "Merge Records", "Are you sure you want to merge these records?", "fa-compress")
+    @handle_errors
+    def merge_selected(self, items: List[Any]) -> Response:
+        """Merge selected records"""
+        if len(items) < 2:
+            flash(_("Select at least two records to merge"), "error")
+            return redirect(self.get_redirect())
+
+        if request.method == 'POST':
+            try:
+                primary_record = items[0]
+                for item in items[1:]:
+                    self._merge_records(primary_record, item)
+                flash(_("Records merged successfully"), "success")
+            except Exception as e:
+                flash(str(e), "error")
+            return redirect(self.get_redirect())
+
+        return self.render_template(
+            'merge_records.html',
+            items=items,
+            columns=self.edit_columns
+        )
+
+    def _merge_records(self, primary: Any, secondary: Any) -> None:
+        """Merge two records"""
+        for column in self.edit_columns:
+            primary_value = getattr(primary, column, None)
+            secondary_value = getattr(secondary, column, None)
+
+            if primary_value is None and secondary_value is not None:
+                setattr(primary, column, secondary_value)
+
+        self.datamodel.session.delete(secondary)
+        self.datamodel.session.commit()
+
+    # Error Handlers
+    @handle_errors
+    def _handle_view_exception(self, exception: Exception) -> Response:
+        """Handle view exceptions"""
+        log.error(f"View exception: {str(exception)}")
+
+        if isinstance(exception, PermissionError):
+            flash(_("You don't have permission to perform this action"), "error")
+        elif isinstance(exception, ValueError):
+            flash(str(exception), "error")
+        else:
+            flash(_("An error occurred while processing your request"), "error")
+
+        return redirect(self.get_redirect())
+
+
+    # Security Methods
+    def _check_permission(self, permission_name: str) -> bool:
+        """Check user permission"""
+        return self.appbuilder.sm.has_access(
+            permission_name,
+            self.class_permission_name
+        )
+
+    def _get_user_roles(self) -> List[str]:
+        """Get current user roles"""
+        return [role.name for role in g.user.roles]
+
+    def _check_item_permissions(self, item: Any) -> bool:
+        """Check item-level permissions"""
+        if hasattr(item, 'check_permission'):
+            return item.check_permission(g.user)
+        return True
+
+    def _log_action(self, action: str, item: Any, changes: dict = None) -> None:
+        """Log model changes"""
+        try:
+            log_entry = {
+                'action': action,
+                'model': self.__class__.__name__,
+                'item_id': getattr(item, 'id', None),
+                'user_id': g.user.id,
+                'timestamp': datetime.utcnow(),
+                'changes': changes or {},
+                'ip_address': request.remote_addr,
+                'user_agent': request.user_agent.string
+            }
+
+            # Log to database
+            AuditLog.create(**log_entry)
+
+            # Log to application logger
+            logging.info(f"Audit: {json.dumps(log_entry)}")
+
+        except Exception as e:
+            logging.error(f"Audit logging error: {str(e)}")
+
+    # Helper Methods
+    def _get_field_value(self, item: Any, field_name: str) -> Any:
+        """Get field value with proper formatting"""
+        value = getattr(item, field_name, None)
+        formatter = self.formatters_columns.get(field_name)
+        if formatter and value is not None:
+            return formatter(value)
+        return value
+
+    def _set_field_value(self, item: Any, field_name: str, value: Any) -> None:
+        """Set field value with proper processing"""
+        try:
+            processed_value = self._process_form_field(field_name, value)
+            setattr(item, field_name, processed_value)
+        except Exception as e:
+            raise ValueError(f"Error setting {field_name}: {str(e)}")
+
+    def _get_related_model(self, field_name: str) -> Optional[Any]:
+        """Get related model for a field"""
+        try:
+            column = getattr(self.datamodel.obj, field_name)
+            if hasattr(column, 'property') and hasattr(column.property, 'mapper'):
+                return column.property.mapper.class_
+        except Exception:
+            pass
+        return None
+
+
+    def process_form_post(self, form: Any, is_created: bool = False) -> None:
+        """Process form after submission"""
+        try:
+            self._validate_form(form, not is_created)
+            self._process_relationships(form)
+            self._handle_file_uploads(form)
+            self._update_audit_fields(form)
+        except Exception as e:
+            raise ValueError(f"Form processing error: {str(e)}")
+
+    def _process_relationships(self, form: Any) -> None:
+        """Process relationship fields"""
+        for col in self.edit_columns:
+            if hasattr(form, col):
+                field = getattr(form, col)
+                if hasattr(field, 'process_relationships'):
+                    field.process_relationships()
+
+    def _handle_file_uploads(self, form: Any) -> None:
+        """Process file upload fields"""
+        if not self.has_file_upload:
+            return
+
+        for field_name in self.upload_columns:
+            field = getattr(form, field_name, None)
+            if field and field.data:
+                self._process_file_field(field_name, field.data)
+
+
+
+    @staticmethod
+    def _get_user_id() -> Optional[int]:
+        """Get current user ID safely"""
+        try:
+            return g.user.id if hasattr(g, 'user') else None
+        except Exception:
+            return None
+
+    def is_editable(self, item: Any) -> bool:
+        """Check if item is editable"""
+        if not self.can_edit:
+            return False
+
+        if hasattr(item, 'is_editable'):
+            return item.is_editable()
+
+        if hasattr(item, 'created_by_id'):
+            return item.created_by_id == self._get_user_id()
+
+        return True
+
+    def is_deletable(self, item: Any) -> bool:
+        """Check if item is deletable"""
+        if not self.can_delete:
+            return False
+
+        if hasattr(item, 'is_deletable'):
+            return item.is_deletable()
+
+        if hasattr(item, 'created_by_id'):
+            return item.created_by_id == self._get_user_id()
+
+        return True
 
 """
 {% if not single_file %}

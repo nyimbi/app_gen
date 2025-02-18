@@ -1,0 +1,505 @@
+{% extends 'modelview/base.html' %} {% block content %}
+<div class="import-wizard-container">
+    {# Wizard Header #}
+    <div class="wizard-header">
+        <h3>
+            <i class="fa fa-upload"></i>
+            {{ _('Import Data') }}: {{ modelview_name }}
+        </h3>
+
+        {# Progress Steps #}
+        <div class="wizard-steps">
+            <div
+                class="step {% if step == 'upload' %}active{% endif %}"
+                data-step="upload"
+            >
+                <div class="step-number">1</div>
+                <div class="step-label">{{ _('Upload File') }}</div>
+            </div>
+            <div
+                class="step {% if step == 'mapping' %}active{% endif %}"
+                data-step="mapping"
+            >
+                <div class="step-number">2</div>
+                <div class="step-label">{{ _('Map Fields') }}</div>
+            </div>
+            <div
+                class="step {% if step == 'validate' %}active{% endif %}"
+                data-step="validate"
+            >
+                <div class="step-number">3</div>
+                <div class="step-label">{{ _('Validate Data') }}</div>
+            </div>
+            <div
+                class="step {% if step == 'import' %}active{% endif %}"
+                data-step="import"
+            >
+                <div class="step-number">4</div>
+                <div class="step-label">{{ _('Import') }}</div>
+            </div>
+        </div>
+    </div>
+
+    {# Wizard Content #}
+    <div class="wizard-content">
+        {# Step 1: File Upload #}
+        <div
+            class="wizard-step {% if step != 'upload' %}hidden{% endif %}"
+            id="step-upload"
+        >
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h4 class="panel-title">{{ _('Upload Data File') }}</h4>
+                </div>
+                <div class="panel-body">
+                    {# File Upload Form #}
+                    <form
+                        action="{{ url_for('.import_upload') }}"
+                        class="dropzone"
+                        id="import-dropzone"
+                    >
+                        {{ csrf_token() }}
+                        <div class="fallback">
+                            <input
+                                name="file"
+                                type="file"
+                                accept="{{ allowed_extensions|join(',') }}"
+                            />
+                        </div>
+                    </form>
+
+                    {# File Type Info #}
+                    <div class="file-type-info">
+                        <h5>{{ _('Supported File Types') }}</h5>
+                        <ul class="list-unstyled">
+                            {% for ext, info in file_types.items() %}
+                            <li>
+                                <i class="fa fa-file-{{ info.icon }}-o"></i>
+                                <strong>{{ ext|upper }}</strong>: {{
+                                info.description }}
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+
+                    {# Template Download #}
+                    <div class="template-download">
+                        <h5>{{ _('Download Template') }}</h5>
+                        <p>
+                            {{ _('Use our template file to ensure correct data
+                            format:') }}
+                        </p>
+                        <div class="btn-group">
+                            {% for format in template_formats %}
+                            <a
+                                href="{{ url_for('.download_template', format=format) }}"
+                                class="btn btn-default"
+                            >
+                                <i class="fa fa-download"></i>
+                                {{ format|upper }}
+                            </a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# Step 2: Field Mapping #}
+        <div
+            class="wizard-step {% if step != 'mapping' %}hidden{% endif %}"
+            id="step-mapping"
+        >
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h4 class="panel-title">{{ _('Map Fields') }}</h4>
+                </div>
+                <div class="panel-body">
+                    <form id="mapping-form">
+                        {# File Preview #}
+                        <div class="file-preview">
+                            <h5>{{ _('File Preview') }}</h5>
+                            <div class="table-responsive">
+                                <table
+                                    class="table table-bordered table-striped"
+                                >
+                                    <thead>
+                                        <tr>
+                                            {% for header in file_headers %}
+                                            <th>{{ header }}</th>
+                                            {% endfor %}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for row in preview_data %}
+                                        <tr>
+                                            {% for cell in row %}
+                                            <td>{{ cell }}</td>
+                                            {% endfor %}
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        {# Field Mapping #}
+                        <div class="field-mapping">
+                            <h5>{{ _('Map Fields') }}</h5>
+                            <div class="mapping-grid">
+                                {% for header in file_headers %}
+                                <div class="mapping-row">
+                                    <div class="source-field">
+                                        <label>{{ header }}</label>
+                                    </div>
+                                    <div class="mapping-arrow">
+                                        <i class="fa fa-arrow-right"></i>
+                                    </div>
+                                    <div class="target-field">
+                                        <select
+                                            name="mapping[{{ header }}]"
+                                            class="form-control"
+                                        >
+                                            <option value="">
+                                                {{ _('- Ignore this field -') }}
+                                            </option>
+                                            {% for field in model_fields %}
+                                            <option
+                                                value="{{ field.name }}"
+                                                {%
+                                                if
+                                                field.name|lower=""
+                                                ="header|lower"
+                                                %}selected{%
+                                                endif
+                                                %}
+                                            >
+                                                {{ field.label }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        {# Import Options #}
+                        <div class="import-options">
+                            <h5>{{ _('Import Options') }}</h5>
+                            <div class="checkbox">
+                                <label>
+                                    <input
+                                        type="checkbox"
+                                        name="skip_header"
+                                        value="1"
+                                        checked
+                                    />
+                                    {{ _('Skip header row') }}
+                                </label>
+                            </div>
+                            <div class="checkbox">
+                                <label>
+                                    <input
+                                        type="checkbox"
+                                        name="update_existing"
+                                        value="1"
+                                    />
+                                    {{ _('Update existing records') }}
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label
+                                    >{{ _('Identify existing records by')
+                                    }}</label
+                                >
+                                <select name="identify_by" class="form-control">
+                                    {% for field in unique_fields %}
+                                    <option value="{{ field.name }}">
+                                        {{ field.label }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        {# Step 3: Validation #}
+        <div
+            class="wizard-step {% if step != 'validate' %}hidden{% endif %}"
+            id="step-validate"
+        >
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h4 class="panel-title">{{ _('Validate Data') }}</h4>
+                </div>
+                <div class="panel-body">
+                    {# Validation Summary #}
+                    <div class="validation-summary">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <div class="stat-box stat-total">
+                                    <div class="stat-label">
+                                        {{ _('Total Records') }}
+                                    </div>
+                                    <div class="stat-value">
+                                        {{ validation_stats.total }}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="stat-box stat-valid">
+                                    <div class="stat-label">
+                                        {{ _('Valid') }}
+                                    </div>
+                                    <div class="stat-value">
+                                        {{ validation_stats.valid }}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="stat-box stat-warnings">
+                                    <div class="stat-label">
+                                        {{ _('Warnings') }}
+                                    </div>
+                                    <div class="stat-value">
+                                        {{ validation_stats.warnings }}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="stat-box stat-errors">
+                                    <div class="stat-label">
+                                        {{ _('Errors') }}
+                                    </div>
+                                    <div class="stat-value">
+                                        {{ validation_stats.errors }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {# Validation Results #}
+                    <div class="validation-results">
+                        <h5>{{ _('Validation Results') }}</h5>
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>{{ _('Row') }}</th>
+                                        {% for field in mapped_fields %}
+                                        <th>{{ field.label }}</th>
+                                        {% endfor %}
+                                        <th>{{ _('Status') }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for result in validation_results %}
+                                    <tr class="{{ result.status }}">
+                                        <td>{{ result.row }}</td>
+                                        {% for field in mapped_fields %}
+                                        <td
+                                            class="{% if field.name in result.errors %}has-error{% endif %}"
+                                        >
+                                            {{ result.data[field.name] }} {% if
+                                            field.name in result.errors %}
+                                            <div class="error-message">
+                                                {{ result.errors[field.name] }}
+                                            </div>
+                                            {% endif %}
+                                        </td>
+                                        {% endfor %}
+                                        <td>
+                                            <span
+                                                class="status-badge status-{{ result.status }}"
+                                            >
+                                                {{ result.status|title }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {# Error Summary #} {% if validation_stats.errors > 0 %}
+                    <div class="error-summary">
+                        <h5>{{ _('Error Summary') }}</h5>
+                        <ul class="error-list">
+                            {% for error in error_summary %}
+                            <li>
+                                <span class="error-count"
+                                    >{{ error.count }}</span
+                                >
+                                {{ error.message }}
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {# Step 4: Import #}
+        <div
+            class="wizard-step {% if step != 'import' %}hidden{% endif %}"
+            id="step-import"
+        >
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h4 class="panel-title">{{ _('Import Data') }}</h4>
+                </div>
+                <div class="panel-body">
+                    {# Import Summary #}
+                    <div class="import-summary">
+                        <div class="alert alert-info">
+                            <h5>{{ _('Import Summary') }}</h5>
+                            <ul>
+                                <li>
+                                    {{ _('Records to import') }}: {{
+                                    import_stats.total }}
+                                </li>
+                                <li>
+                                    {{ _('New records') }}: {{ import_stats.new
+                                    }}
+                                </li>
+                                <li>
+                                    {{ _('Updates') }}: {{ import_stats.updates
+                                    }}
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    {# Import Progress #}
+                    <div class="import-progress hidden">
+                        <div class="progress">
+                            <div
+                                class="progress-bar"
+                                role="progressbar"
+                                style="width: 0%"
+                            >
+                                <span class="progress-text">0%</span>
+                            </div>
+                        </div>
+                        <div class="progress-stats">
+                            <span class="records-processed">0</span> /
+                            <span class="total-records">0</span>
+                            {{ _('records processed') }}
+                        </div>
+                    </div>
+
+                    {# Import Results #}
+                    <div class="import-results hidden">
+                        <h5>{{ _('Import Results') }}</h5>
+                        <div class="results-summary">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="result-stat">
+                                        <div class="stat-label">
+                                            {{ _('Processed') }}
+                                        </div>
+                                        <div class="stat-value processed-count">
+                                            0
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="result-stat">
+                                        <div class="stat-label">
+                                            {{ _('Successful') }}
+                                        </div>
+                                        <div class="stat-value success-count">
+                                            0
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="result-stat">
+                                        <div class="stat-label">
+                                            {{ _('Failed') }}
+                                        </div>
+                                        <div class="stat-value error-count">
+                                            0
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Wizard Footer #}
+    <div class="wizard-footer">
+        <div class="wizard-buttons">
+            <button
+                type="button"
+                class="btn btn-default"
+                id="prev-step"
+                {%
+                if
+                step=""
+                ="upload"
+                %}disabled{%
+                endif
+                %}
+            >
+                <i class="fa fa-arrow-left"></i> {{ _('Previous') }}
+            </button>
+            <button
+                type="button"
+                class="btn btn-primary"
+                id="next-step"
+                {%
+                if
+                step=""
+                ="import"
+                %}disabled{%
+                endif
+                %}
+            >
+                {{ _('Next') }} <i class="fa fa-arrow-right"></i>
+            </button>
+            <button
+                type="button"
+                class="btn btn-success hidden"
+                id="start-import"
+            >
+                <i class="fa fa-check"></i> {{ _('Start Import') }}
+            </button>
+        </div>
+        <button type="button" class="btn btn-link" onclick="history.back()">
+            {{ _('Cancel Import') }}
+        </button>
+    </div>
+</div>
+
+{% block tail_js %} {{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeImportWizard({
+            uploadUrl: "{{ url_for('.import_upload') }}",
+            validateUrl: "{{ url_for('.import_validate') }}",
+            importUrl: "{{ url_for('.import_process') }}",
+            maxFileSize: {{ max_file_size }},
+            allowedExtensions: {{ allowed_extensions|tojson }},
+            csrf_token: "{{ csrf_token() }}",
+            translations: {
+                uploadError: "{{ _('Error uploading file') }}",
+                validationError: "{{ _('Error validating data') }}",
+                importError: "{{ _('Error during import') }}",
+                confirmCancel: "{{ _('Are you sure you want to cancel the import?') }}"
+            }
+        });
+    });
+</script>
+{% endblock %}

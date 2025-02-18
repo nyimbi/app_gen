@@ -1,0 +1,1156 @@
+{#
+This template includes:
+
+1. Basic view configuration (titles, route base)
+2. List view configuration (columns, widgets, filters)
+3. Show view configuration
+4. Add and Edit form configurations
+5. Form field configurations with widgets and validators
+6. Related views for relationships
+7. Custom base query
+8. Pagination settings
+9. CRUD operation permissions
+10. Export functionality
+11. Column exclusions for different operations
+12. Description columns
+13. A custom action (toggle_active)
+14. Custom methods for post-add, post-update, and pre-delete operations
+15. Method to override the default route base
+16. A custom API method
+17. View registration with AppBuilder (for non-single-file mode)
+#}
+
+{%- if not single_file %}
+from datetime import datetime, date
+from typing import Dict, List, Any, Optional
+import types
+import csv
+import io
+import json
+from flask import (
+    abort, flash, redirect, url_for, send_file,
+    current_app, request, Response, Markup
+)
+from sqlalchemy import or_, and_, func, types as sa_types
+from sqlalchemy.types import JSON, DateTime, Numeric, Date, Time, Enum
+from sqlalchemy.dialects.postgresql import JSONB, ARRAY
+from flask_appbuilder import ModelView, expose, action, has_access
+from flask_appbuilder.models.sqla.interface import SQLAInterface
+from flask_appbuilder.filemanager import get_file_original_name
+from flask_appbuilder.security.decorators import has_access, permission_name
+from flask_appbuilder.models.filters import FilterEqual, FilterNotEqual
+from flask_appbuilder.models.sqla.filters import (
+    FilterGreater, FilterEqualFunction, FilterStartsWith,
+    FilterContains, FilterEndsWith, FilterNotEndsWith,
+    FilterRelationManyToManyEqual, FilterRelationOneToManyEqual,
+    FilterRelationOneToManyNotEqual, FilterSmaller
+)
+{%- endif %}
+
+def get_user():
+    """Get current user"""
+    return current_user.id
+
+# Security helper functions
+def is_admin():
+    """Check if current user is admin"""
+    return any(role.name == 'Admin' for role in current_user.roles)
+
+# Add template filters
+@appbuilder.app.template_filter('currency')
+def currency_filter(value):
+    """Format value as currency"""
+    if value is None or not isinstance(value, (int, float)):
+        return '-'
+    return f"${value:,.2f}"
+
+@appbuilder.app.template_filter('datetime')
+def datetime_filter(value):
+    """Format datetime"""
+    if value is None:
+        return '-'
+    return value.strftime('%Y-%m-%d %H:%M')
+
+@appbuilder.app.template_filter('timeuntil')
+def timeuntil_filter(value):
+    """Format time until expiry"""
+    if value is None:
+        return '-'
+    now = datetime.now()
+    if value < now:
+        return 'Expired'
+    delta = value - now
+    days = delta.days
+    hours = delta.seconds // 3600
+    if days > 0:
+        return f'{days}d {hours}h'
+    return f'{hours}h'
+
+@appbuilder.app.template_filter('status_badge')
+def status_badge_filter(status):
+    """Get Bootstrap badge class for status"""
+    status_classes = {
+        'pending': 'warning',
+        'completed': 'success',
+        'failed': 'danger',
+        'processing': 'info',
+        'reversed': 'secondary'
+    }
+    return status_classes.get(status.lower(), 'primary')
+
+@appbuilder.app.template_filter('priority_badge')
+def priority_badge_filter(priority):
+    """Get Bootstrap badge class for priority"""
+    priority_classes = {
+        'high': 'danger',
+        'medium': 'warning',
+        'low': 'info'
+    }
+    return priority_classes.get(priority.lower(), 'secondary')
+
+@appbuilder.app.template_filter('number')
+def number_filter(value):
+    """Format number with thousands separator"""
+    return "{:,}".format(value)
+
+
+# Custom formatters
+class BaseFormatter:
+    """Base formatter class for displaying related model data"""
+    def __init__(self, model):
+        self.model = model
+
+    def format(self, value):
+        if value is None:
+            return ''
+        obj = db.session.get(self.model, value)
+        return str(obj) if obj else str(value)
+
+def get_user_formatter(value):
+    """Format user ID to display username"""
+    if value is None:
+        return ''
+    user = db.session.get(User, value)
+    return Markup(f'<span>{user.username if user else value}</span>')
+
+class FilterMixin:
+    """Mixin class to add advanced filtering capabilities to views
+
+    This mixin provides methods to:
+    1. Apply role-based filters
+    2. Handle client context filtering
+    3. Apply user-specific filters
+    4. Manage filter combinations
+    5. Handle filter persistence
+
+    Attributes:
+        base_filter_roles (dict): Mapping of roles to their base filters
+        default_filters (list): List of default filters to always apply
+        filter_converter (dict): Custom filter type conversions
+        persist_filters (bool): Whether to persist filters across sessions
+    """
+
+    base_filter_roles = {
+        'Admin': [],
+        'Client': [('client_id', FilterEqualFunction, lambda: get_filter_client_id())],
+        'User': [('user_id', FilterEqualFunction, lambda: get_filter_user_id())]
+    }
+    default_filters = []
+    filter_converter = {}
+    persist_filters = True
+
+    def get_base_filters(self):
+        """Get base filters based on user role and context
+
+        Returns:
+            list: List of filter tuples to apply
+        """
+        filters = []
+
+        # Add role-based filters
+        if not is_admin():
+            if hasattr(self.datamodel.obj, 'client_id'):
+                client_ids = get_user_clients()
+                if client_ids:
+                    filters.append(('client_id', 'in', client_ids))
+
+            if hasattr(self.datamodel.obj, 'user_id'):
+                filters.append(('user_id', FilterEqualFunction, get_filter_user_id))
+
+        # Add default filters
+        filters.extend(self.default_filters)
+
+        return filters
+
+    def apply_filters(self, query):
+        """Apply all filters to query
+
+        Args:
+            query: SQLAlchemy query object
+
+        Returns:
+            Modified query with filters applied
+        """
+        filters = self.get_base_filters()
+        for filter_name, filter_func, filter_arg in filters:
+            if callable(filter_arg):
+                filter_arg = filter_arg()
+            if filter_arg is not None:
+                query = query.filter(filter_func(getattr(self.datamodel.obj, filter_name), filter_arg))
+        return query
+
+    def pre_update(self, item):
+        """Check permissions before update
+
+        Args:
+            item: Model instance being updated
+
+        Raises:
+            PermissionError: If user doesn't have permission
+        """
+        if not is_admin():
+            if hasattr(item, 'client_id'):
+                client_ids = get_user_clients()
+                if client_ids and item.client_id not in client_ids:
+                    raise PermissionError("You don't have permission to update this item")
+
+    def get_user_filters(self):
+        """Get filters specific to current user
+
+        Returns:
+            list: User-specific filters
+        """
+        filters = []
+        for role in current_user.roles:
+            role_filters = self.base_filter_roles.get(role.name, [])
+            filters.extend(role_filters)
+        return filters
+
+    def combine_filters(self, base_filters, user_filters):
+        """Combine different types of filters
+
+        Args:
+            base_filters (list): Base filters from view
+            user_filters (list): User-specific filters
+
+        Returns:
+            list: Combined and deduplicated filters
+        """
+        all_filters = []
+        seen = set()
+
+        for f in base_filters + user_filters:
+            filter_key = (f[0], str(f[1]))
+            if filter_key not in seen:
+                all_filters.append(f)
+                seen.add(filter_key)
+
+        return all_filters
+
+
+class {{ table_name|capitalize }}ModelView(ModelView):
+    datamodel = SQLAInterface({{ table_name|capitalize }})
+
+    # Related views (for relationships)
+    {%- for relationship in relationships %}
+    # related_views = [
+    #    ({{ relationship.referred_table|capitalize }}ModelView), #, "{{ relationship.constrained_column }}"),
+    # ]
+    {%- endfor %}
+
+    # Template configuration
+    template_folder = "modelview"
+    list_template = "list.html"
+    edit_template = "form.html"
+    add_template = "form.html"
+    show_template = "show.html"
+
+    # Basic configuration
+    route_base = "/{{ table_name.lower() }}"
+    list_title = "{{ table_name|capitalize }} List"
+    show_title = "{{ table_name|capitalize }} Details"
+    add_title = "Add {{ table_name|capitalize }}"
+    edit_title = "Edit {{ table_name|capitalize }}"
+    custom_template = ""
+
+    # Field type configurations
+    field_type_config = {
+        {% for column in columns %}
+        '{{ column.name }}': {
+            'type': '{{ column.type }}',
+            {% if column.type == 'JSON' or column.type == 'JSONB' %}
+            'widget': 'json_editor',
+            'formatter': '_json_formatter',
+            {% elif column.type == 'Date' %}
+            'widget': 'date',
+            'formatter': 'date_formatter',
+            {% elif column.type == 'DateTime' %}
+            'widget': 'datetime',
+            'formatter': 'datetime_formatter',
+            {% elif column.type == 'Time' %}
+            'widget': 'time',
+            'formatter': 'time_formatter',
+            {% elif column.type == 'Enum' %}
+            'widget': 'select2',
+            'formatter': 'enum_formatter',
+            {% elif column.type == 'Boolean' %}
+            'widget': 'switch',
+            'formatter': 'boolean_formatter',
+            {% elif 'amount' in column.name.lower() or 'price' in column.name.lower() %}
+            'widget': 'money',
+            'formatter': 'currency_formatter',
+            {% endif %}
+            'validators': [
+                {% if not column.nullable %}
+                'DataRequired()',
+                {% endif %}
+                {% if column.type == 'String' and column.length %}
+                'Length(max={{ column.length }})',
+                {% endif %}
+            ]
+        },
+        {% endfor %}
+
+    # List view configuration
+    list_columns = {{ list_columns }}
+    list_widget = ListWidget
+    label_columns = {
+        {%- for column in columns -%}
+        "{{ column.name }}": _("{{ column.label|capitalize }}"),
+        {%- endfor -%}
+    }
+    search_columns = {{ list_columns }}
+    base_order = ("id", "asc")
+    base_filters = [["id", FilterGreater, 0]]
+
+    # Show view configuration
+    show_columns = {{ list_columns }}
+    show_widget = ShowWidget
+
+    # Add and Edit form configuration
+    add_columns = [
+        {%- for column in columns if not column.primary_key -%}
+        "{{ column.name }}",
+        {%- endfor -%}
+    ]
+    edit_columns = [
+        {%- for column in columns if not column.primary_key -%}
+        "{{ column.name }}",
+        {%- endfor -%}
+    ]
+    add_widget = FormWidget
+    edit_widget = FormWidget
+
+    # File upload configuration
+    upload_folder = "uploads"
+    file_allowed_extensions = ["pdf", "doc", "docx", "xls", "xlsx", "txt", "csv"]
+    image_allowed_extensions = ["jpg", "jpeg", "png", "gif"]
+
+    def _handle_file_upload(self, field_name, file_data):
+        """Handle file upload for a given field"""
+        if not file_data:
+            return None
+
+        filename = secure_filename(file_data.filename)
+        file_extension = filename.rsplit('.', 1)[1].lower()
+
+        if field_name.endswith(('_img', '_photo')):
+            if file_extension not in self.image_allowed_extensions:
+                raise ValueError(f"Invalid image format. Allowed: {self.image_allowed_extensions}")
+        elif file_extension not in self.file_allowed_extensions:
+            raise ValueError(f"Invalid file format. Allowed: {self.file_allowed_extensions}")
+
+        # Save file and return path
+        file_path = os.path.join(self.upload_folder, filename)
+        file_data.save(file_path)
+        return file_path
+
+    # Fieldset configuration for add/edit forms
+    fieldsets = [
+        {% for section, fields in fieldsets.items() %}
+        (
+            '{{ section }}',
+            {
+                'fields': {{ fields }},
+                'expanded': {% if section in ['Basic Information', 'Contact Details'] %}True{% else %}False{% endif %},
+                'icon': '{{ fieldset_icons.get(section, "fa-folder") }}',
+                'description': '{{ section }} fields'
+            }
+        ),
+        {% endfor %}
+    ]
+
+    # Show view fieldsets
+    show_fieldsets = [
+        {% for section, fields in fieldsets.items() %}
+        (
+            '{{ section }}',
+            {
+                'fields': {{ fields }},
+                'expanded': {% if section in ['Basic Information'] %}True{% else %}False{% endif %}
+            }
+        ),
+        {% endfor %}
+    ]
+
+    # Add fieldset classes for custom styling
+    fieldset_classes = {
+        {% for section in fieldsets.keys() %}
+        '{{ section }}': 'fieldset-{{ section|lower|replace(" ", "-") }}',
+        {% endfor %}
+    }
+
+    # Fieldset display configuration
+    fieldset_display_config = {
+        'collapsible': True,
+        'default_expanded': ['Basic Information'],
+        'column_classes': {
+            'label_columns': 'col-md-2',
+            'field_columns': 'col-md-10'
+        },
+        'row_classes': 'form-row',
+        'fieldset_classes': fieldset_classes
+    }
+
+    # Custom fieldset order for different views
+    add_fieldset_order = [
+        'Basic Information',
+        'Contact Details',
+        'Location',
+        'Dates & Times',
+        'Status & Settings',
+        'Additional Information'
+    ]
+
+    edit_fieldset_order = [
+        'Basic Information',
+        'Status & Settings',
+        'Contact Details',
+        'Additional Information'
+    ]
+
+    show_fieldset_order = [
+        'Basic Information',
+        'Contact Details',
+        'Status & Settings',
+        'Additional Information',
+        'System Fields'
+    ]
+
+    def render_form(self, form, **kwargs):
+        self._init_vars()
+        form._fields = self._get_fields_in_fieldset_order(form._fields)
+        kwargs['fieldset_display_config'] = self.fieldset_display_config
+        return super().render_form(form, **kwargs)
+
+    def _get_fields_in_fieldset_order(self, fields):
+        """Reorder form fields according to fieldset order"""
+        ordered_fields = {}
+        fieldset_order = (
+            self.add_fieldset_order
+            if self.action == 'add'
+            else self.edit_fieldset_order
+        )
+
+        # First add fields in fieldset order
+        for section in fieldset_order:
+            if section in self.fieldsets:
+                for field_name in self.fieldsets[section]['fields']:
+                    if field_name in fields:
+                        ordered_fields[field_name] = fields[field_name]
+
+        # Add any remaining fields
+        for field_name, field in fields.items():
+            if field_name not in ordered_fields:
+                ordered_fields[field_name] = field
+
+        return ordered_fields
+
+
+    # Form field configurations
+
+    {%- for column_name, field_info in form_fields.items() %}
+    {{ column_name }} = {
+        "widget": {{ field_info.widget }},
+        "validators": [{{ field_info.validators|join(', ') }}],
+        "description": _("Enter {{ column_name|replace('_', ' ')|capitalize }}"),}
+    {%- endfor %}
+
+
+    # Custom queries
+    # base_query = db.session.query({{ table_name|capitalize }}).filter({{ table_name|capitalize }}.is_active == True)
+
+    # Pagination settings
+    page_size = 20
+    can_set_page_size = True
+
+    # CRUD operation permissions
+    can_create = True
+    can_edit = True
+    can_delete = True
+    can_show = True
+
+    # Export functionality
+    can_export = True
+    export_types = ["csv", "json", "yaml", "xlsx"]
+
+    # Additional view options
+    search_exclude_columns = ["password", "secret_key"]
+    add_exclude_columns = ["created_at", "updated_at"]
+    edit_exclude_columns = ["created_at", "updated_at"]
+    show_exclude_columns = []
+    description_columns = {
+        {%- for column in columns -%}
+        "{{ column.name }}": _("Description for {{ column.name }}"),
+        {%- endfor -%}
+    }
+
+    # Custom actions
+    @action("toggle_active", "Toggle Active", "Are you sure you want to toggle the active status?", "fa-check")
+    def toggle_active(self, items):
+        for item in items:
+            item.active = not item.active
+            db.session.add(item)
+        db.session.commit()
+        flash("Toggled active status for selected items", "success")
+        return redirect(self.get_redirect())
+
+    @action("batch_update", "Batch Update", "Are you sure you want to update these items?", "fa-edit")
+    def batch_update(self, items):
+        """Batch update selected items"""
+        if not items:
+            flash("No items selected", "warning")
+            return redirect(self.get_redirect())
+
+        # Get common editable fields
+        editable_cols = set(self.edit_columns)
+        for item in items:
+            editable_cols &= set(item.__table__.columns.keys())
+
+        if request.method == 'POST':
+            # Process form data
+            for field in editable_cols:
+                value = request.form.get(field)
+                if value:
+                    for item in items:
+                        setattr(item, field, value)
+
+            db.session.commit()
+            flash(f"Updated {len(items)} items", "success")
+            return redirect(self.get_redirect())
+
+        # Show batch update form
+        return self.render_template(
+            'batch_update.html',
+            items=items,
+            editable_columns=list(editable_cols)
+        )
+
+    def _json_formatter(self, value):
+        """Format JSON fields for display"""
+        if value is None:
+            return ""
+        try:
+            if isinstance(value, str):
+                value = json.loads(value)
+            return Markup(f"<pre>{json.dumps(value, indent=2)}</pre>")
+        except:
+            return str(value)
+
+    def _json_edit_field(self, field_name):
+        """Create a custom field for editing JSON data"""
+        return {
+            "field_name": field_name,
+            "widget": BS3TextAreaFieldWidget(),
+            "validators": [
+                lambda form, field: self._validate_json(form, field)
+            ],
+            "description": _("Enter valid JSON data")
+        }
+
+    def _validate_json(self, form, field):
+        """Validate JSON input"""
+        if field.data:
+            try:
+                json.loads(field.data)
+            except json.JSONDecodeError as e:
+                raise validators.ValidationError(f"Invalid JSON: {str(e)}")
+
+    # Custom formatters for different field types
+    formatters_columns = {
+        {% for column in columns %}
+        {% if column.type == 'JSON' or column.type == 'JSONB' %}
+        '{{ column.name }}': _json_formatter,
+        {% elif column.type == 'Numeric' %}
+        '{{ column.name }}': lambda x: number_filter(x) if x is not None else '',
+        {% elif 'amount' in column.name.lower() or 'price' in column.name.lower() or 'cost' in column.name.lower() %}
+        '{{ column.name }}': lambda x: currency_filter(x) if x is not None else '',
+        {% elif column.type == 'DateTime' %}
+        '{{ column.name }}': lambda x: datetime_filter(x) if x is not None else '',
+        {% elif column.type == 'Date' %}
+        '{{ column.name }}': lambda x: x.strftime('%Y-%m-%d') if x is not None else '',
+        {% endif %}
+        {% endfor %}
+    }
+
+    # Enhanced CSV export functionality
+    @action("export_csv", "Export CSV", "Export selected records to CSV?", "fa-file-text")
+    def export_csv(self, items):
+        if not items:
+            flash("No records selected for export", "warning")
+            return redirect(self.get_redirect())
+
+        # Create in-memory file
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        # Write headers
+        columns = self.list_columns
+        writer.writerow([self.label_columns.get(col, col) for col in columns])
+
+        # Write data
+        for item in items:
+            row = []
+            for col in columns:
+                value = getattr(item, col, None)
+
+                # Apply formatters for special data types
+                if col in self.formatters_columns:
+                    if isinstance(self.formatters_columns[col], types.FunctionType):
+                        value = self.formatters_columns[col](value)
+                    else:
+                        value = self.formatters_columns[col].format(value)
+
+                # Handle specific data types
+                if isinstance(value, (datetime, date)):
+                    value = value.isoformat()
+                elif isinstance(value, (dict, list)):
+                    value = json.dumps(value)
+
+                row.append(str(value) if value is not None else '')
+
+            writer.writerow(row)
+
+        # Prepare response
+        output.seek(0)
+        return send_file(
+            io.BytesIO(output.getvalue().encode('utf-8')),
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name=f'{self.__class__.__name__}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+        )
+
+    # Field type detection and configuration
+    def _get_field_widget(self, column_name, column_type):
+        """Get appropriate widget based on field type"""
+        if isinstance(column_type, (JSON, JSONB)):
+            return self._json_edit_field(column_name)
+        return super()._get_field_widget(column_name, column_type)
+
+    # Add filter setup
+    def _init_filters(self):
+        """Initialize filters based on column types"""
+        super()._init_filters()
+
+        for column in self.datamodel.obj.__table__.columns:
+            if isinstance(column.type, (JSON, JSONB)):
+                self.filter_converter.add_filter(
+                    type(column.type),
+                    FilterContains,
+                    FilterNotEqual,
+                    FilterStartsWith,
+                    FilterEndsWith
+                )
+
+    def _apply_search_filter(self, query, search_value):
+        """Apply search filter across multiple columns"""
+        if not search_value:
+            return query
+
+        search_queries = []
+        for column in self.search_columns:
+            col_obj = getattr(self.datamodel.obj, column, None)
+            if col_obj is not None:
+                if isinstance(col_obj.type, (String, Text)):
+                    search_queries.append(col_obj.ilike(f"%{search_value}%"))
+                elif isinstance(col_obj.type, (Integer, Numeric)):
+                    try:
+                        val = float(search_value)
+                        search_queries.append(col_obj == val)
+                    except ValueError:
+                        continue
+
+        if search_queries:
+            query = query.filter(or_(*search_queries))
+        return query
+
+    def show(self, pk):
+        """Override show method to handle formatters"""
+        item = self.datamodel.get(pk)
+        if not item:
+            abort(404)
+        widgets = self._get_show_widget(pk)
+        self._apply_formatters(widgets)
+        return self._show(pk, widgets)
+
+    def _apply_formatters(self, widgets):
+        """Apply formatters to widgets based on field type"""
+        for widget in widgets:
+            if widget.name in self.formatters_columns:
+                widget.formatter = self.formatters_columns[widget.name]
+
+    def pre_update(self, item):
+        """Pre-process data before update"""
+        for column in self.datamodel.obj.__table__.columns:
+            if isinstance(column.type, (JSON, JSONB)):
+                value = getattr(item, column.name, None)
+                if isinstance(value, str):
+                    try:
+                        setattr(item, column.name, json.loads(value))
+                    except json.JSONDecodeError:
+                        flash(f"Invalid JSON in field {column.name}", "error")
+                        raise Exception(f"Invalid JSON in field {column.name}")
+
+    def process_form_post(self, form):
+        """Process form data after POST"""
+        form_data = super().process_form_post(form)
+
+        # Process JSON fields
+        for column in self.datamodel.obj.__table__.columns:
+            if isinstance(column.type, (JSON, JSONB)) and column.name in form_data:
+                try:
+                    if form_data[column.name]:
+                        form_data[column.name] = json.loads(form_data[column.name])
+                    else:
+                        form_data[column.name] = None
+                except json.JSONDecodeError:
+                    flash(f"Invalid JSON in field {column.name}", "error")
+                    raise Exception(f"Invalid JSON in field {column.name}")
+
+        return form_data
+
+    template_macros = {
+        'render_json': lambda value: Markup(f"<pre>{json.dumps(value, indent=2)}</pre>") if value else "",
+        'render_currency': lambda value: currency_filter(value),
+        'render_number': lambda value: number_filter(value),
+        'render_datetime': lambda value: datetime_filter(value),
+        'render_date': lambda value: value.strftime('%Y-%m-%d') if value else "",
+    }
+
+
+    def _init_related_fields(self):
+        """Initialize related fields based on foreign keys"""
+        for column in self.datamodel.obj.__table__.columns:
+            if column.foreign_keys:
+                fk = list(column.foreign_keys)[0]
+                referred_table = fk.column.table.name
+                referred_column = fk.column.name
+
+                # Add relationship field
+                setattr(self, f"{column.name}_field", {
+                    "widget": Select2AJAXWidget(
+                        endpoint=f'/api/{referred_table}/api/column/{referred_column}'
+                    ),
+                    "validators": [DataRequired()] if not column.nullable else [],
+                    "description": f"Select {referred_table}"
+                })
+
+    def pre_add_validation(self, form):
+        """Custom validation before adding record"""
+        for validator in self.validators_columns.get(form.name, []):
+            validator(form)
+
+    def pre_update_validation(self, form):
+        """Custom validation before updating record"""
+        for validator in self.validators_columns.get(form.name, []):
+            validator(form)
+
+     def post_add(self, item):
+        """Log after adding record"""
+        super().post_add(item)
+        self._log_action('add', item)
+
+    def post_update(self, item):
+        """Log after updating record"""
+        super().post_update(item)
+        self._log_action('update', item)
+
+    def post_delete(self, item):
+        """Log after deleting record"""
+        super().post_delete(item)
+        self._log_action('delete', item)
+
+    def _log_action(self, action_type, item):
+        """Log model changes"""
+        if hasattr(self.datamodel.obj, 'audit_log'):
+            log_entry = {
+                'action': action_type,
+                'timestamp': datetime.now(),
+                'user_id': g.user.id if hasattr(g, 'user') else None,
+                'item_id': item.id,
+                'changes': self._get_changes(item)
+            }
+            db.session.add(self.datamodel.obj.audit_log(**log_entry))
+            db.session.commit()
+
+    @action("export_excel", "Export Excel", "Export selected records to Excel?", "fa-file-excel-o")
+    def export_excel(self, items):
+        """Export selected items to Excel"""
+        if not items:
+            flash("No items selected for export", "warning")
+            return redirect(self.get_redirect())
+
+        # Create Excel file
+        output = io.BytesIO()
+        workbook = xlsxwriter.Workbook(output)
+        worksheet = workbook.add_worksheet()
+
+        # Write headers
+        headers = [self.label_columns.get(col, col) for col in self.list_columns]
+        for col, header in enumerate(headers):
+            worksheet.write(0, col, header)
+
+        # Write data
+        for row, item in enumerate(items, start=1):
+            for col, column in enumerate(self.list_columns):
+                value = getattr(item, column, '')
+                if column in self.formatters_columns:
+                    value = self.formatters_columns[column](value)
+                worksheet.write(row, col, value)
+
+        workbook.close()
+        output.seek(0)
+
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=f'{self.__class__.__name__}_export_{datetime.now():%Y%m%d_%H%M%S}.xlsx'
+        )
+
+    def _apply_custom_filters(self, query):
+        """Apply custom filters to query"""
+        for filter_name, filter_func in self.custom_filters.items():
+            filter_value = request.args.get(filter_name)
+            if filter_value:
+                query = filter_func(query, filter_value)
+        return query
+
+    def _apply_custom_ordering(self, query):
+        """Apply custom ordering to query"""
+        order_column = request.args.get('order_column', self.base_order[0])
+        order_direction = request.args.get('order_direction', self.base_order[1])
+
+        if order_column in self.custom_ordering:
+            query = self.custom_ordering[order_column](query, order_direction)
+        return query
+
+    # Override default route base
+    @classmethod
+    def set_route_base(cls, app, route_base):
+        cls.route_base = route_base
+
+    # Advanced Search Configuration
+    advanced_search_config = {
+        'enabled': True,
+        'search_mode': 'contains',  # 'exact', 'startswith', 'endswith'
+        'case_sensitive': False,
+        'search_across_relations': True,
+        'max_search_conditions': 5,
+        'search_help_text': _("Use * for wildcard, quotes for exact match"),
+
+        # Custom search operators
+        'operators': {
+            'text': ['contains', 'not_contains', 'equals', 'not_equals', 'starts_with', 'ends_with'],
+            'numeric': ['equals', 'not_equals', 'greater_than', 'less_than', 'between'],
+            'date': ['equals', 'not_equals', 'after', 'before', 'between', 'this_week', 'this_month', 'this_year'],
+            'boolean': ['is_true', 'is_false'],
+            'relation': ['has', 'has_not']
+        }
+    }
+
+    @expose('/advanced-search')
+    @has_access
+    def advanced_search(self):
+        """Advanced search interface"""
+        search_fields = self._get_search_fields()
+        return self.render_template(
+            'advanced_search.html',
+            search_fields=search_fields,
+            config=self.advanced_search_config
+        )
+
+
+    # Bulk Import Configuration
+    import_config = {
+        'allowed_formats': ['csv', 'xlsx', 'json'],
+        'max_file_size': 10 * 1024 * 1024,  # 10MB
+        'chunk_size': 1000,
+        'validate_before_import': True,
+        'update_existing': True,
+        'identify_by': ['id', 'unique_code'],  # Fields to identify existing records
+        'skip_errors': False,
+        'error_threshold': 10,  # Maximum number of errors before abort
+    }
+
+    @expose('/import', methods=['GET', 'POST'])
+    @has_access
+    def import_data(self):
+        """Bulk import data with validation"""
+        if request.method == 'POST':
+            if 'file' not in request.files:
+                flash(_('No file uploaded'), 'error')
+                return redirect(url_for(f'.{self.import_data.__name__}'))
+
+            file = request.files['file']
+            try:
+                results = self._process_import_file(file)
+                return self.render_template(
+                    'import_review.html',
+                    results=results,
+                    config=self.import_config
+                )
+            except Exception as e:
+                flash(str(e), 'error')
+
+        return self.render_template(
+            'import.html',
+            config=self.import_config
+        )
+
+    def _process_import_file(self, file):
+        """Process and validate import file"""
+        filename = secure_filename(file.filename)
+        ext = filename.rsplit('.', 1)[1].lower()
+
+        if ext not in self.import_config['allowed_formats']:
+            raise ValueError(f"Unsupported file format. Allowed: {self.import_config['allowed_formats']}")
+
+        # Process file based on format
+        if ext == 'csv':
+            return self._process_csv_import(file)
+        elif ext == 'xlsx':
+            return self._process_excel_import(file)
+        else:
+            return self._process_json_import(file)
+
+    # Version Control Configuration
+    versioning_config = {
+        'enabled': True,
+        'track_changes': True,
+        'track_who': True,
+        'track_when': True,
+        'ignore_fields': ['updated_at', 'created_at'],
+        'diff_format': 'detailed',  # 'simple' or 'detailed'
+        'max_versions': 100,
+    }
+
+    def _track_changes(self, item, action_type):
+        """Track changes for version control"""
+        if not self.versioning_config['enabled']:
+            return
+
+        changes = {
+            'action': action_type,
+            'timestamp': datetime.now(),
+            'user_id': g.user.id if hasattr(g, 'user') else None,
+            'changes': self._get_changes(item),
+            'version': self._get_next_version(item)
+        }
+
+        version_cls = self._get_version_class()
+        version = version_cls(**changes)
+        db.session.add(version)
+
+    @expose('/history/<pk>')
+    @has_access
+    def view_history(self, pk):
+        """View version history"""
+        item = self.datamodel.get(pk)
+        if not item:
+            abort(404)
+
+        versions = self._get_versions(item)
+        return self.render_template(
+            'history.html',
+            item=item,
+            versions=versions,
+            config=self.versioning_config
+        )
+
+    # Workflow Configuration
+    workflow_config = {
+        'enabled': True,
+        'states': {
+            'draft': {
+                'label': _('Draft'),
+                'color': 'secondary',
+                'actions': ['submit', 'delete']
+            },
+            'submitted': {
+                'label': _('Submitted'),
+                'color': 'primary',
+                'actions': ['approve', 'reject']
+            },
+            'approved': {
+                'label': _('Approved'),
+                'color': 'success',
+                'actions': ['revoke']
+            },
+            'rejected': {
+                'label': _('Rejected'),
+                'color': 'danger',
+                'actions': ['resubmit']
+            }
+        },
+        'transitions': {
+            'submit': {
+                'from': 'draft',
+                'to': 'submitted',
+                'permission': 'can_submit'
+            },
+            'approve': {
+                'from': 'submitted',
+                'to': 'approved',
+                'permission': 'can_approve',
+                'requires_comment': True
+            },
+            # ... more transitions
+        }
+    }
+
+    def _can_transition(self, item, transition):
+        """Check if state transition is allowed"""
+        if not self.workflow_config['enabled']:
+            return True
+
+        current_state = getattr(item, 'state', None)
+        if not current_state:
+            return False
+
+        transition_config = self.workflow_config['transitions'].get(transition)
+        if not transition_config:
+            return False
+
+        if current_state != transition_config['from']:
+            return False
+
+        permission = transition_config.get('permission')
+        if permission and not self.appbuilder.sm.has_access(permission):
+            return False
+
+        return True
+
+    @expose('/transition/<pk>/<transition>')
+    @has_access
+    def transition_state(self, pk, transition):
+        """Handle state transition"""
+        item = self.datamodel.get(pk)
+        if not item:
+            abort(404)
+
+        if not self._can_transition(item, transition):
+            flash(_('Transition not allowed'), 'error')
+            return redirect(self.get_redirect())
+
+        try:
+            self._perform_transition(item, transition)
+            flash(_('State updated successfully'), 'success')
+        except Exception as e:
+            flash(str(e), 'error')
+
+        return redirect(self.get_redirect())
+
+    # Dynamic Form Configuration
+    dynamic_form_config = {
+        'enabled': True,
+        'conditional_fields': {
+            'field_name': {
+                'depends_on': 'other_field',
+                'show_if': lambda value: value == 'specific_value',
+                'required_if': lambda value: value in ['value1', 'value2']
+            }
+        },
+        'calculated_fields': {
+            'total': {
+                'depends_on': ['quantity', 'unit_price'],
+                'calculate': lambda qty, price: qty * price
+            }
+        },
+        'field_groups': {
+            'basic_info': {
+                'label': _('Basic Information'),
+                'fields': ['name', 'description'],
+                'expanded': True
+            },
+            'advanced': {
+                'label': _('Advanced Settings'),
+                'fields': ['config', 'options'],
+                'expanded': False
+            }
+        }
+    }
+
+    def _process_dynamic_form(self, form):
+        """Process dynamic form fields"""
+        if not self.dynamic_form_config['enabled']:
+            return form
+
+        for field, config in self.dynamic_form_config['conditional_fields'].items():
+            dependent_value = form.get(config['depends_on']).data
+            if config['show_if'](dependent_value):
+                if config.get('required_if', lambda x: False)(dependent_value):
+                    form.get(field).validators.append(DataRequired())
+            else:
+                form._fields.pop(field, None)
+
+        for field, config in self.dynamic_form_config['calculated_fields'].items():
+            values = [form.get(f).data for f in config['depends_on']]
+            form.get(field).data = config['calculate'](*values)
+
+        return form
+
+    custom_field_types = {
+        'money': {
+            'widget': MoneyWidget(),
+            'validator': MoneyValidator(),
+            'formatter': currency_formatter
+        },
+        'phone': {
+            'widget': PhoneWidget(),
+            'validator': PhoneValidator(),
+            'formatter': phone_formatter
+        },
+        'address': {
+            'widget': AddressWidget(),
+            'validator': AddressValidator(),
+            'formatter': address_formatter
+        },
+        'rich_text': {
+            'widget': CKEditorWidget(),
+            'validator': None,
+            'formatter': lambda x: Markup(x)
+        },
+        'json_editor': {
+            'widget': JSONEditorWidget(),
+            'validator': JSONValidator(),
+            'formatter': json_formatter
+        },
+        'color_picker': {
+            'widget': ColorPickerWidget(),
+            'validator': ColorValidator(),
+            'formatter': color_formatter
+        }
+    }
+
+"""
+{% if not single_file %}
+appbuilder.add_view(
+    {{ table_name|capitalize }}ModelView,
+    "{{ table_name|capitalize }}",
+    icon="fa-folder-open-o",
+    category="Master Data",
+    category_icon="fa-database"
+)
+{% endif %}
+"""

@@ -1,0 +1,462 @@
+{% extends 'modelview/base.html' %} {% block content %}
+<div class="kanban-view-container">
+    {# Header Section #}
+    <div class="kanban-header">
+        <div class="title-section">
+            <h3>
+                <i class="fa fa-columns"></i>
+                {{ modelview_name }} {{ _('Kanban') }}
+            </h3>
+        </div>
+
+        {# Board Controls #}
+        <div class="board-controls">
+            {# Group By Selector #}
+            <div class="group-by-selector">
+                <select class="form-control" id="group-by">
+                    {% for field in groupable_fields %}
+                    <option
+                        value="{{ field.name }}"
+                        {%
+                        if
+                        field.name=""
+                        ="current_grouping"
+                        %}selected{%
+                        endif
+                        %}
+                    >
+                        {{ _('Group by') }} {{ field.label }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            {# Quick Filters #}
+            <div class="quick-filters">
+                {% for filter in quick_filters %}
+                <button
+                    type="button"
+                    class="btn btn-default quick-filter"
+                    data-filter="{{ filter.name }}"
+                >
+                    <i class="fa fa-{{ filter.icon }}"></i>
+                    {{ filter.label }} {% if filter.count %}
+                    <span class="badge">{{ filter.count }}</span>
+                    {% endif %}
+                </button>
+                {% endfor %}
+            </div>
+
+            {# View Options #}
+            <div class="view-options">
+                <div class="btn-group">
+                    <button
+                        type="button"
+                        class="btn btn-default"
+                        data-toggle="tooltip"
+                        title="{{ _('Collapse All') }}"
+                        id="collapse-all"
+                    >
+                        <i class="fa fa-compress"></i>
+                    </button>
+                    <button
+                        type="button"
+                        class="btn btn-default"
+                        data-toggle="tooltip"
+                        title="{{ _('Expand All') }}"
+                        id="expand-all"
+                    >
+                        <i class="fa fa-expand"></i>
+                    </button>
+                </div>
+                <div class="btn-group">
+                    <button
+                        type="button"
+                        class="btn btn-default"
+                        data-toggle="tooltip"
+                        title="{{ _('Refresh Board') }}"
+                        id="refresh-board"
+                    >
+                        <i class="fa fa-refresh"></i>
+                    </button>
+                    <button
+                        type="button"
+                        class="btn btn-default"
+                        data-toggle="tooltip"
+                        title="{{ _('Board Settings') }}"
+                        id="board-settings"
+                    >
+                        <i class="fa fa-cog"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Main Board Content #}
+    <div class="kanban-board" id="kanban-board">
+        {% for column in board_columns %}
+        <div class="kanban-column" data-column-id="{{ column.id }}">
+            {# Column Header #}
+            <div
+                class="column-header"
+                style="background-color: {{ column.color }}"
+            >
+                <div class="column-title">
+                    <span class="column-name">{{ column.name }}</span>
+                    <span class="item-count badge"
+                        >{{ column.items|length }}</span
+                    >
+                </div>
+                <div class="column-actions">
+                    {% if column.can_add %}
+                    <button
+                        type="button"
+                        class="btn btn-xs btn-success add-item"
+                        data-column-id="{{ column.id }}"
+                    >
+                        <i class="fa fa-plus"></i>
+                    </button>
+                    {% endif %}
+                    <button
+                        type="button"
+                        class="btn btn-xs btn-default column-settings"
+                        data-column-id="{{ column.id }}"
+                    >
+                        <i class="fa fa-ellipsis-v"></i>
+                    </button>
+                </div>
+            </div>
+
+            {# Column Content #}
+            <div class="column-content">
+                {% for item in column.items %}
+                <div
+                    class="kanban-card"
+                    data-item-id="{{ item.id }}"
+                    draggable="true"
+                >
+                    {# Card Header #}
+                    <div class="card-header">
+                        {% if item.priority %}
+                        <span class="priority priority-{{ item.priority }}">
+                            <i class="fa fa-flag"></i>
+                        </span>
+                        {% endif %}
+                        <div class="card-title">{{ item.title }}</div>
+                        <div class="card-actions">
+                            <div class="dropdown">
+                                <button
+                                    class="btn btn-xs btn-default dropdown-toggle"
+                                    data-toggle="dropdown"
+                                >
+                                    <i class="fa fa-ellipsis-v"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-right">
+                                    <li>
+                                        <a
+                                            href="{{ url_for('.show', pk=item.id) }}"
+                                        >
+                                            <i class="fa fa-eye"></i> {{
+                                            _('View') }}
+                                        </a>
+                                    </li>
+                                    {% if can_edit %}
+                                    <li>
+                                        <a
+                                            href="{{ url_for('.edit', pk=item.id) }}"
+                                        >
+                                            <i class="fa fa-edit"></i> {{
+                                            _('Edit') }}
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    <li class="divider"></li>
+                                    {% for action in item_actions %}
+                                    <li>
+                                        <a
+                                            href="#"
+                                            class="item-action"
+                                            data-action="{{ action.name }}"
+                                            data-item-id="{{ item.id }}"
+                                        >
+                                            <i
+                                                class="fa fa-{{ action.icon }}"
+                                            ></i>
+                                            {{ action.label }}
+                                        </a>
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    {# Card Content #}
+                    <div class="card-content">
+                        {% if item.description %}
+                        <div class="card-description">
+                            {{ item.description|truncate(100) }}
+                        </div>
+                        {% endif %} {# Card Fields #}
+                        <div class="card-fields">
+                            {% for field in card_fields %} {% set value =
+                            item[field.name] %} {% if value %}
+                            <div class="card-field">
+                                <span class="field-icon">
+                                    <i class="fa fa-{{ field.icon }}"></i>
+                                </span>
+                                <span class="field-value">
+                                    {{ render_field_value(field.name, value,
+                                    field.type) }}
+                                </span>
+                            </div>
+                            {% endif %} {% endfor %}
+                        </div>
+
+                        {# Card Metadata #}
+                        <div class="card-metadata">
+                            {% if item.due_date %}
+                            <span
+                                class="due-date {% if item.is_overdue %}overdue{% endif %}"
+                                title="{{ _('Due Date') }}"
+                            >
+                                <i class="fa fa-calendar"></i>
+                                {{ item.due_date|date }}
+                            </span>
+                            {% endif %} {% if item.assigned_to %}
+                            <span
+                                class="assigned-to"
+                                title="{{ _('Assigned To') }}"
+                            >
+                                <i class="fa fa-user"></i>
+                                {{ item.assigned_to|user_link }}
+                            </span>
+                            {% endif %}
+                        </div>
+
+                        {# Card Tags #} {% if item.tags %}
+                        <div class="card-tags">
+                            {% for tag in item.tags %}
+                            <span
+                                class="tag"
+                                style="background-color: {{ tag.color }}"
+                            >
+                                {{ tag.name }}
+                            </span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    {# Card Footer #}
+                    <div class="card-footer">
+                        {% if item.comments_count %}
+                        <span class="comments-count">
+                            <i class="fa fa-comments"></i>
+                            {{ item.comments_count }}
+                        </span>
+                        {% endif %} {% if item.attachments_count %}
+                        <span class="attachments-count">
+                            <i class="fa fa-paperclip"></i>
+                            {{ item.attachments_count }}
+                        </span>
+                        {% endif %} {% if item.checklist_progress %}
+                        <div
+                            class="checklist-progress"
+                            title="{{ item.checklist_progress.completed }}/{{ item.checklist_progress.total }}"
+                        >
+                            <div class="progress">
+                                <div
+                                    class="progress-bar"
+                                    style="width: {{ item.checklist_progress.percentage }}%"
+                                ></div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            {# Column Footer #}
+            <div class="column-footer">
+                {% if column.show_summary %}
+                <div class="column-summary">
+                    {% for metric in column.summary %}
+                    <div class="summary-item">
+                        <span class="metric-label">{{ metric.label }}:</span>
+                        <span class="metric-value">{{ metric.value }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{# Quick Add Modal #}
+<div class="modal fade" id="quick-add-modal">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    &times;
+                </button>
+                <h4 class="modal-title">{{ _('Quick Add') }}</h4>
+            </div>
+            <div class="modal-body">
+                <form id="quick-add-form">
+                    {# Quick add form fields will be loaded dynamically #}
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button
+                    type="button"
+                    class="btn btn-primary"
+                    id="save-quick-add"
+                >
+                    {{ _('Add') }}
+                </button>
+                <button
+                    type="button"
+                    class="btn btn-default"
+                    data-dismiss="modal"
+                >
+                    {{ _('Cancel') }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Board Settings Modal #}
+<div class="modal fade" id="board-settings-modal">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    &times;
+                </button>
+                <h4 class="modal-title">{{ _('Board Settings') }}</h4>
+            </div>
+            <div class="modal-body">
+                <form id="board-settings-form">
+                    {# Card Display Settings #}
+                    <h5>{{ _('Card Display') }}</h5>
+                    <div class="form-group">
+                        <label>{{ _('Visible Fields') }}</label>
+                        <select
+                            class="form-control"
+                            name="visible_fields"
+                            multiple
+                        >
+                            {% for field in available_fields %}
+                            <option
+                                value="{{ field.name }}"
+                                {%
+                                if
+                                field.name
+                                in
+                                card_fields
+                                %}selected{%
+                                endif
+                                %}
+                            >
+                                {{ field.label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    {# Column Settings #}
+                    <h5>{{ _('Columns') }}</h5>
+                    <div class="column-settings">
+                        {# Column settings will be loaded dynamically #}
+                    </div>
+
+                    {# Other Settings #}
+                    <h5>{{ _('Other Settings') }}</h5>
+                    <div class="checkbox">
+                        <label>
+                            <input
+                                type="checkbox"
+                                name="show_summaries"
+                                {%
+                                if
+                                show_summaries
+                                %}checked{%
+                                endif
+                                %}
+                            />
+                            {{ _('Show column summaries') }}
+                        </label>
+                    </div>
+                    <div class="checkbox">
+                        <label>
+                            <input
+                                type="checkbox"
+                                name="collapse_empty"
+                                {%
+                                if
+                                collapse_empty
+                                %}checked{%
+                                endif
+                                %}
+                            />
+                            {{ _('Collapse empty columns') }}
+                        </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button
+                    type="button"
+                    class="btn btn-primary"
+                    id="save-settings"
+                >
+                    {{ _('Save Settings') }}
+                </button>
+                <button
+                    type="button"
+                    class="btn btn-default"
+                    data-dismiss="modal"
+                >
+                    {{ _('Cancel') }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block tail_js %} {{ super() }}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeKanbanBoard({
+            columns: {{ board_columns|tojson }},
+            settings: {
+                groupBy: "{{ current_grouping }}",
+                cardFields: {{ card_fields|tojson }},
+                showSummaries: {{ show_summaries|tojson }},
+                collapseEmpty: {{ collapse_empty|tojson }}
+            },
+            urls: {
+                moveItem: "{{ url_for('.move_item') }}",
+                quickAdd: "{{ url_for('.quick_add') }}",
+                refreshBoard: "{{ url_for('.refresh_board') }}",
+                saveSettings: "{{ url_for('.save_board_settings') }}"
+            },
+            csrf_token: "{{ csrf_token() }}",
+            translations: {
+                moveError: "{{ _('Error moving item') }}",
+                addError: "{{ _('Error adding item') }}",
+                saveError: "{{ _('Error saving settings') }}",
+                confirmDelete: "{{ _('Are you sure you want to delete this item?') }}"
+            }
+        });
+    });
+</script>
+{% endblock %}

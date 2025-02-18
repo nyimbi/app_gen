@@ -76,17 +76,26 @@ def register_views(appbuilder: AppBuilder):
     {% endif %}
     {%- endfor %}
 
-    # Register other views
     {%- for view in views_info %}
     {% if view.has_chart_view %}
-    appbuilder.add_view(
-        {{ view.capitalize_name }}ChartView,
+    chart_view = {{ view.capitalize_name }}ChartView()
+    appbuilder.add_view_no_menu(chart_view)  # Register the view without menu
+    appbuilder.add_link(
         "{{ view.capitalize_name }} Charts",
+        href=f"/{{ view.name|lower }}_chart/",
         icon="fa-bar-chart",
         category="Charts",
         category_icon="fa-bar-chart"
     )
     {% endif %}
+    {%- endfor %}
+
+
+
+    # Register other views
+
+    {%- for view in views_info %}
+
 
     {% if view.has_wizard_view %}
     appbuilder.add_view(

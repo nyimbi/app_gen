@@ -1,0 +1,398 @@
+{% extends "appbuilder/base.html" %} {% block head_css %} {{ super() }}
+<style type="text/css">
+    /* General Styles */
+    .mb-4 {
+        margin-bottom: 20px;
+    }
+    .mt-4 {
+        margin-top: 20px;
+    }
+    .ml-2 {
+        margin-left: 10px;
+    }
+
+    /* Table Styles */
+    .table-responsive {
+        overflow-x: auto;
+        margin-bottom: 20px;
+    }
+    .table {
+        width: 100%;
+        max-width: 100%;
+        margin-bottom: 1rem;
+    }
+    .table > thead > tr > th {
+        vertical-align: bottom;
+        border-bottom: 2px solid #ddd;
+        padding: 8px;
+        line-height: 1.42857143;
+    }
+    .table > tbody > tr > td {
+        padding: 8px;
+        line-height: 1.42857143;
+        vertical-align: top;
+        border-top: 1px solid #ddd;
+    }
+    .table > tbody > tr.success > td {
+        background-color: #dff0d8 !important;
+    }
+    .table > tbody > tr.danger > td {
+        background-color: #f2dede !important;
+    }
+    .table-hover > tbody > tr:hover {
+        background-color: #f5f5f5;
+    }
+
+    /* Alert Styles */
+    .alert {
+        padding: 15px;
+        margin-bottom: 20px;
+        border: 1px solid transparent;
+        border-radius: 4px;
+    }
+    .alert-info {
+        color: #31708f;
+        background-color: #d9edf7;
+        border-color: #bce8f1;
+    }
+    .alert-success {
+        color: #3c763d;
+        background-color: #dff0d8;
+        border-color: #d6e9c6;
+    }
+    .alert-danger {
+        color: #a94442;
+        background-color: #f2dede;
+        border-color: #ebccd1;
+    }
+
+    /* Status Label Styles */
+    .label {
+        display: inline;
+        padding: 0.2em 0.6em 0.3em;
+        font-size: 75%;
+        font-weight: 700;
+        line-height: 1;
+        color: #fff;
+        text-align: center;
+        white-space: nowrap;
+        vertical-align: baseline;
+        border-radius: 0.25em;
+    }
+    .label-success {
+        background-color: #5cb85c;
+    }
+    .label-danger {
+        background-color: #d9534f;
+    }
+
+    /* Button Styles */
+    .btn {
+        display: inline-block;
+        padding: 6px 12px;
+        margin-bottom: 0;
+        font-size: 14px;
+        font-weight: 400;
+        line-height: 1.42857143;
+        text-align: center;
+        white-space: nowrap;
+        vertical-align: middle;
+        cursor: pointer;
+        border: 1px solid transparent;
+        border-radius: 4px;
+    }
+    .btn-xs {
+        padding: 1px 5px;
+        font-size: 12px;
+        line-height: 1.5;
+        border-radius: 3px;
+    }
+    .btn-info {
+        color: #fff;
+        background-color: #5bc0de;
+        border-color: #46b8da;
+    }
+    .btn-danger {
+        color: #fff;
+        background-color: #d9534f;
+        border-color: #d43f3a;
+    }
+    .btn-primary {
+        color: #fff;
+        background-color: #337ab7;
+        border-color: #2e6da4;
+    }
+    .btn-default {
+        color: #333;
+        background-color: #fff;
+        border-color: #ccc;
+    }
+
+    /* Popover Styles */
+    .popover {
+        max-width: 400px;
+        background-color: #fff;
+        border: 1px solid rgba(0, 0, 0, 0.2);
+        border-radius: 6px;
+        box-shadow: 0 5px 10px rgba(0, 0, 0, 0.2);
+    }
+    .popover-title {
+        padding: 8px 14px;
+        margin: 0;
+        font-size: 14px;
+        background-color: #f7f7f7;
+        border-bottom: 1px solid #ebebeb;
+        border-radius: 5px 5px 0 0;
+    }
+    .popover-content {
+        padding: 9px 14px;
+        word-wrap: break-word;
+    }
+
+    /* Panel Styles */
+    .panel {
+        margin-bottom: 20px;
+        background-color: #fff;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
+    }
+    .panel-primary {
+        border-color: #337ab7;
+    }
+    .panel-primary > .panel-heading {
+        color: #fff;
+        background-color: #337ab7;
+        border-color: #337ab7;
+    }
+    .panel-heading {
+        padding: 10px 15px;
+        border-bottom: 1px solid transparent;
+        border-top-left-radius: 3px;
+        border-top-right-radius: 3px;
+    }
+    .panel-body {
+        padding: 15px;
+    }
+    .panel-title {
+        margin-top: 0;
+        margin-bottom: 0;
+        font-size: 16px;
+        color: inherit;
+    }
+</style>
+{% endblock %} {% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="panel panel-primary">
+                <div class="panel-heading">
+                    <h3 class="panel-title">{{ _('Import Review') }}</h3>
+                </div>
+                <div class="panel-body">
+                    <!-- Summary Stats -->
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <div class="alert alert-info">
+                                <strong>{{ _('Total Records') }}:</strong> {{
+                                results|length }}
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="alert alert-success">
+                                <strong>{{ _('Successful') }}:</strong>
+                                {{ results|selectattr('status', 'equalto',
+                                'success')|list|length }}
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="alert alert-danger">
+                                <strong>{{ _('Failed') }}:</strong>
+                                {{ results|selectattr('status', 'equalto',
+                                'error')|list|length }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Data Review Table -->
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>{{ _('Status') }}</th>
+                                    {% for field in results[0].row.keys() %}
+                                    <th>{{ field }}</th>
+                                    {% endfor %}
+                                    <th>{{ _('Details') }}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for result in results %}
+                                <tr
+                                    class="{{ 'success' if result.status == 'success' else 'danger' }}"
+                                >
+                                    <td>{{ loop.index }}</td>
+                                    <td>
+                                        {% if result.status == 'success' %}
+                                        <span class="label label-success"
+                                            >{{ _('Success') }}</span
+                                        >
+                                        {% else %}
+                                        <span class="label label-danger"
+                                            >{{ _('Error') }}</span
+                                        >
+                                        {% endif %}
+                                    </td>
+                                    {% for field, value in result.row.items() %}
+                                    <td>{{ value }}</td>
+                                    {% endfor %}
+                                    <td>
+                                        {% if result.status == 'error' %}
+                                        <button
+                                            type="button"
+                                            class="btn btn-xs btn-danger"
+                                            data-toggle="popover"
+                                            title="{{ _('Error Details') }}"
+                                            data-content="{{ result.error }}"
+                                        >
+                                            {{ _('Show Error') }}
+                                        </button>
+                                        {% else %}
+                                        <button
+                                            type="button"
+                                            class="btn btn-xs btn-info"
+                                            data-toggle="popover"
+                                            title="{{ _('Processed Data') }}"
+                                            data-content="{{ result.processed|tojson }}"
+                                        >
+                                            {{ _('Show Details') }}
+                                        </button>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="row mt-4">
+                        <div class="col-md-12">
+                            <form
+                                action="{{ url_for('.import_data') }}"
+                                method="post"
+                                id="import-form"
+                            >
+                                <input type="hidden" name="confirm" value="1" />
+                                {% if results|selectattr('status', 'equalto',
+                                'success')|list|length > 0 %}
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fa fa-check"></i> {{ _('Confirm
+                                    Import') }}
+                                </button>
+                                {% endif %}
+                                <a
+                                    href="{{ url_for('.import_data') }}"
+                                    class="btn btn-default"
+                                >
+                                    <i class="fa fa-times"></i> {{ _('Cancel')
+                                    }}
+                                </a>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} {% block tail_js %} {{ super() }}
+<script type="text/javascript">
+    (function ($) {
+        // Custom popover formatter
+        function formatPopoverContent(content) {
+            if (typeof content === "object") {
+                return "<pre>" + JSON.stringify(content, null, 2) + "</pre>";
+            }
+            return content;
+        }
+
+        // Initialize popovers with custom formatting
+        function initPopovers() {
+            $('[data-toggle="popover"]').each(function () {
+                var $el = $(this);
+                var content = $el.data("content");
+
+                $el.popover({
+                    trigger: "click",
+                    placement: "left",
+                    html: true,
+                    content: function () {
+                        return formatPopoverContent(content);
+                    },
+                    container: "body",
+                });
+            });
+        }
+
+        // Handle outside clicks for popovers
+        function handleOutsideClicks() {
+            $(document).on("click", function (e) {
+                if (
+                    $(e.target).data("toggle") !== "popover" &&
+                    $(e.target).parents(".popover.in").length === 0
+                ) {
+                    $('[data-toggle="popover"]').popover("hide");
+                }
+            });
+        }
+
+        // Handle import form submission
+        function handleImportForm() {
+            $("#import-form").on("submit", function (e) {
+                e.preventDefault();
+                var form = this;
+
+                bootbox.confirm({
+                    message:
+                        "{{ _('Are you sure you want to import these records?') }}",
+                    buttons: {
+                        confirm: {
+                            label: '{{ _("Yes") }}',
+                            className: "btn-success",
+                        },
+                        cancel: {
+                            label: '{{ _("No") }}',
+                            className: "btn-danger",
+                        },
+                    },
+                    callback: function (result) {
+                        if (result) {
+                            form.submit();
+                        }
+                    },
+                });
+            });
+        }
+
+        // Initialize tooltips
+        function initTooltips() {
+            $('[data-toggle="tooltip"]').tooltip();
+        }
+
+        // Document ready handler
+        $(document).ready(function () {
+            initPopovers();
+            handleOutsideClicks();
+            handleImportForm();
+            initTooltips();
+        });
+
+        // Handle dynamic content updates
+        $(document).on("shown.bs.tab", function () {
+            initPopovers();
+        });
+    })(jQuery);
+</script>
+{% endblock %}

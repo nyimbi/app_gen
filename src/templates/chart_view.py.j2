@@ -1,183 +1,254 @@
-{#
+{# chart_view.py.j2 #}
 """
-chart_view.py.j2
+Chart View Template for Flask-AppBuilder
 
-This template generates a ChartView for Flask-AppBuilder. It includes:
-
-1. Import statements for necessary Flask-AppBuilder components.
-2. A ChartView class definition for the specified table.
-3. Configuration for chart type, chart title, and chart description.
-4. Definition of chart columns, including label columns and formatters.
-5. Configuration for the chart layout, including size and orientation.
-6. Search columns configuration for filtering chart data.
-7. Base query definition for data retrieval.
-8. Custom methods for data processing and chart customization.
-9. Additional chart options like color scheme, legend positioning, and tooltips.
-10. Time series configuration for date-based charts.
-11. Chart-specific configurations for various chart types (pie, bar, line).
-12. Export functionality configuration.
-13. View registration with AppBuilder (for non-single-file mode).
-
-This template aims to provide a comprehensive starting point for creating
-various types of charts in Flask-AppBuilder. It includes placeholders and
-examples for different chart configurations, which should be customized
-based on the specific requirements of your application and data structure.
+This template generates a ChartView class for visualizing data from database tables.
+It supports:
+- Multiple chart types (Pie, Bar, Line)
+- Date-based and numeric data visualization
+- Dynamic data loading
+- Custom formatting and styling
+- Error handling and logging
+- NULL value handling
+- Export functionality
 """
-#}
+
 import logging
-from flask import current_app
-from sqlalchemy import func, case, cast, Integer, desc, and_, or_
+from typing import Any, Dict, List, Optional, Union
+from datetime import datetime, date
+from flask import render_template, current_app, flash
+from flask_babel import lazy_gettext as _
+from sqlalchemy import func, case, cast, Integer, desc, and_, or_, DateTime
 from flask_appbuilder.charts.views import ChartView
 from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.models.group import aggregate_sum, aggregate_count, aggregate_avg
-from flask_appbuilder.widgets import ListWidget, ShowWidget, FormWidget
-from flask_appbuilder.fieldwidgets import (
-     BS3TextFieldWidget,
-     BS3PasswordFieldWidget,
-     BS3TextAreaFieldWidget,
-     Select2Widget,
-     Select2ManyWidget,
-     DatePickerWidget,
-     DateTimePickerWidget,
-     # TimePickerWidget,
-     # BS3DateTimePickerWidget,
-     # ColorPickerWidget,
-     # FileUploadFieldWidget,
-     Select2AJAXWidget,
-     Select2SlaveAJAXWidget,
-     # BS3DateTimeFieldWidget,
-     # BS3DateFieldWidget,
-     # CheckboxWidget,
-     # BS3FileUploadFieldWidget
- )
 from flask_babel import lazy_gettext as _
 from app import appbuilder, db
 from ..models import {{ table_name|capitalize }}
 log = logging.getLogger(__name__)
 
+log = logging.getLogger(__name__)
+
 class {{ table_name|capitalize }}ChartView(ChartView):
+    """
+    Chart view for {{ table_name|capitalize }} data visualization.
+    Supports multiple chart types and dynamic data loading.
+    """
+
     datamodel = SQLAInterface({{ table_name|capitalize }})
-    chart_title = _("{{ table_name|capitalize }} Statistics")
-    chart_type = "PieChart"
-    chart_3d = True
-    custom_template = ""
+    chart_title = _('{{ table_name|capitalize }} Statistics')
 
-    # Define group by columns
-    group_by_columns = ['{{ date_columns[0].name }}']
+    # Basic view configuration
+    route_base = '/{{ table_name|lower }}_chart'
+    end_point = '{{ table_name|lower }}_chart'
+    default_view = 'chart'
+    chart_template = 'chart.html'  # Using Superset-style template for better visualization
 
-    # Define chart series
+    # Chart type configuration from config or default
+    chart_type = '{{ config.get("chart", {}).get("type", "PieChart") }}'
+    chart_3d = {{ config.get("chart", {}).get("enable_3d", "True") }}
+
+    # Chart dimensions
+    chart_width = {{ config.get("chart", {}).get("width", "800") }}
+    chart_height = {{ config.get("chart", {}).get("height", "400") }}
+
+    # Define column lists for searching and grouping
+    date_column = '{{ date_columns[0].name }}'
+    numeric_columns = [
+        {% for col in numeric_columns %}
+        '{{ col.name }}'{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ]
+
+    # Search columns configuration
+    search_columns = [date_column] + numeric_columns
+
+    # Group by configuration for date-based analysis
+    group_by_columns = [date_column]
+
+    # Chart definitions for aggregation
     definitions = [
         {
-            "group": "{{ date_columns[0].name }}",
-            "series": [(aggregate_count, "id")]
+            'group': date_column,
+            'formatter': lambda x: x.strftime('%Y-%m-%d') if isinstance(x, (date, datetime)) else str(x),
+            'series': [(func.count, 'id')]
         }
     ]
 
-    # Add formatters
+    # Column formatters
     formatters_columns = {
-        "{{ date_columns[0].name }}": lambda x: x.strftime("%Y-%m-%d") if x else "Unknown",
-        "count": lambda x: f"{x:,.0f}"
+        date_column: lambda x: x.strftime('%Y-%m-%d') if isinstance(x, (date, datetime)) else 'N/A',
+        'count': lambda x: f'{x:,.0f}'
     }
 
+    # Label configurations
     label_columns = {
-        "{{ date_columns[0].name }}": _("Date"),
-        "count": _("Total Count")
+        date_column: _('Date'),
+        'count': _('Count'),
+        {% for col in numeric_columns %}
+        '{{ col.name }}': _('{{ col.name|capitalize }}'){% if not loop.last %},{% endif %}
+        {% endfor %}
     }
 
-    # Remove the problematic base_filters and handle NULL values in get_data
-    # base_filters = [['{{ date_columns[0].name }}', 'is not', None]]  # Remove this line
+    def _init_titles(self):
+        """Initialize view titles"""
+        self.title = _('{{ table_name|capitalize }} Charts')
+        self.chart_title = _('{{ table_name|capitalize }} Statistics')
 
-    # Chart layout configuration
-    chart_width = 400
-    chart_height = 400
-    chart_orientation = "horizontal"
+    def _handle_view_error(self, exception):
+        """Handle and log view errors"""
+        flash(str(exception), 'error')
+        current_app.logger.error(f'Chart view error: {str(exception)}')
+        return self.render_template(
+            self.chart_template,
+            chart_title=self.chart_title,
+            error=_('Error loading chart data')
+        )
 
-    # Search columns for filtering
-    search_columns = ["{{ date_columns[0].name }}"]
-
-    # Base order
-    base_order = ("{{ date_columns[0].name }}", "asc")
-
-    def get_data(self):
-        """Get chart data with error handling and NULL value handling"""
+    def query_transform(self, query):
+        """Transform query to handle NULL values and apply filters"""
         try:
+            return query.filter(or_(
+                self.datamodel.obj.{{ date_columns[0].name }}.isnot(None),
+                self.datamodel.obj.{{ date_columns[0].name }}.is_(None)
+            ))
+        except Exception as e:
+            log.error(f'Query transform error: {str(e)}')
+            return query
+
+    def get_data(self) -> List[Dict[str, Any]]:
+        """
+        Retrieve and format chart data with comprehensive error handling
+
+        Returns:
+            List of dictionaries containing chart data points
+        """
+        try:
+            # Build the base query
             query = self.datamodel.session.query(
-                self.datamodel.obj.{{ date_columns[0].name }},
+                case(
+                    (self.datamodel.obj.{{ date_columns[0].name }}.isnot(None),
+                     func.date_trunc('day', self.datamodel.obj.{{ date_columns[0].name }})),
+                    else_=None
+                ).label('date'),
+                {% for col in numeric_columns[:3] %}
+                func.sum(self.datamodel.obj.{{ col.name }}).label('{{ col.name }}'),
+                {% endfor %}
                 func.count(self.datamodel.obj.id).label('count')
-            ).filter(
-                self.datamodel.obj.{{ date_columns[0].name }}.isnot(None)
-            ).group_by(
-                self.datamodel.obj.{{ date_columns[0].name }}
-            ).order_by(
-                self.datamodel.obj.{{ date_columns[0].name }}
             )
 
+            # Apply date grouping
+            query = query.group_by(
+                case(
+                    (self.datamodel.obj.{{ date_columns[0].name }}.isnot(None),
+                     func.date_trunc('day', self.datamodel.obj.{{ date_columns[0].name }})),
+                    else_=None
+                )
+            )
+
+            # Execute query and format results
             results = query.all()
+            chart_data = []
 
-            data = []
             for result in results:
-                date_val = result[0]
-                count_val = result[1]
-                if date_val:  # Only include non-null dates
-                    data.append({
-                        'name': self.formatters_columns['{{ date_columns[0].name }}'](date_val),
-                        'value': count_val
-                    })
+                date_val = result.date
+                formatted_date = (
+                    date_val.strftime('%Y-%m-%d')
+                    if isinstance(date_val, (date, datetime))
+                    else 'Unknown'
+                )
 
-            return data
+                data_point = {
+                    'name': formatted_date,
+                    'count': result.count,
+                    {% for col in numeric_columns[:3] %}
+                    '{{ col.name }}': float(getattr(result, '{{ col.name }}', 0) or 0),
+                    {% endfor %}
+                }
+                chart_data.append(data_point)
+
+            # Sort data chronologically, putting Unknown at the end
+            chart_data.sort(key=lambda x: (
+                x['name'] == 'Unknown',
+                x['name']
+            ))
+
+            return chart_data
 
         except Exception as e:
-            current_app.logger.error(f"Error getting chart data: {str(e)}")
+            log.error(f'Error getting chart data: {str(e)}')
             return []
 
-    chart_options = {
-        "colors": ["#3366CC", "#DC3912", "#FF9900", "#109618", "#990099"],
-        "legend": {"position": "bottom"},
-        "tooltip": {"trigger": "selection"},
-        "height": 400,
-        "width": 600,
-        "orientation": "horizontal",
-        "is3D": True,
-        "pieHole": 0.4,
-        "sliceVisibilityThreshold": 0.01,
-        "chartArea": {
-            "left": 50,
-            "top": 50,
-            "width": "90%",
-            "height": "80%"
+    def get_chart_options(self) -> Dict[str, Any]:
+        """
+        Get chart configuration options
+
+        Returns:
+            Dictionary containing chart options
+        """
+        return {
+            'colors': {{ config.get('chart', {}).get('colors',
+                      "['#3366CC', '#DC3912', '#FF9900', '#109618', '#990099']")|safe }},
+            'legend': {'position': 'bottom'},
+            'tooltip': {'trigger': 'selection'},
+            'height': self.chart_height,
+            'width': self.chart_width,
+            'is3D': self.chart_3d,
+            'pieHole': 0.4,
+            'sliceVisibilityThreshold': 0.01,
+            'chartArea': {
+                'left': '10%',
+                'top': '10%',
+                'width': '80%',
+                'height': '80%'
+            },
+            'hAxis': {
+                'title': self.label_columns.get(self.date_column, 'Date'),
+                'slantedText': True,
+                'slantedTextAngle': 45
+            },
+            'vAxis': {
+                'title': self.label_columns.get('count', 'Count'),
+                'minValue': 0
+            }
         }
-    }
 
-    def __init__(self, **kwargs):
-        """Initialize the chart view"""
-        super({{ table_name|capitalize }}ChartView, self).__init__(**kwargs)
-        self.title = _("{{ table_name|capitalize }} Statistics")
+    def chart(self):
+        """
+        Render the chart view with error handling
 
-    def pre_process_data(self, data):
-        """Pre-process data before rendering"""
+        Returns:
+            Rendered chart template
+        """
         try:
-            processed_data = []
-            for item in data:
-                if item.get('name') and item.get('value') is not None:
-                    processed_data.append({
-                        'name': str(item['name']),
-                        'value': float(item['value'])
-                    })
-            return processed_data
-        except Exception as e:
-            current_app.logger.error(f"Error pre-processing data: {str(e)}")
-            return []
+            chart_data = self.get_data()
 
+            if not chart_data:
+                return render_template(
+                    self.chart_template,
+                    chart_title=self.chart_title,
+                    message=_('No data available')
+                )
+
+            return render_template(
+                self.chart_template,
+                chart_title=self.chart_title,
+                chart_type=self.chart_type,
+                data=chart_data,
+                chart_options=self.get_chart_options()
+            )
+
+        except Exception as e:
+            return self._handle_view_error(e)
 
 """
-{%- if not single_file %}
-# Register the ChartView with AppBuilder
+{% if not single_file %}
+# Register chart view with AppBuilder
 appbuilder.add_view(
     {{ table_name|capitalize }}ChartView,
-    "{{ table_name|capitalize }} Charts",
-    icon="{{ config.get('icon', 'fa-bar-chart') if config else 'fa-bar-chart' }}",
-    category="Charts",
-    category_icon="fa-chart-pie"
+    '{{ table_name|capitalize }} Charts',
+    icon='fa-bar-chart',
+    category='Charts',
+    category_icon='fa-chart-pie'
 )
-{%- endif %}
+{% endif %}
 """

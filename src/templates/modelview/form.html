@@ -1,0 +1,280 @@
+{% extends 'modelview/base.html' %} {% block content %}
+<div class="model-form-container">
+    {# Form Header #}
+    <div class="form-header">
+        <h3>{{ title }}</h3>
+        {% if item and has_workflow %} {{ render_workflow_actions(item) }} {%
+        endif %}
+    </div>
+
+    {# Main Form #}
+    <form
+        method="post"
+        enctype="multipart/form-data"
+        id="model-form"
+        class="model-form {% if has_dynamic_forms %}dynamic-form{% endif %}"
+        data-validate-url="{{ url_for('.validate') }}"
+        data-form-type="{{ 'edit' if item else 'add' }}"
+    >
+        {{ form.hidden_tag() }} {# Fieldsets #}
+        <div class="fieldsets-container">
+            {% for fieldset_title, fieldset in fieldsets %}
+            <div
+                class="form-fieldset fieldset-{{ fieldset_title|lower|replace(' ', '-') }}"
+                id="fieldset_{{ fieldset_title|lower|replace(' ', '_') }}"
+                data-fieldset-id="{{ loop.index }}"
+            >
+                {# Fieldset Header #}
+                <div class="fieldset-header">
+                    <div class="fieldset-title-group">
+                        <i
+                            class="fa {{ fieldset.icon|default('fa-folder') }}"
+                        ></i>
+                        <span class="fieldset-title">{{ fieldset_title }}</span>
+                        {% if fieldset.required_fields %}
+                        <span
+                            class="required-indicator"
+                            title="Contains required fields"
+                            >*</span
+                        >
+                        {% endif %}
+                    </div>
+                    <div class="fieldset-controls">
+                        {% if fieldset.help_text %}
+                        <i
+                            class="fa fa-question-circle help-icon"
+                            data-toggle="tooltip"
+                            title="{{ fieldset.help_text }}"
+                        ></i>
+                        {% endif %}
+                        <span class="fieldset-toggle-icon">
+                            {% if fieldset.expanded %}▼{% else %}▶{% endif %}
+                        </span>
+                    </div>
+                </div>
+
+                {# Fieldset Content #}
+                <div
+                    class="fieldset-content {% if not fieldset.expanded %}collapsed{% endif %}"
+                >
+                    {% if fieldset.description %}
+                    <div class="fieldset-description">
+                        {{ fieldset.description }}
+                    </div>
+                    {% endif %} {# Fields #}
+                    <div
+                        class="fields-grid"
+                        data-columns="{{ fieldset.layout.columns|default(1) }}"
+                    >
+                        {% for field_name in fieldset.fields %} {% set field =
+                        form[field_name] %} {% set field_config =
+                        field_type_config.get(field_name, {}) %}
+
+                        <div
+                            class="form-field-container {% if field.errors %}has-error{% endif %}"
+                            data-field-type="{{ field_config.type|default('text') }}"
+                            data-field-name="{{ field_name }}"
+                            {%
+                            if
+                            field_config.dependent_on
+                            %}
+                            data-depends-on="{{ field_config.dependent_on }}"
+                            {%
+                            endif
+                            %}
+                            {%
+                            if
+                            field_config.condition
+                            %}
+                            data-condition="{{ field_config.condition }}"
+                            {%
+                            endif
+                            %}
+                        >
+                            {# Field Label #}
+                            <div class="field-label">
+                                {{ field.label(class='control-label') }} {% if
+                                field_config.required %}
+                                <span class="required-marker">*</span>
+                                {% endif %} {% if field_config.help_text %}
+                                <i
+                                    class="fa fa-question-circle field-help"
+                                    data-toggle="tooltip"
+                                    title="{{ field_config.help_text }}"
+                                ></i>
+                                {% endif %}
+                            </div>
+
+                            {# Field Input #}
+                            <div class="field-input">
+                                {% if field_config.type == 'json' %}
+                                <div
+                                    id="{{ field_name }}_editor"
+                                    class="json-editor"
+                                ></div>
+                                {{ field(style="display: none;") }} {% elif
+                                field_config.type == 'file' %}
+                                <div class="file-upload-container">
+                                    {{ field(class='file-input') }}
+                                    <div class="file-preview"></div>
+                                    <div class="file-controls">
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm btn-default clear-file"
+                                        >
+                                            <i class="fa fa-times"></i> Clear
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {% elif field_config.type == 'rich_text' %} {{
+                                field(class='rich-text-editor') }} {% elif
+                                field_config.type == 'related' %}
+                                <div class="related-field-container">
+                                    {{ field(class='select2-ajax',
+                                    **field_config.widget_args|default({})) }}
+                                    {% if field_config.allow_create %}
+                                    <button
+                                        type="button"
+                                        class="btn btn-sm btn-success create-related"
+                                    >
+                                        <i class="fa fa-plus"></i>
+                                    </button>
+                                    {% endif %}
+                                </div>
+
+                                {% else %} {{ field(class='form-control ' +
+                                field_config.widget_class|default('')) }} {%
+                                endif %} {# Field Errors #} {% if field.errors
+                                %}
+                                <div class="error-messages">
+                                    {% for error in field.errors %}
+                                    <span class="help-block error-message"
+                                        >{{ error }}</span
+                                    >
+                                    {% endfor %}
+                                </div>
+                                {% endif %} {# Field Description #} {% if
+                                field.description %}
+                                <span class="help-block"
+                                    >{{ field.description }}</span
+                                >
+                                {% endif %} {# Field Addons #} {% if
+                                field_config.addons %}
+                                <div class="field-addons">
+                                    {% for addon in field_config.addons %}
+                                    <button
+                                        type="button"
+                                        class="btn btn-sm btn-default field-addon"
+                                        data-action="{{ addon.action }}"
+                                    >
+                                        <i class="fa fa-{{ addon.icon }}"></i>
+                                        {{ addon.label }}
+                                    </button>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        {# Form Actions #}
+        <div class="form-actions">
+            {{ form.csrf_token }} {# Save Button Group #}
+            <div class="btn-group">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fa fa-save"></i> {{ _('Save') }}
+                </button>
+                {% if has_workflow %}
+                <button
+                    type="button"
+                    class="btn btn-primary dropdown-toggle"
+                    data-toggle="dropdown"
+                >
+                    <span class="caret"></span>
+                </button>
+                <ul class="dropdown-menu">
+                    {% for action in save_actions %}
+                    <li>
+                        <a
+                            href="#"
+                            class="save-action"
+                            data-action="{{ action.name }}"
+                        >
+                            <i class="fa fa-{{ action.icon }}"></i>
+                            {{ action.label }}
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+
+            {# Other Actions #}
+            <a href="{{ url_for('.' + list_url) }}" class="btn btn-default">
+                <i class="fa fa-times"></i> {{ _('Cancel') }}
+            </a>
+
+            {% if item %}
+            <div class="btn-group pull-right">
+                <button
+                    type="button"
+                    class="btn btn-default dropdown-toggle"
+                    data-toggle="dropdown"
+                >
+                    <i class="fa fa-ellipsis-v"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-right">
+                    {% if has_versioning %}
+                    <li>
+                        <a href="{{ url_for('.history', pk=item.id) }}">
+                            <i class="fa fa-history"></i> View History
+                        </a>
+                    </li>
+                    {% endif %}
+                    <li>
+                        <a href="{{ url_for('.show', pk=item.id) }}">
+                            <i class="fa fa-eye"></i> View Details
+                        </a>
+                    </li>
+                    {% if can_delete %}
+                    <li>
+                        <a
+                            href="#"
+                            class="delete-item"
+                            data-url="{{ url_for('.delete', pk=item.id) }}"
+                        >
+                            <i class="fa fa-trash"></i> Delete
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+    </form>
+
+    {# Version Info #} {% if item and has_versioning %} {{
+    render_version_info(item) }} {% endif %} {# Audit Info #} {% if item and
+    has_audit_log %} {{ render_audit_info(item) }} {% endif %}
+</div>
+{% endblock %} {% block tail_js %} {{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize form components
+        initializeForm({
+            hasWorkflow: {{ has_workflow|tojson }},
+            hasVersioning: {{ has_versioning|tojson }},
+            hasDynamicForms: {{ has_dynamic_forms|tojson }},
+            fieldTypeConfig: {{ field_type_config|tojson }},
+            validators: {{ validators|tojson }},
+            dependencies: {{ field_dependencies|tojson }}
+        });
+    });
+</script>
+{% endblock %}

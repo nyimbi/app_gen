@@ -1,0 +1,271 @@
+{% extends 'modelview/base.html' %} {% block content %}
+<div class="model-show-container">
+    {# Header Section #}
+    <div class="show-header">
+        <div class="title-section">
+            <h3>{{ title }}</h3>
+            {% if has_workflow %}
+            <div class="workflow-status">
+                <span class="status-badge status-{{ item.state }}">
+                    {{ item.state|title }}
+                </span>
+                {{ render_workflow_actions(item) }}
+            </div>
+            {% endif %}
+        </div>
+
+        {# Action Buttons #}
+        <div class="header-actions">
+            <div class="primary-actions">
+                {% if can_edit %}
+                <a
+                    href="{{ url_for('.' + edit_url, pk=pk) }}"
+                    class="btn btn-primary"
+                >
+                    <i class="fa fa-edit"></i> {{ _('Edit') }}
+                </a>
+                {% endif %}
+                <a href="{{ url_for('.' + list_url) }}" class="btn btn-default">
+                    <i class="fa fa-list"></i> {{ _('Back to list') }}
+                </a>
+            </div>
+
+            <div class="secondary-actions">
+                <div class="btn-group">
+                    <button
+                        type="button"
+                        class="btn btn-default dropdown-toggle"
+                        data-toggle="dropdown"
+                    >
+                        <i class="fa fa-ellipsis-v"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-right">
+                        {% if can_export %}
+                        <li>
+                            <a href="#" class="export-record" data-format="pdf">
+                                <i class="fa fa-file-pdf-o"></i> {{ _('Export as
+                                PDF') }}
+                            </a>
+                        </li>
+                        <li>
+                            <a
+                                href="#"
+                                class="export-record"
+                                data-format="excel"
+                            >
+                                <i class="fa fa-file-excel-o"></i> {{ _('Export
+                                as Excel') }}
+                            </a>
+                        </li>
+                        {% endif %} {% if has_versioning %}
+                        <li>
+                            <a href="{{ url_for('.history', pk=pk) }}">
+                                <i class="fa fa-history"></i> {{ _('View
+                                History') }}
+                            </a>
+                        </li>
+                        {% endif %} {% if has_audit_log %}
+                        <li></li>
+                            <a
+                                href="#"
+                                data-toggle="modal"
+                                data-target="#audit-log-modal"
+                            >
+                                <i class="fa fa-clock-o"></i> {{ _('View Audit
+                                Log') }}
+                            </a>
+                        </li>
+                        {% endif %} {% if can_delete %}
+                        <li class="divider"></li>
+                        <li>
+                            <a
+                                href="#"
+                                class="delete-record"
+                                data-url="{{ url_for('.delete', pk=pk) }}"
+                            >
+                                <i class="fa fa-trash"></i> {{ _('Delete') }}
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Main Content #}
+    <div class="show-content">
+        {# Tabs Navigation #}
+        <ul class="nav nav-tabs" role="tablist">
+            <li role="presentation" class="active">
+                <a href="#details" role="tab" data-toggle="tab">
+                    <i class="fa fa-info-circle"></i> {{ _('Details') }}
+                </a>
+            </li>
+            {% if related_views %} {% for view in related_views %}
+            <li role="presentation">
+                <a
+                    href="#{{ view.endpoint }}"
+                    role="tab"
+                    data-toggle="tab"
+                    data-load-url="{{ url_for(view.endpoint + '.list', parent_pk=pk) }}"
+                >
+                    <i class="fa fa-{{ view.icon }}"></i> {{ view.title }} {% if
+                    view.badge %}
+                    <span class="badge">{{ view.badge }}</span>
+                    {% endif %}
+                </a>
+            </li>
+            {% endfor %} {% endif %} {% if has_attachments %}
+            <li role="presentation">
+                <a href="#attachments" role="tab" data-toggle="tab">
+                    <i class="fa fa-paperclip"></i> {{ _('Attachments') }}
+                </a>
+            </li>
+            {% endif %} {% if has_comments %}
+            <li role="presentation">
+                <a href="#comments" role="tab" data-toggle="tab">
+                    <i class="fa fa-comments"></i> {{ _('Comments') }}
+                    <span class="badge">{{ comment_count }}</span>
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+
+        {# Tab Content #}
+        <div class="tab-content">
+            {# Details Tab #}
+            <div role="tabpanel" class="tab-pane active" id="details">
+                {% for fieldset_title, fieldset in show_fieldsets %}
+                <div
+                    class="form-fieldset fieldset-{{ fieldset_title|lower|replace(' ', '-') }}"
+                    id="fieldset_{{ fieldset_title|lower|replace(' ', '_') }}"
+                >
+                    <div class="fieldset-header">
+                        <i
+                            class="fa {{ fieldset.icon|default('fa-folder') }}"
+                        ></i>
+                        <span class="fieldset-title">{{ fieldset_title }}</span>
+                        <span class="fieldset-toggle-icon">
+                            {% if fieldset.expanded %}▼{% else %}▶{% endif %}
+                        </span>
+                    </div>
+
+                    <div
+                        class="fieldset-content {% if not fieldset.expanded %}collapsed{% endif %}"
+                    >
+                        <div
+                            class="fields-grid"
+                            data-columns="{{ fieldset.columns|default(2) }}"
+                        >
+                            {% for field in fieldset.fields %}
+                            <div class="field-container">
+                                <label class="field-label"
+                                    >{{ label_columns[field] }}</label
+                                >
+                                <div class="field-value">
+                                    {% set value = value_columns[field] %} {%
+                                    set field_type = field_types.get(field,
+                                    'text') %} {% if field in formatters_columns
+                                    %} {{ value|safe }} {% else %} {{
+                                    render_field_value(field, value, field_type)
+                                    }} {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %} {# Metadata Section #}
+                <div class="metadata-section">
+                    {% if has_versioning %} {{ render_version_info(item) }} {%
+                    endif %} {% if has_audit_log %} {{ render_audit_info(item)
+                    }} {% endif %}
+                </div>
+            </div>
+
+            {# Related Views Tabs #} {% if related_views %} {% for view in
+            related_views %}
+            <div role="tabpanel" class="tab-pane" id="{{ view.endpoint }}">
+                <div
+                    class="related-view-container"
+                    data-view="{{ view.endpoint }}"
+                    data-parent-pk="{{ pk }}"
+                >
+                    <div class="loading-indicator">
+                        <i class="fa fa-spinner fa-spin"></i>
+                        {{ _('Loading...') }}
+                    </div>
+                </div>
+            </div>
+            {% endfor %} {% endif %} {# Attachments Tab #} {% if has_attachments
+            %}
+            <div role="tabpanel" class="tab-pane" id="attachments">
+                <div class="attachments-container">
+                    <div class="attachment-upload">
+                        <form
+                            action="{{ url_for('.upload_attachment', pk=pk) }}"
+                            class="dropzone"
+                            id="attachment-dropzone"
+                        >
+                            <div class="fallback">
+                                <input name="file" type="file" multiple />
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="attachments-list">
+                        {% for attachment in attachments %} {{
+                        render_attachment(attachment) }} {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %} {# Comments Tab #} {% if has_comments %}
+            <div role="tabpanel" class="tab-pane" id="comments">
+                <div class="comments-container">
+                    <div class="comment-form">
+                        <form
+                            action="{{ url_for('.add_comment', pk=pk) }}"
+                            method="post"
+                            class="add-comment-form"
+                        >
+                            {{ comment_form.hidden_tag() }} {{
+                            comment_form.content(class="form-control",
+                            placeholder=_("Add a comment...")) }}
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fa fa-comment"></i> {{ _('Comment') }}
+                            </button>
+                        </form>
+                    </div>
+
+                    <div class="comments-list">
+                        {% for comment in comments %} {{ render_comment(comment)
+                        }} {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{# Modals #} {% include 'modelview/modals/audit_log.html' %} {% if has_workflow
+%} {% include 'modelview/modals/workflow_action.html' %} {% endif %} {% include
+'modelview/modals/delete_confirmation.html' %} {% endblock %} {% block tail_js
+%} {{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeShowView({
+            hasWorkflow: {{ has_workflow|tojson }},
+            hasVersioning: {{ has_versioning|tojson }},
+            hasAttachments: {{ has_attachments|tojson }},
+            hasComments: {{ has_comments|tojson }},
+            hasAuditLog: {{ has_audit_log|tojson }},
+            pk: {{ pk|tojson }},
+            modelName: "{{ modelview_name }}",
+            attachmentTypes: {{ attachment_types|tojson }},
+            maxFileSize: {{ max_file_size|tojson }}
+        });
+    });
+</script>
+{% endblock %}

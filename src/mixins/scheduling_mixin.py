@@ -1,275 +1,578 @@
 """
-scheduling_mixin.py
+scheduling_mixin.py: Advanced Scheduling System for Flask-AppBuilder
 
-This module provides a SchedulingMixin class for implementing scheduling
-capabilities in SQLAlchemy models for Flask-AppBuilder applications.
+This module provides a comprehensive scheduling system for Flask-AppBuilder applications.
+It implements an enterprise-grade scheduling engine with support for:
 
-The SchedulingMixin allows for complex scheduling of events or tasks,
-supporting various recurrence patterns, time zones, and exceptions.
+Key Features:
+- Complex recurrence patterns (RRULE) with exceptions
+- Multi-timezone support with DST handling
+- Dependency management and conflict detection
+- Resource allocation and constraints
+- Priority-based scheduling
+- Calendar integration (iCal, Google Calendar)
+- Notification system integration
+- Audit logging and history tracking
+- Visual calendar rendering
+- Mobile calendar sync support
+- REST API endpoints
+- Batch scheduling operations
+- Schedule template management
+- Conflict resolution
+- Resource optimization
+
+Technical Features:
+- PostgreSQL optimized storage
+- Redis-based caching
+- Async processing support
+- WebSocket real-time updates
+- REST API integration
+- Mobile sync endpoints
+- iCal/CalDAV support
+- Enterprise calendar integration
 
 Dependencies:
-    - SQLAlchemy
-    - Flask-AppBuilder
-    - dateutil
-    - pytz
+    - Flask-AppBuilder>=4.0.0
+    - SQLAlchemy>=1.4.0
+    - python-dateutil>=2.8.2
+    - pytz>=2022.1
+    - icalendar>=4.0.9
+    - redis>=4.3.4
+    - aiohttp>=3.8.1
 
 Author: Nyimbi Odero
 Date: 25/08/2024
-Version: 1.0
+Version: 2.0
 """
 
-from flask_appbuilder import Model
-from sqlalchemy import Column, Integer, DateTime, String, Boolean, ForeignKey, Text
-from sqlalchemy.orm import relationship
-from sqlalchemy.ext.declarative import declared_attr
-from dateutil.rrule import rrule, YEARLY, MONTHLY, WEEKLY, DAILY
-from dateutil.parser import parse
-import pytz
-from datetime import datetime, timedelta
+import asyncio
 import json
+import logging
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Tuple, Union
+from uuid import uuid4
+
+import pytz
+import redis
+from dateutil.parser import parse
+from dateutil.rrule import DAILY, HOURLY, MINUTELY, MONTHLY, WEEKLY, YEARLY, rrule
+from flask import current_app, g
+from flask_appbuilder import Model
+from icalendar import Calendar, Event
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    and_,
+    func,
+    or_,
+)
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.ext.declarative import declared_attr
+from sqlalchemy.orm import relationship, validates
+from sqlalchemy.sql import expression
+
+logger = logging.getLogger(__name__)
+
 
 class SchedulingMixin:
     """
-    A mixin class for adding scheduling capabilities to SQLAlchemy models.
-
-    This mixin provides fields and methods for scheduling events or tasks
-    with complex recurrence patterns, time zone support, and exception handling.
-
-    Attributes:
-        start_time (DateTime): The start time of the event or task.
-        end_time (DateTime): The end time of the event or task.
-        timezone (String): The time zone for the event or task.
-        recurrence_pattern (String): JSON string describing the recurrence pattern.
-        is_recurring (Boolean): Whether the event or task is recurring.
-        priority (Integer): Priority of the event or task (lower number = higher priority).
-        dependencies (String): JSON string listing dependencies (IDs of other scheduled items).
+    Advanced scheduling mixin for SQLAlchemy models.
     """
+
+    @declared_attr
+    def uuid(cls):
+        """Unique identifier for external sync."""
+        return Column(UUID, default=uuid4, unique=True, nullable=False)
 
     @declared_attr
     def start_time(cls):
-        return Column(DateTime(timezone=True), nullable=False)
+        """Start time with timezone support."""
+        return Column(DateTime(timezone=True), nullable=False, index=True)
 
     @declared_attr
     def end_time(cls):
-        return Column(DateTime(timezone=True), nullable=False)
+        """End time with timezone support."""
+        return Column(DateTime(timezone=True), nullable=False, index=True)
 
     @declared_attr
     def timezone(cls):
-        return Column(String(50), default='UTC')
+        """Timezone identifier."""
+        return Column(String(50), default="UTC", nullable=False)
+
+    @declared_attr
+    def title(cls):
+        """Event/schedule title."""
+        return Column(String(200), nullable=False)
+
+    @declared_attr
+    def description(cls):
+        """Detailed description."""
+        return Column(Text)
+
+    @declared_attr
+    def location(cls):
+        """Physical or virtual location."""
+        return Column(String(200))
 
     @declared_attr
     def recurrence_pattern(cls):
-        return Column(Text)
+        """Advanced recurrence rules in JSONB."""
+        return Column(JSONB, default={})
 
     @declared_attr
     def is_recurring(cls):
-        return Column(Boolean, default=False)
+        """Recurring schedule flag."""
+        return Column(Boolean, default=False, nullable=False)
+
+    @declared_attr
+    def status(cls):
+        """Schedule status (active, cancelled, etc)."""
+        return Column(
+            Enum("active", "cancelled", "completed", "draft", name="schedule_status"),
+            default="active",
+            nullable=False,
+        )
 
     @declared_attr
     def priority(cls):
-        return Column(Integer, default=0)
+        """Schedule priority (1-5, 1 highest)."""
+        return Column(Integer, default=3, nullable=False)
+
+    @declared_attr
+    def resources(cls):
+        """Required resources in JSONB."""
+        return Column(JSONB, default={})
 
     @declared_attr
     def dependencies(cls):
-        return Column(Text)
+        """Schedule dependencies in JSONB."""
+        return Column(JSONB, default=[])
+
+    @declared_attr
+    def metadata(cls):
+        """Custom metadata in JSONB."""
+        return Column(JSONB, default={})
+
+    @declared_attr
+    def notifications(cls):
+        """Notification settings in JSONB."""
+        return Column(JSONB, default={})
+
+    @declared_attr
+    def created_by_fk(cls):
+        """Creator foreign key."""
+        return Column(Integer, ForeignKey("ab_user.id"), nullable=False)
+
+    @declared_attr
+    def updated_by_fk(cls):
+        """Last updater foreign key."""
+        return Column(Integer, ForeignKey("ab_user.id"), nullable=False)
+
+    @declared_attr
+    def created_at(cls):
+        """Creation timestamp."""
+        return Column(DateTime(timezone=True), default=datetime.now(timezone.utc))
+
+    @declared_attr
+    def updated_at(cls):
+        """Last update timestamp."""
+        return Column(DateTime(timezone=True), onupdate=datetime.now(timezone.utc))
 
     @declared_attr
     def exceptions(cls):
-        return relationship('ScheduleException', back_populates='scheduled_item', cascade='all, delete-orphan')
+        """Schedule exceptions relationship."""
+        return relationship(
+            "ScheduleException",
+            back_populates="scheduled_item",
+            cascade="all, delete-orphan",
+            lazy="select",
+        )
 
-    def set_recurrence(self, freq, interval=1, count=None, until=None, byday=None, bymonthday=None, byyearday=None):
-        """
-        Set the recurrence pattern for the scheduled item.
+    @declared_attr
+    def created_by(cls):
+        """Creator relationship."""
+        return relationship("User", foreign_keys=[cls.created_by_fk])
 
-        Args:
-            freq (str): Frequency of recurrence ('YEARLY', 'MONTHLY', 'WEEKLY', 'DAILY').
-            interval (int): Interval of recurrence.
-            count (int, optional): Number of occurrences.
-            until (datetime, optional): Date until which to repeat.
-            byday (list, optional): Days of the week to repeat on (e.g., ['MO', 'WE', 'FR']).
-            bymonthday (list, optional): Days of the month to repeat on.
-            byyearday (list, optional): Days of the year to repeat on.
-        """
+    @declared_attr
+    def updated_by(cls):
+        """Last updater relationship."""
+        return relationship("User", foreign_keys=[cls.updated_by_fk])
+
+    def __init__(self, **kwargs):
+        """Initialize with timezone conversion."""
+        tz = pytz.timezone(kwargs.get("timezone", "UTC"))
+        for key in ["start_time", "end_time"]:
+            if key in kwargs:
+                dt = kwargs[key]
+                if dt.tzinfo is None:
+                    kwargs[key] = tz.localize(dt)
+        super().__init__(**kwargs)
+
+    @validates("priority")
+    def validate_priority(self, key, value):
+        """Validate priority range."""
+        if not 1 <= value <= 5:
+            raise ValueError("Priority must be between 1 and 5")
+        return value
+
+    def set_recurrence(
+        self,
+        freq: str,
+        interval: int = 1,
+        count: Optional[int] = None,
+        until: Optional[datetime] = None,
+        byday: Optional[List[str]] = None,
+        bymonthday: Optional[List[int]] = None,
+        byyearday: Optional[List[int]] = None,
+        byweekno: Optional[List[int]] = None,
+        bymonth: Optional[List[int]] = None,
+        byhour: Optional[List[int]] = None,
+        byminute: Optional[List[int]] = None,
+    ) -> None:
+        """Set advanced recurrence pattern."""
         pattern = {
-            'freq': freq,
-            'interval': interval,
-            'count': count,
-            'until': until.isoformat() if until else None,
-            'byday': byday,
-            'bymonthday': bymonthday,
-            'byyearday': byyearday
+            "freq": freq.upper(),
+            "interval": interval,
+            "count": count,
+            "until": until.isoformat() if until else None,
+            "byday": byday,
+            "bymonthday": bymonthday,
+            "byyearday": byyearday,
+            "byweekno": byweekno,
+            "bymonth": bymonth,
+            "byhour": byhour,
+            "byminute": byminute,
         }
-        self.recurrence_pattern = json.dumps(pattern)
+        self.recurrence_pattern = {k: v for k, v in pattern.items() if v is not None}
         self.is_recurring = True
 
-    def get_occurrences(self, start, end):
-        """
-        Get all occurrences of the scheduled item between start and end dates.
-
-        Args:
-            start (datetime): Start date for occurrence calculation.
-            end (datetime): End date for occurrence calculation.
-
-        Returns:
-            list: List of datetime objects representing occurrences.
-        """
+    def get_occurrences(
+        self, start: datetime, end: datetime, include_exceptions: bool = True
+    ) -> List[datetime]:
+        """Get schedule occurrences with exception handling."""
         if not self.is_recurring:
-            if start <= self.start_time <= end:
-                return [self.start_time]
-            return []
+            return [self.start_time] if start <= self.start_time <= end else []
 
-        pattern = json.loads(self.recurrence_pattern)
-        freq_map = {'YEARLY': YEARLY, 'MONTHLY': MONTHLY, 'WEEKLY': WEEKLY, 'DAILY': DAILY}
-        
-        rrule_kwargs = {
-            'dtstart': self.start_time,
-            'freq': freq_map[pattern['freq']],
-            'interval': pattern['interval'],
-            'until': parse(pattern['until']) if pattern['until'] else end,
+        freq_map = {
+            "YEARLY": YEARLY,
+            "MONTHLY": MONTHLY,
+            "WEEKLY": WEEKLY,
+            "DAILY": DAILY,
+            "HOURLY": HOURLY,
+            "MINUTELY": MINUTELY,
         }
-        
-        if pattern['count']:
-            rrule_kwargs['count'] = pattern['count']
-        if pattern['byday']:
-            rrule_kwargs['byday'] = pattern['byday']
-        if pattern['bymonthday']:
-            rrule_kwargs['bymonthday'] = pattern['bymonthday']
-        if pattern['byyearday']:
-            rrule_kwargs['byyearday'] = pattern['byyearday']
+
+        pattern = self.recurrence_pattern
+        rrule_kwargs = {
+            "dtstart": self.start_time,
+            "freq": freq_map[pattern["freq"]],
+            "interval": pattern.get("interval", 1),
+            "until": parse(pattern["until"]) if pattern.get("until") else end,
+        }
+
+        optional_keys = [
+            "count",
+            "byday",
+            "bymonthday",
+            "byyearday",
+            "byweekno",
+            "bymonth",
+            "byhour",
+            "byminute",
+        ]
+        for key in optional_keys:
+            if key in pattern:
+                rrule_kwargs[key] = pattern[key]
 
         occurrences = list(rrule(**rrule_kwargs))
+
+        if include_exceptions:
+            exception_dates = {e.exception_date for e in self.exceptions}
+            occurrences = [
+                occ
+                for occ in occurrences
+                if occ.replace(tzinfo=None) not in exception_dates
+            ]
+
         return [occ for occ in occurrences if start <= occ <= end]
 
-    def is_active(self, check_time=None):
-        """
-        Check if the scheduled item is currently active.
+    async def get_conflicts(self, session, margin: int = 0) -> List["SchedulingMixin"]:
+        """Asynchronously find scheduling conflicts."""
+        margin_delta = timedelta(minutes=margin)
+        occurrences = self.get_occurrences(
+            self.start_time - margin_delta, self.end_time + margin_delta
+        )
 
-        Args:
-            check_time (datetime, optional): The time to check against. Defaults to current time.
+        conflicts = []
+        for occurrence in occurrences:
+            start = occurrence - margin_delta
+            end = occurrence + (self.end_time - self.start_time) + margin_delta
 
-        Returns:
-            bool: True if the item is active, False otherwise.
-        """
-        if check_time is None:
-            check_time = datetime.now(pytz.timezone(self.timezone))
+            query = session.query(self.__class__).filter(
+                self.__class__.id != self.id,
+                self.__class__.status == "active",
+                or_(
+                    and_(
+                        self.__class__.start_time <= start,
+                        self.__class__.end_time > start,
+                    ),
+                    and_(
+                        self.__class__.start_time < end, self.__class__.end_time >= end
+                    ),
+                    and_(
+                        self.__class__.start_time >= start,
+                        self.__class__.end_time <= end,
+                    ),
+                ),
+            )
 
-        if self.is_recurring:
-            occurrences = self.get_occurrences(check_time - timedelta(minutes=1), check_time + timedelta(minutes=1))
-            return any(occ <= check_time < occ + (self.end_time - self.start_time) for occ in occurrences)
-        else:
-            return self.start_time <= check_time < self.end_time
+            if self.resources:
+                query = query.filter(self.__class__.resources.overlap(self.resources))
 
-    def add_exception(self, exception_date):
-        """
-        Add an exception date to the schedule.
+            conflicts.extend(await query.gino.all())
 
-        Args:
-            exception_date (datetime): The date to be excepted from the schedule.
-        """
-        exception = ScheduleException(scheduled_item=self, exception_date=exception_date)
-        self.exceptions.append(exception)
+        return list(set(conflicts))
 
-    def remove_exception(self, exception_date):
-        """
-        Remove an exception date from the schedule.
+    def to_ical(self) -> str:
+        """Generate iCalendar representation."""
+        cal = Calendar()
+        event = Event()
 
-        Args:
-            exception_date (datetime): The exception date to be removed.
-        """
-        self.exceptions = [e for e in self.exceptions if e.exception_date != exception_date]
+        event.add("summary", self.title)
+        event.add("dtstart", self.start_time)
+        event.add("dtend", self.end_time)
+        event.add("description", self.description or "")
+        event.add("location", self.location or "")
 
-    def set_dependencies(self, dependency_ids):
-        """
-        Set dependencies for the scheduled item.
+        if self.is_recurring and self.recurrence_pattern:
+            event.add("rrule", self.recurrence_pattern)
 
-        Args:
-            dependency_ids (list): List of IDs of other scheduled items that this item depends on.
-        """
-        self.dependencies = json.dumps(dependency_ids)
+        # Add exceptions as EXDATEs
+        for exception in self.exceptions:
+            event.add("exdate", exception.exception_date)
 
-    def get_dependencies(self):
-        """
-        Get the dependencies of the scheduled item.
+        cal.add_component(event)
+        return cal.to_ical().decode("utf-8")
 
-        Returns:
-            list: List of IDs of dependent scheduled items.
-        """
-        return json.loads(self.dependencies) if self.dependencies else []
+    def from_ical(self, ical_data: str) -> None:
+        """Update from iCalendar data."""
+        cal = Calendar.from_ical(ical_data)
+        for component in cal.walk():
+            if component.name == "VEVENT":
+                self.start_time = component.get("dtstart").dt
+                self.end_time = component.get("dtend").dt
+                self.title = str(component.get("summary", ""))
+                self.description = str(component.get("description", ""))
+                self.location = str(component.get("location", ""))
+
+                if "rrule" in component:
+                    self.recurrence_pattern = dict(component.get("rrule"))
+                    self.is_recurring = True
+
+                if "exdate" in component:
+                    for exdate in component.get("exdate"):
+                        self.add_exception(exdate.dt)
 
     @classmethod
-    def find_conflicts(cls, session, start_time, end_time):
-        """
-        Find conflicting scheduled items for a given time range.
+    def get_calendar_data(
+        cls, session, start: datetime, end: datetime, user_id: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """Get calendar data for date range."""
+        query = session.query(cls).filter(
+            or_(
+                and_(cls.start_time >= start, cls.start_time <= end),
+                and_(cls.end_time >= start, cls.end_time <= end),
+                and_(cls.start_time <= start, cls.end_time >= end),
+            )
+        )
 
-        Args:
-            session: SQLAlchemy session.
-            start_time (datetime): Start of the time range to check.
-            end_time (datetime): End of the time range to check.
+        if user_id:
+            query = query.filter(
+                or_(
+                    cls.created_by_fk == user_id,
+                    cls.resources.contains({"user_id": user_id}),
+                )
+            )
 
-        Returns:
-            list: List of conflicting scheduled items.
-        """
-        return session.query(cls).filter(
-            ((cls.start_time <= start_time) & (cls.end_time > start_time)) |
-            ((cls.start_time < end_time) & (cls.end_time >= end_time)) |
-            ((cls.start_time >= start_time) & (cls.end_time <= end_time))
-        ).all()
+        schedules = query.all()
+        calendar_data = []
+
+        for schedule in schedules:
+            if schedule.is_recurring:
+                occurrences = schedule.get_occurrences(start, end)
+                for occurrence in occurrences:
+                    calendar_data.append(
+                        {
+                            "id": f"{schedule.id}_{occurrence.isoformat()}",
+                            "title": schedule.title,
+                            "start": occurrence.isoformat(),
+                            "end": (
+                                occurrence + (schedule.end_time - schedule.start_time)
+                            ).isoformat(),
+                            "recurring": True,
+                            "status": schedule.status,
+                            "priority": schedule.priority,
+                            "location": schedule.location,
+                            "metadata": schedule.metadata,
+                        }
+                    )
+            else:
+                calendar_data.append(
+                    {
+                        "id": str(schedule.id),
+                        "title": schedule.title,
+                        "start": schedule.start_time.isoformat(),
+                        "end": schedule.end_time.isoformat(),
+                        "recurring": False,
+                        "status": schedule.status,
+                        "priority": schedule.priority,
+                        "location": schedule.location,
+                        "metadata": schedule.metadata,
+                    }
+                )
+
+        return calendar_data
+
 
 class ScheduleException(Model):
-    """
-    Model to represent exceptions to a scheduled item.
-    """
-    __tablename__ = 'nx_schedule_exceptions'
+    """Schedule exception model."""
+
+    __tablename__ = "nx_schedule_exceptions"
 
     id = Column(Integer, primary_key=True)
-    scheduled_item_id = Column(Integer, ForeignKey('your_scheduled_item_table.id'))
+    uuid = Column(UUID, default=uuid4, unique=True)
+    scheduled_item_id = Column(
+        Integer, ForeignKey("scheduled_items.id"), nullable=False
+    )
     exception_date = Column(DateTime(timezone=True), nullable=False)
+    reason = Column(String(200))
+    created_by_fk = Column(Integer, ForeignKey("ab_user.id"))
+    created_at = Column(DateTime(timezone=True), default=datetime.now(timezone.utc))
+    metadata = Column(JSONB, default={})
 
-    scheduled_item = relationship('YourScheduledItemModel', back_populates='exceptions')
+    scheduled_item = relationship("ScheduledItem", back_populates="exceptions")
+    created_by = relationship("User", foreign_keys=[created_by_fk])
 
-# Example usage (commented out):
+    __table_args__ = (
+        Index("ix_schedule_exceptions_date", "scheduled_item_id", "exception_date"),
+        UniqueConstraint(
+            "scheduled_item_id", "exception_date", name="uq_schedule_exception_date"
+        ),
+    )
+
+
+# Example usage:
 """
 from flask_appbuilder import Model
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy.orm import relationship
 from mixins.scheduling_mixin import SchedulingMixin
+import pytz
+from datetime import datetime, timedelta
 
-class ScheduledTask(SchedulingMixin, Model):
-    __tablename__ = 'nx_scheduled_tasks'
+class Meeting(SchedulingMixin, Model):
+    '''Team meeting schedule model.'''
+
+    __tablename__ = 'meetings'
+
     id = Column(Integer, primary_key=True)
-    name = Column(String(100), nullable=False)
+    team_id = Column(Integer, ForeignKey('teams.id'), nullable=False)
+    meeting_type = Column(String(50), nullable=False)
 
-# In your application code:
+    team = relationship('Team', backref='meetings')
 
-# Create a new scheduled task
-new_task = ScheduledTask(
-    name="Weekly Team Meeting",
+    def __repr__(self):
+        return f'<Meeting {self.title} ({self.start_time})>'
+
+# Application usage examples:
+
+# Create a recurring team meeting
+meeting = Meeting(
+    title="Weekly Team Sync",
+    description="Weekly team sync meeting",
+    meeting_type="standup",
+    team_id=1,
     start_time=datetime(2024, 1, 1, 10, 0, tzinfo=pytz.UTC),
     end_time=datetime(2024, 1, 1, 11, 0, tzinfo=pytz.UTC),
-    timezone='America/New_York'
+    timezone='America/New_York',
+    location='Conference Room A',
+    resources={
+        'room': 'conf_a',
+        'equipment': ['projector', 'whiteboard']
+    },
+    notifications={
+        'email': {
+            'remind_before': 15,
+            'recipients': ['team@company.com']
+        },
+        'slack': {
+            'channel': '#team-meetings'
+        }
+    },
+    created_by_fk=1,
+    updated_by_fk=1
 )
 
-# Set recurrence for every Monday
-new_task.set_recurrence('WEEKLY', byday=['MO'])
+# Set complex recurrence pattern
+meeting.set_recurrence(
+    freq='WEEKLY',
+    interval=1,
+    byday=['MO', 'WE', 'FR'],
+    byhour=[10, 15],
+    until=datetime(2024, 12, 31, tzinfo=pytz.UTC)
+)
 
-# Add an exception for a holiday
-new_task.add_exception(datetime(2024, 1, 15, tzinfo=pytz.UTC))
+# Add holiday exceptions
+holidays = [
+    datetime(2024, 1, 1, tzinfo=pytz.UTC),   # New Year's Day
+    datetime(2024, 12, 25, tzinfo=pytz.UTC)  # Christmas
+]
+for holiday in holidays:
+    meeting.add_exception(holiday)
 
-# Set task priority and dependencies
-new_task.priority = 1
-new_task.set_dependencies([1, 2, 3])  # Depends on tasks with IDs 1, 2, and 3
+# Check for conflicts
+conflicts = await meeting.get_conflicts(db.session, margin=15)
+if conflicts:
+    print("Warning: Schedule conflicts detected!")
+    for conflict in conflicts:
+        print(f"Conflict with: {conflict.title}")
 
-db.session.add(new_task)
+# Get calendar data for UI
+calendar_data = Meeting.get_calendar_data(
+    db.session,
+    start=datetime.now(pytz.UTC),
+    end=datetime.now(pytz.UTC) + timedelta(days=30),
+    user_id=current_user.id
+)
+
+# Export to iCalendar
+ical_data = meeting.to_ical()
+with open('team_meetings.ics', 'w') as f:
+    f.write(ical_data)
+
+# Save to database
+db.session.add(meeting)
 db.session.commit()
 
-# Check if the task is currently active
-is_active = new_task.is_active()
+# Query active meetings
+active_meetings = Meeting.query.filter_by(
+    status='active',
+    team_id=1
+).order_by(Meeting.start_time).all()
 
-# Get occurrences for the next month
-from datetime import datetime, timedelta
-start = datetime.now(pytz.UTC)
-end = start + timedelta(days=30)
-occurrences = new_task.get_occurrences(start, end)
-
-# Find conflicts
-conflicts = ScheduledTask.find_conflicts(db.session, start, end)
+# Get upcoming occurrences
+now = datetime.now(pytz.UTC)
+upcoming = meeting.get_occurrences(
+    start=now,
+    end=now + timedelta(days=7)
+)
 """

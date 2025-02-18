@@ -35,44 +35,56 @@ class MyPlace(Model, PlaceMixin):
 Note: Ensure that the SETUP_GEONAMES configuration is set in your Flask-AppBuilder
 config if you want to use GeoNames data.
 """
-import os
+
 import gzip
-import json
 import hashlib
-import zipfile
+import json
 import math
-import requests
-import folium
+import os
+import xml.etree.ElementTree as ET
+import zipfile
 from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+import folium
+import matplotlib.pyplot as plt
+import requests
 from flask import current_app
-from sqlalchemy import func
-from typing import List, Tuple, Dict, Any, Optional, Union
 from geoalchemy2 import Geometry
 from geoalchemy2.shape import from_shape
-from shapely.geometry import Polygon
 from pyproj import Transformer
-import xml.etree.ElementTree as ET
-import matplotlib.pyplot as plt
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, Table, MetaData, inspect
-from sqlalchemy.orm import relationship, declared_attr
+from shapely.geometry import Polygon
+from sqlalchemy import (
+    Column,
+    Float,
+    ForeignKey,
+    Integer,
+    MetaData,
+    String,
+    Table,
+    func,
+    inspect,
+)
+from sqlalchemy.orm import declared_attr, relationship
 
 # Work across both SQLAlchemy 1.x and 2.0
 try:
     # SQLAlchemy 2.0
-    from sqlalchemy.orm import DeclarativeBase, mapped_column, Mapped
+    from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
     SQLALCHEMY_2 = True
 except ImportError:
     # SQLAlchemy 1.x
     from sqlalchemy.ext.declarative import declared_attr
-    SQLALCHEMY_2 = False
 
+    SQLALCHEMY_2 = False
 
 
 class PlaceMixin:
     """
-       A comprehensive mixin for Flask-AppBuilder models that provides extensive
-       geographical information and operations.
-       """
+    A comprehensive mixin for Flask-AppBuilder models that provides extensive
+    geographical information and operations.
+    """
 
     @declared_attr
     def __tablename__(cls):
@@ -85,12 +97,16 @@ class PlaceMixin:
         latitude = mapped_column(Float)
         longitude = mapped_column(Float)
         altitude = mapped_column(Float)
-        geometry = mapped_column(Geometry(geometry_type='POINT', srid=4326))
-        country_code = mapped_column(String(2), ForeignKey('nx_geo_country_info.iso_alpha2'))
+        geometry = mapped_column(Geometry(geometry_type="POINT", srid=4326))
+        country_code = mapped_column(
+            String(2), ForeignKey("nx_geo_country_info.iso_alpha2")
+        )
         admin1_code = mapped_column(String(20))
         admin2_code = mapped_column(String(80))
-        feature_code = mapped_column(String(10), ForeignKey('nx_geo_feature_codes.code'))
-        timezone = mapped_column(String(200), ForeignKey('nx_geo_timezones.timezoneid'))
+        feature_code = mapped_column(
+            String(10), ForeignKey("nx_geo_feature_codes.code")
+        )
+        timezone = mapped_column(String(200), ForeignKey("nx_geo_timezones.timezoneid"))
     else:
         id = Column(Integer, primary_key=True)
         place_name = Column(String(100))
@@ -98,17 +114,17 @@ class PlaceMixin:
         latitude = Column(Float)
         longitude = Column(Float)
         altitude = Column(Float)
-        geometry = Column(Geometry(geometry_type='POINT', srid=4326))
-        country_code = Column(String(2), ForeignKey('nx_geo_country_info.iso_alpha2'))
+        geometry = Column(Geometry(geometry_type="POINT", srid=4326))
+        country_code = Column(String(2), ForeignKey("nx_geo_country_info.iso_alpha2"))
         admin1_code = Column(String(20))
         admin2_code = Column(String(80))
-        feature_code = Column(String(10), ForeignKey('nx_geo_feature_codes.code'))
-        timezone = Column(String(200), ForeignKey('nx_geo_timezones.timezoneid'))
+        feature_code = Column(String(10), ForeignKey("nx_geo_feature_codes.code"))
+        timezone = Column(String(200), ForeignKey("nx_geo_timezones.timezoneid"))
 
     # Relationships
-    country = relationship('NxGeoCountryInfo', foreign_keys=[country_code])
-    feature = relationship('NxGeoFeatureCodes', foreign_keys=[feature_code])
-    timezone_info = relationship('NxGeoTimezones', foreign_keys=[timezone])
+    country = relationship("NxGeoCountryInfo", foreign_keys=[country_code])
+    feature = relationship("NxGeoFeatureCodes", foreign_keys=[feature_code])
+    timezone_info = relationship("NxGeoTimezones", foreign_keys=[timezone])
 
     class GeoNamesSetup:
         """
@@ -158,13 +174,13 @@ class PlaceMixin:
             Returns:
                 bool: True if setup is complete, False otherwise
             """
-            return os.path.exists(os.path.join(cls.DOWNLOAD_DIR, '.setup_complete'))
+            return os.path.exists(os.path.join(cls.DOWNLOAD_DIR, ".setup_complete"))
 
         @classmethod
         def mark_setup_complete(cls):
             """Mark the GeoNames setup as complete."""
-            with open(os.path.join(cls.DOWNLOAD_DIR, '.setup_complete'), 'w') as f:
-                f.write('Setup completed successfully')
+            with open(os.path.join(cls.DOWNLOAD_DIR, ".setup_complete"), "w") as f:
+                f.write("Setup completed successfully")
 
         @classmethod
         def tables_exist(cls, engine):
@@ -180,10 +196,16 @@ class PlaceMixin:
             inspector = inspect(engine)
             existing_tables = inspector.get_table_names()
             required_tables = [
-                'nx_geo_geoname', 'nx_geo_country_info', 'nx_geo_admin1_codes',
-                'nx_geo_admin2_codes', 'nx_geo_alternate_names', 'nx_geo_feature_codes',
-                'nx_geo_timezones', 'nx_geo_continents', 'nx_geo_postal_codes',
-                'nx_geo_language_codes'
+                "nx_geo_geoname",
+                "nx_geo_country_info",
+                "nx_geo_admin1_codes",
+                "nx_geo_admin2_codes",
+                "nx_geo_alternate_names",
+                "nx_geo_feature_codes",
+                "nx_geo_timezones",
+                "nx_geo_continents",
+                "nx_geo_postal_codes",
+                "nx_geo_language_codes",
             ]
             return all(table in existing_tables for table in required_tables)
 
@@ -199,26 +221,29 @@ class PlaceMixin:
 
             # Define tables here (similar to the previous implementation)
             # Example:
-            Table('nx_geo_geoname', metadata,
-                  Column('geonameid', Integer, primary_key=True),
-                  Column('name', String),
-                  Column('asciiname', String),
-                  Column('alternatenames', String),
-                  Column('latitude', Float),
-                  Column('longitude', Float),
-                  Column('feature_class', String),
-                  Column('feature_code', String),
-                  Column('country_code', String),
-                  Column('cc2', String),
-                  Column('admin1_code', String),
-                  Column('admin2_code', String),
-                  Column('admin3_code', String),
-                  Column('admin4_code', String),
-                  Column('population', Integer),
-                  Column('elevation', Integer),
-                  Column('dem', Integer),
-                  Column('timezone', String),
-                  Column('modification_date', String))
+            Table(
+                "nx_geo_geoname",
+                metadata,
+                Column("geonameid", Integer, primary_key=True),
+                Column("name", String),
+                Column("asciiname", String),
+                Column("alternatenames", String),
+                Column("latitude", Float),
+                Column("longitude", Float),
+                Column("feature_class", String),
+                Column("feature_code", String),
+                Column("country_code", String),
+                Column("cc2", String),
+                Column("admin1_code", String),
+                Column("admin2_code", String),
+                Column("admin3_code", String),
+                Column("admin4_code", String),
+                Column("population", Integer),
+                Column("elevation", Integer),
+                Column("dem", Integer),
+                Column("timezone", String),
+                Column("modification_date", String),
+            )
 
             # ... Define other tables ...
 
@@ -242,7 +267,7 @@ class PlaceMixin:
             """
             url = cls.GEONAMES_URL + filename
             local_file = os.path.join(cls.DOWNLOAD_DIR, filename)
-            temp_file = local_file + '.tmp'
+            temp_file = local_file + ".tmp"
 
             if os.path.exists(local_file) and cls.verify_file(local_file, filename):
                 logger.info(f"{filename} already downloaded and verified.")
@@ -250,24 +275,28 @@ class PlaceMixin:
 
             if os.path.exists(temp_file):
                 logger.info(f"Resuming download of {filename}")
-                mode = 'ab'
+                mode = "ab"
                 existing_size = os.path.getsize(temp_file)
-                headers = {'Range': f'bytes={existing_size}-'}
+                headers = {"Range": f"bytes={existing_size}-"}
             else:
                 logger.info(f"Starting download of {filename}")
-                mode = 'wb'
+                mode = "wb"
                 existing_size = 0
                 headers = {}
 
             response = requests.get(url, headers=headers, stream=True)
-            total_size = int(response.headers.get('content-length', 0))
+            total_size = int(response.headers.get("content-length", 0))
 
             with open(temp_file, mode) as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
                         f.write(chunk)
                         existing_size += len(chunk)
-                        print(f"\rDownloading {filename}: {existing_size}/{total_size} bytes", end='', flush=True)
+                        print(
+                            f"\rDownloading {filename}: {existing_size}/{total_size} bytes",
+                            end="",
+                            flush=True,
+                        )
 
             print()  # New line after progress
 
@@ -306,7 +335,9 @@ class PlaceMixin:
                 logger.info(f"File {filename} verified successfully.")
                 return True
             else:
-                logger.error(f"MD5 mismatch for {filename}. Expected: {expected_md5}, Actual: {actual_md5}")
+                logger.error(
+                    f"MD5 mismatch for {filename}. Expected: {expected_md5}, Actual: {actual_md5}"
+                )
                 return False
 
         @classmethod
@@ -349,12 +380,12 @@ class PlaceMixin:
             """
             md5_hash = hashlib.md5()
 
-            if file_path.endswith('.gz'):
-                with gzip.open(file_path, 'rb') as f:
+            if file_path.endswith(".gz"):
+                with gzip.open(file_path, "rb") as f:
                     for chunk in iter(lambda: f.read(4096), b""):
                         md5_hash.update(chunk)
             else:
-                with open(file_path, 'rb') as f:
+                with open(file_path, "rb") as f:
                     for chunk in iter(lambda: f.read(4096), b""):
                         md5_hash.update(chunk)
 
@@ -395,21 +426,24 @@ class PlaceMixin:
 
             try:
                 # Handle zipped files
-                if zip_filename.endswith('.zip'):
-                    with zipfile.ZipFile(file_path, 'r') as zip_ref:
+                if zip_filename.endswith(".zip"):
+                    with zipfile.ZipFile(file_path, "r") as zip_ref:
                         with zip_ref.open(txt_filename) as f:
-                            content = f.read().decode('utf-8')
+                            content = f.read().decode("utf-8")
                 else:
                     # Handle unzipped files
-                    with open(file_path, 'r', encoding='utf-8') as f:
+                    with open(file_path, "r", encoding="utf-8") as f:
                         content = f.read()
 
                 # Determine the table name
-                table_name = 'nx_geo_' + txt_filename.split('.')[0]
-                if table_name == 'nx_geo_allCountries' and zip_filename == 'postalCodes.zip':
-                    table_name = 'nx_geo_postal_codes'
-                elif table_name == 'nx_geo_allCountries':
-                    table_name = 'nx_geo_geoname'
+                table_name = "nx_geo_" + txt_filename.split(".")[0]
+                if (
+                    table_name == "nx_geo_allCountries"
+                    and zip_filename == "postalCodes.zip"
+                ):
+                    table_name = "nx_geo_postal_codes"
+                elif table_name == "nx_geo_allCountries":
+                    table_name = "nx_geo_geoname"
 
                 logger.info(f"Loading data into {table_name} table...")
 
@@ -418,23 +452,29 @@ class PlaceMixin:
                     connection.execute(f"DELETE FROM {table_name}")
 
                     # Bulk load new data
-                    if db.engine.dialect.name == 'postgresql':
+                    if db.engine.dialect.name == "postgresql":
                         # For PostgreSQL, use COPY command
                         connection.execute(
-                            f"COPY {table_name} FROM STDIN WITH CSV DELIMITER E'\\t' QUOTE E'\\b' NULL AS ''")
+                            f"COPY {table_name} FROM STDIN WITH CSV DELIMITER E'\\t' QUOTE E'\\b' NULL AS ''"
+                        )
                         connection.execute(content)
                     else:
                         # For other databases, use a more generic approach
-                        temp_file = os.path.join(cls.DOWNLOAD_DIR, f'temp_{txt_filename}')
-                        with open(temp_file, 'w', encoding='utf-8') as f:
+                        temp_file = os.path.join(
+                            cls.DOWNLOAD_DIR, f"temp_{txt_filename}"
+                        )
+                        with open(temp_file, "w", encoding="utf-8") as f:
                             f.write(content)
 
                         table = db.Model.metadata.tables[table_name]
-                        with open(temp_file, 'r', encoding='utf-8') as f:
+                        with open(temp_file, "r", encoding="utf-8") as f:
                             columns = [c.key for c in table.columns]
                             connection.execute(
                                 table.insert(),
-                                [dict(zip(columns, line.strip().split('\t'))) for line in f]
+                                [
+                                    dict(zip(columns, line.strip().split("\t")))
+                                    for line in f
+                                ],
                             )
 
                         os.remove(temp_file)
@@ -455,14 +495,17 @@ class PlaceMixin:
         """
         super().__init_subclass__(**kwargs)
         try:
-            if current_app.config.get('SETUP_GEONAMES', False):
+            if current_app.config.get("SETUP_GEONAMES", False):
                 from flask_appbuilder import db
+
                 cls.GeoNamesSetup.setup(db)
         except RuntimeError:
             # This will occur if there's no application context
             pass
 
-    def set_coordinates(self, latitude: float, longitude: float, altitude: Optional[float] = None) -> 'PlaceMixin':
+    def set_coordinates(
+        self, latitude: float, longitude: float, altitude: Optional[float] = None
+    ) -> "PlaceMixin":
         """
         Set the geographical coordinates for the place.
 
@@ -478,10 +521,8 @@ class PlaceMixin:
         self.longitude = longitude
         if altitude is not None:
             self.altitude = altitude
-        self.geometry = f'POINT({longitude} {latitude})'
+        self.geometry = f"POINT({longitude} {latitude})"
         return self
-
-
 
     def haversine_distance(self, lat2: float, lon2: float) -> float:
         """
@@ -499,7 +540,10 @@ class PlaceMixin:
         lat2, lon2 = math.radians(lat2), math.radians(lon2)
         dlat = lat2 - lat1
         dlon = lon2 - lon1
-        a = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+        a = (
+            math.sin(dlat / 2) ** 2
+            + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+        )
         c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
         return R * c
 
@@ -515,6 +559,7 @@ class PlaceMixin:
             float: Distance in kilometers
         """
         from geopy import distance
+
         return distance.geodesic((self.latitude, self.longitude), (lat2, lon2)).km
 
     def great_circle_distance(self, lat2: float, lon2: float) -> float:
@@ -529,9 +574,10 @@ class PlaceMixin:
             float: Distance in kilometers
         """
         from geopy import distance
+
         return distance.great_circle((self.latitude, self.longitude), (lat2, lon2)).km
 
-    def nearest_places(self, db, limit: int = 5) -> List['PlaceMixin']:
+    def nearest_places(self, db, limit: int = 5) -> List["PlaceMixin"]:
         """
         Find the nearest places to this location.
 
@@ -542,14 +588,28 @@ class PlaceMixin:
         Returns:
             List[PlaceMixin]: List of nearest places
         """
-        NxGeoGeoname = db.Model.metadata.tables['nx_geo_geoname']
-        query = db.session.query(NxGeoGeoname).order_by(
-            func.ST_Distance(
-                func.ST_GeomFromText(f'POINT({self.longitude} {self.latitude})', 4326),
-                func.ST_GeomFromText(func.concat('POINT(', NxGeoGeoname.c.longitude, ' ', NxGeoGeoname.c.latitude, ')'),
-                                     4326)
+        NxGeoGeoname = db.Model.metadata.tables["nx_geo_geoname"]
+        query = (
+            db.session.query(NxGeoGeoname)
+            .order_by(
+                func.ST_Distance(
+                    func.ST_GeomFromText(
+                        f"POINT({self.longitude} {self.latitude})", 4326
+                    ),
+                    func.ST_GeomFromText(
+                        func.concat(
+                            "POINT(",
+                            NxGeoGeoname.c.longitude,
+                            " ",
+                            NxGeoGeoname.c.latitude,
+                            ")",
+                        ),
+                        4326,
+                    ),
+                )
             )
-        ).limit(limit)
+            .limit(limit)
+        )
         return query.all()
 
     def to_geojson(self) -> Dict[str, Any]:
@@ -563,17 +623,17 @@ class PlaceMixin:
             "type": "Feature",
             "geometry": {
                 "type": "Point",
-                "coordinates": [self.longitude, self.latitude]
+                "coordinates": [self.longitude, self.latitude],
             },
             "properties": {
                 "name": self.place_name,
                 "description": self.place_description,
-                "altitude": self.altitude
-            }
+                "altitude": self.altitude,
+            },
         }
 
     @classmethod
-    def from_geojson(cls, geojson: Dict[str, Any]) -> 'PlaceMixin':
+    def from_geojson(cls, geojson: Dict[str, Any]) -> "PlaceMixin":
         """
         Create a new place from a GeoJSON feature.
 
@@ -584,13 +644,13 @@ class PlaceMixin:
             PlaceMixin: New PlaceMixin instance
         """
         place = cls()
-        place.longitude, place.latitude = geojson['geometry']['coordinates']
-        place.place_name = geojson['properties'].get('name')
-        place.place_description = geojson['properties'].get('description')
-        place.altitude = geojson['properties'].get('altitude')
+        place.longitude, place.latitude = geojson["geometry"]["coordinates"]
+        place.place_name = geojson["properties"].get("name")
+        place.place_description = geojson["properties"].get("description")
+        place.altitude = geojson["properties"].get("altitude")
         return place
 
-    def geocode(self, db, address: str) -> Optional['PlaceMixin']:
+    def geocode(self, db, address: str) -> Optional["PlaceMixin"]:
         """
         Geocode an address using the GeoNames database.
 
@@ -601,10 +661,13 @@ class PlaceMixin:
         Returns:
             Optional[PlaceMixin]: Geocoded place or None if not found
         """
-        NxGeoGeoname = db.Model.metadata.tables['nx_geo_geoname']
-        query = db.session.query(NxGeoGeoname).filter(
-            NxGeoGeoname.c.name.ilike(f"%{address}%")
-        ).order_by(NxGeoGeoname.c.population.desc()).first()
+        NxGeoGeoname = db.Model.metadata.tables["nx_geo_geoname"]
+        query = (
+            db.session.query(NxGeoGeoname)
+            .filter(NxGeoGeoname.c.name.ilike(f"%{address}%"))
+            .order_by(NxGeoGeoname.c.population.desc())
+            .first()
+        )
 
         if query:
             self.set_coordinates(query.latitude, query.longitude)
@@ -613,7 +676,9 @@ class PlaceMixin:
             return self
         return None
 
-    def reverse_geocode(self, db, latitude: float, longitude: float) -> Optional['PlaceMixin']:
+    def reverse_geocode(
+        self, db, latitude: float, longitude: float
+    ) -> Optional["PlaceMixin"]:
         """
         Perform reverse geocoding to find the nearest location to the given coordinates.
 
@@ -625,14 +690,26 @@ class PlaceMixin:
         Returns:
             Optional[PlaceMixin]: Nearest place or None if not found
         """
-        NxGeoGeoname = db.Model.metadata.tables['nx_geo_geoname']
-        query = db.session.query(NxGeoGeoname).order_by(
-            func.ST_Distance(
-                func.ST_GeomFromText(f'POINT({longitude} {latitude})', 4326),
-                func.ST_GeomFromText(func.concat('POINT(', NxGeoGeoname.c.longitude, ' ', NxGeoGeoname.c.latitude, ')'),
-                                     4326)
+        NxGeoGeoname = db.Model.metadata.tables["nx_geo_geoname"]
+        query = (
+            db.session.query(NxGeoGeoname)
+            .order_by(
+                func.ST_Distance(
+                    func.ST_GeomFromText(f"POINT({longitude} {latitude})", 4326),
+                    func.ST_GeomFromText(
+                        func.concat(
+                            "POINT(",
+                            NxGeoGeoname.c.longitude,
+                            " ",
+                            NxGeoGeoname.c.latitude,
+                            ")",
+                        ),
+                        4326,
+                    ),
+                )
             )
-        ).first()
+            .first()
+        )
 
         if query:
             self.set_coordinates(query.latitude, query.longitude)
@@ -649,21 +726,21 @@ class PlaceMixin:
             Dict[str, Any]: Dictionary containing the place's attributes
         """
         return {
-            'id': self.id,
-            'place_name': self.place_name,
-            'place_description': self.place_description,
-            'latitude': self.latitude,
-            'longitude': self.longitude,
-            'altitude': self.altitude,
-            'country_code': self.country_code,
-            'admin1_code': self.admin1_code,
-            'admin2_code': self.admin2_code,
-            'feature_code': self.feature_code,
-            'timezone': self.timezone
+            "id": self.id,
+            "place_name": self.place_name,
+            "place_description": self.place_description,
+            "latitude": self.latitude,
+            "longitude": self.longitude,
+            "altitude": self.altitude,
+            "country_code": self.country_code,
+            "admin1_code": self.admin1_code,
+            "admin2_code": self.admin2_code,
+            "feature_code": self.feature_code,
+            "timezone": self.timezone,
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'PlaceMixin':
+    def from_dict(cls, data: Dict[str, Any]) -> "PlaceMixin":
         """
         Create a new place from a dictionary.
 
@@ -688,7 +765,7 @@ class PlaceMixin:
         return f"POINT({self.longitude} {self.latitude})"
 
     @classmethod
-    def from_wkt(cls, wkt: str) -> 'PlaceMixin':
+    def from_wkt(cls, wkt: str) -> "PlaceMixin":
         """
         Create a new place from a Well-Known Text (WKT) geometry.
 
@@ -702,6 +779,7 @@ class PlaceMixin:
             ValueError: If the WKT string is not a valid point
         """
         import re
+
         match = re.match(r"POINT\((\S+)\s+(\S+)\)", wkt)
         if match:
             place = cls()
@@ -710,9 +788,9 @@ class PlaceMixin:
         else:
             raise ValueError("Invalid WKT point string")
 
-
-
-    def distance_to(self, other: Union['PlaceMixin', Tuple[float, float]], method: str = 'haversine') -> float:
+    def distance_to(
+        self, other: Union["PlaceMixin", Tuple[float, float]], method: str = "haversine"
+    ) -> float:
         """
         Calculate the distance to another place or coordinates.
 
@@ -731,16 +809,18 @@ class PlaceMixin:
         else:
             other_lat, other_lon = other.latitude, other.longitude
 
-        if method == 'haversine':
+        if method == "haversine":
             return self.haversine_distance(other_lat, other_lon)
-        elif method == 'geodesic':
+        elif method == "geodesic":
             return self.geodesic_distance(other_lat, other_lon)
-        elif method == 'great_circle':
+        elif method == "great_circle":
             return self.great_circle_distance(other_lat, other_lon)
         else:
             raise ValueError(f"Invalid distance calculation method: {method}")
 
-    def set_coordinates_in_crs(self, x: float, y: float, from_crs: str, to_crs: str = 'EPSG:4326') -> 'PlaceMixin':
+    def set_coordinates_in_crs(
+        self, x: float, y: float, from_crs: str, to_crs: str = "EPSG:4326"
+    ) -> "PlaceMixin":
         """
         Set coordinates transformed from one CRS to another.
 
@@ -757,7 +837,9 @@ class PlaceMixin:
         lon, lat = transformer.transform(x, y)
         return self.set_coordinates(lat, lon)
 
-    def generate_static_map(self, zoom: int = 12, width: int = 400, height: int = 300) -> str:
+    def generate_static_map(
+        self, zoom: int = 12, width: int = 400, height: int = 300
+    ) -> str:
         """
         Generate a static map image URL using OpenStreetMap.
 
@@ -771,15 +853,15 @@ class PlaceMixin:
         """
         base_url = "https://static-maps.openstreetmap.fr/"
         params = {
-            'center': f"{self.latitude},{self.longitude}",
-            'zoom': zoom,
-            'size': f"{width}x{height}",
-            'maptype': 'mapnik',
-            'markers': f"{self.latitude},{self.longitude},red-dot"
+            "center": f"{self.latitude},{self.longitude}",
+            "zoom": zoom,
+            "size": f"{width}x{height}",
+            "maptype": "mapnik",
+            "markers": f"{self.latitude},{self.longitude},red-dot",
         }
         return f"{base_url}?{'&'.join(f'{k}={v}' for k, v in params.items())}"
 
-    def calculate_route_online(self, destination: 'PlaceMixin') -> Dict[str, Any]:
+    def calculate_route_online(self, destination: "PlaceMixin") -> Dict[str, Any]:
         """
         Calculate a route to a destination using the OSRM online service.
 
@@ -792,16 +874,18 @@ class PlaceMixin:
         url = f"http://router.project-osrm.org/route/v1/driving/{self.longitude},{self.latitude};{destination.longitude},{destination.latitude}?overview=full&geometries=geojson"
         response = requests.get(url)
         data = response.json()
-        if data['code'] != 'Ok':
+        if data["code"] != "Ok":
             raise ValueError("Unable to calculate route")
-        route = data['routes'][0]
+        route = data["routes"][0]
         return {
-            'distance': route['distance'],
-            'duration': route['duration'],
-            'geometry': route['geometry']
+            "distance": route["distance"],
+            "duration": route["duration"],
+            "geometry": route["geometry"],
         }
 
-    def estimate_travel_time(self, destination: 'PlaceMixin', speed_km_h: float = 60) -> float:
+    def estimate_travel_time(
+        self, destination: "PlaceMixin", speed_km_h: float = 60
+    ) -> float:
         """
         Estimate travel time to a destination based on a given speed.
 
@@ -823,20 +907,20 @@ class PlaceMixin:
             dict: Dictionary containing place attributes
         """
         return {
-            'id': self.id,
-            'place_name': self.place_name,
-            'latitude': self.latitude,
-            'longitude': self.longitude,
-            'altitude': self.altitude,
-            'country_code': self.country_code,
-            'admin1_code': self.admin1_code,
-            'admin2_code': self.admin2_code,
-            'feature_code': self.feature_code,
-            'timezone': self.timezone
+            "id": self.id,
+            "place_name": self.place_name,
+            "latitude": self.latitude,
+            "longitude": self.longitude,
+            "altitude": self.altitude,
+            "country_code": self.country_code,
+            "admin1_code": self.admin1_code,
+            "admin2_code": self.admin2_code,
+            "feature_code": self.feature_code,
+            "timezone": self.timezone,
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'PlaceMixin':
+    def from_dict(cls, data: Dict[str, Any]) -> "PlaceMixin":
         """
         Create a PlaceMixin instance from a dictionary.
 
@@ -852,7 +936,7 @@ class PlaceMixin:
         return instance
 
     @classmethod
-    def from_geojson(cls, geojson: Dict[str, Any]) -> 'PlaceMixin':
+    def from_geojson(cls, geojson: Dict[str, Any]) -> "PlaceMixin":
         """
         Create a PlaceMixin instance from a GeoJSON Feature.
 
@@ -862,17 +946,19 @@ class PlaceMixin:
         Returns:
             PlaceMixin: New instance created from the GeoJSON
         """
-        if geojson['type'] != 'Feature' or geojson['geometry']['type'] != 'Point':
+        if geojson["type"] != "Feature" or geojson["geometry"]["type"] != "Point":
             raise ValueError("Invalid GeoJSON: must be a Feature with Point geometry")
 
         instance = cls()
-        instance.longitude, instance.latitude = geojson['geometry']['coordinates']
-        instance.place_name = geojson['properties'].get('name', '')
-        instance.place_description = geojson['properties'].get('description', '')
+        instance.longitude, instance.latitude = geojson["geometry"]["coordinates"]
+        instance.place_name = geojson["properties"].get("name", "")
+        instance.place_description = geojson["properties"].get("description", "")
         return instance
 
     @classmethod
-    def bulk_import_geojson(cls, geojson_collection: Dict[str, Any]) -> List['PlaceMixin']:
+    def bulk_import_geojson(
+        cls, geojson_collection: Dict[str, Any]
+    ) -> List["PlaceMixin"]:
         """
         Bulk import places from a GeoJSON FeatureCollection.
 
@@ -882,12 +968,12 @@ class PlaceMixin:
         Returns:
             list: List of created PlaceMixin instances
         """
-        if geojson_collection['type'] != 'FeatureCollection':
+        if geojson_collection["type"] != "FeatureCollection":
             raise ValueError("Invalid GeoJSON: must be a FeatureCollection")
 
-        return [cls.from_geojson(feature) for feature in geojson_collection['features']]
+        return [cls.from_geojson(feature) for feature in geojson_collection["features"]]
 
-    def geocode_simple(self, db, name: str) -> Optional['PlaceMixin']:
+    def geocode_simple(self, db, name: str) -> Optional["PlaceMixin"]:
         """
         Simple geocoding using the GeoNames database.
 
@@ -898,10 +984,13 @@ class PlaceMixin:
         Returns:
             PlaceMixin: Self if geocoding successful, None otherwise
         """
-        NxGeoGeoname = db.Model.metadata.tables['nx_geo_geoname']
-        result = db.session.query(NxGeoGeoname).filter(
-            NxGeoGeoname.c.name.ilike(f"%{name}%")
-        ).order_by(NxGeoGeoname.c.population.desc()).first()
+        NxGeoGeoname = db.Model.metadata.tables["nx_geo_geoname"]
+        result = (
+            db.session.query(NxGeoGeoname)
+            .filter(NxGeoGeoname.c.name.ilike(f"%{name}%"))
+            .order_by(NxGeoGeoname.c.population.desc())
+            .first()
+        )
 
         if result:
             self.set_coordinates(result.latitude, result.longitude)
@@ -910,7 +999,9 @@ class PlaceMixin:
             return self
         return None
 
-    def reverse_geocode_to_place(self, db, latitude: float, longitude: float) -> Optional['PlaceMixin']:
+    def reverse_geocode_to_place(
+        self, db, latitude: float, longitude: float
+    ) -> Optional["PlaceMixin"]:
         """
         Reverse geocode coordinates to the nearest place.
 
@@ -922,13 +1013,22 @@ class PlaceMixin:
         Returns:
             PlaceMixin: Self if reverse geocoding successful, None otherwise
         """
-        NxGeoGeoname = db.Model.metadata.tables['nx_geo_geoname']
-        result = db.session.query(NxGeoGeoname).order_by(
-            func.ST_Distance(
-                func.ST_SetSRID(func.ST_MakePoint(longitude, latitude), 4326),
-                func.ST_SetSRID(func.ST_MakePoint(NxGeoGeoname.c.longitude, NxGeoGeoname.c.latitude), 4326)
+        NxGeoGeoname = db.Model.metadata.tables["nx_geo_geoname"]
+        result = (
+            db.session.query(NxGeoGeoname)
+            .order_by(
+                func.ST_Distance(
+                    func.ST_SetSRID(func.ST_MakePoint(longitude, latitude), 4326),
+                    func.ST_SetSRID(
+                        func.ST_MakePoint(
+                            NxGeoGeoname.c.longitude, NxGeoGeoname.c.latitude
+                        ),
+                        4326,
+                    ),
+                )
             )
-        ).first()
+            .first()
+        )
 
         if result:
             self.set_coordinates(result.latitude, result.longitude)
@@ -937,7 +1037,9 @@ class PlaceMixin:
             return self
         return None
 
-    def reverse_geocode_to_feature(self, db, latitude: float, longitude: float) -> Dict[str, Any]:
+    def reverse_geocode_to_feature(
+        self, db, latitude: float, longitude: float
+    ) -> Dict[str, Any]:
         """
         Reverse geocode coordinates to the nearest feature with detailed information.
 
@@ -949,44 +1051,76 @@ class PlaceMixin:
         Returns:
             dict: Detailed information about the nearest feature
         """
-        NxGeoGeoname = db.Model.metadata.tables['nx_geo_geoname']
-        NxGeoCountryInfo = db.Model.metadata.tables['nx_geo_country_info']
-        NxGeoAdmin1Codes = db.Model.metadata.tables['nx_geo_admin1_codes']
-        NxGeoAdmin2Codes = db.Model.metadata.tables['nx_geo_admin2_codes']
+        NxGeoGeoname = db.Model.metadata.tables["nx_geo_geoname"]
+        NxGeoCountryInfo = db.Model.metadata.tables["nx_geo_country_info"]
+        NxGeoAdmin1Codes = db.Model.metadata.tables["nx_geo_admin1_codes"]
+        NxGeoAdmin2Codes = db.Model.metadata.tables["nx_geo_admin2_codes"]
 
-        result = db.session.query(NxGeoGeoname, NxGeoCountryInfo, NxGeoAdmin1Codes, NxGeoAdmin2Codes).join(
-            NxGeoCountryInfo, NxGeoGeoname.c.country_code == NxGeoCountryInfo.c.iso_alpha2
-        ).outerjoin(
-            NxGeoAdmin1Codes, (NxGeoGeoname.c.country_code == func.substr(NxGeoAdmin1Codes.c.code, 1, 2)) &
-                              (NxGeoGeoname.c.admin1_code == func.substr(NxGeoAdmin1Codes.c.code, 4, 3))
-        ).outerjoin(
-            NxGeoAdmin2Codes, (NxGeoGeoname.c.country_code == func.substr(NxGeoAdmin2Codes.c.code, 1, 2)) &
-                              (NxGeoGeoname.c.admin1_code == func.substr(NxGeoAdmin2Codes.c.code, 4, 3)) &
-                              (NxGeoGeoname.c.admin2_code == func.substr(NxGeoAdmin2Codes.c.code, 8, 3))
-        ).order_by(
-            func.ST_Distance(
-                func.ST_SetSRID(func.ST_MakePoint(longitude, latitude), 4326),
-                func.ST_SetSRID(func.ST_MakePoint(NxGeoGeoname.c.longitude, NxGeoGeoname.c.latitude), 4326)
+        result = (
+            db.session.query(
+                NxGeoGeoname, NxGeoCountryInfo, NxGeoAdmin1Codes, NxGeoAdmin2Codes
             )
-        ).first()
+            .join(
+                NxGeoCountryInfo,
+                NxGeoGeoname.c.country_code == NxGeoCountryInfo.c.iso_alpha2,
+            )
+            .outerjoin(
+                NxGeoAdmin1Codes,
+                (
+                    NxGeoGeoname.c.country_code
+                    == func.substr(NxGeoAdmin1Codes.c.code, 1, 2)
+                )
+                & (
+                    NxGeoGeoname.c.admin1_code
+                    == func.substr(NxGeoAdmin1Codes.c.code, 4, 3)
+                ),
+            )
+            .outerjoin(
+                NxGeoAdmin2Codes,
+                (
+                    NxGeoGeoname.c.country_code
+                    == func.substr(NxGeoAdmin2Codes.c.code, 1, 2)
+                )
+                & (
+                    NxGeoGeoname.c.admin1_code
+                    == func.substr(NxGeoAdmin2Codes.c.code, 4, 3)
+                )
+                & (
+                    NxGeoGeoname.c.admin2_code
+                    == func.substr(NxGeoAdmin2Codes.c.code, 8, 3)
+                ),
+            )
+            .order_by(
+                func.ST_Distance(
+                    func.ST_SetSRID(func.ST_MakePoint(longitude, latitude), 4326),
+                    func.ST_SetSRID(
+                        func.ST_MakePoint(
+                            NxGeoGeoname.c.longitude, NxGeoGeoname.c.latitude
+                        ),
+                        4326,
+                    ),
+                )
+            )
+            .first()
+        )
 
         if result:
             geoname, country_info, admin1, admin2 = result
             return {
-                'geonameid': geoname.geonameid,
-                'name': geoname.name,
-                'latitude': geoname.latitude,
-                'longitude': geoname.longitude,
-                'feature_class': geoname.feature_class,
-                'feature_code': geoname.feature_code,
-                'country_code': geoname.country_code,
-                'country_name': country_info.name,
-                'admin1_code': geoname.admin1_code,
-                'admin1_name': admin1.name if admin1 else None,
-                'admin2_code': geoname.admin2_code,
-                'admin2_name': admin2.name if admin2 else None,
-                'population': geoname.population,
-                'timezone': geoname.timezone
+                "geonameid": geoname.geonameid,
+                "name": geoname.name,
+                "latitude": geoname.latitude,
+                "longitude": geoname.longitude,
+                "feature_class": geoname.feature_class,
+                "feature_code": geoname.feature_code,
+                "country_code": geoname.country_code,
+                "country_name": country_info.name,
+                "admin1_code": geoname.admin1_code,
+                "admin1_name": admin1.name if admin1 else None,
+                "admin2_code": geoname.admin2_code,
+                "admin2_name": admin2.name if admin2 else None,
+                "population": geoname.population,
+                "timezone": geoname.timezone,
             }
         return None
 
@@ -1029,11 +1163,11 @@ class PlaceMixin:
             "type": "Feature",
             "geometry": {
                 "type": "Point",
-                "coordinates": [self.longitude, self.latitude]
+                "coordinates": [self.longitude, self.latitude],
             },
-            "properties": self.to_dict()
+            "properties": self.to_dict(),
         }
-        with open(filename, 'w') as f:
+        with open(filename, "w") as f:
             json.dump(geojson, f, indent=2)
 
     def save_to_kml(self, filename: str) -> None:
@@ -1043,15 +1177,17 @@ class PlaceMixin:
         Args:
             filename: Name of the file to save
         """
-        kml = ET.Element('kml')
-        document = ET.SubElement(kml, 'Document')
-        placemark = ET.SubElement(document, 'Placemark')
-        ET.SubElement(placemark, 'name').text = self.place_name
-        point = ET.SubElement(placemark, 'Point')
-        ET.SubElement(point, 'coordinates').text = f"{self.longitude},{self.latitude},{self.altitude or 0}"
+        kml = ET.Element("kml")
+        document = ET.SubElement(kml, "Document")
+        placemark = ET.SubElement(document, "Placemark")
+        ET.SubElement(placemark, "name").text = self.place_name
+        point = ET.SubElement(placemark, "Point")
+        ET.SubElement(point, "coordinates").text = (
+            f"{self.longitude},{self.latitude},{self.altitude or 0}"
+        )
 
         tree = ET.ElementTree(kml)
-        tree.write(filename, encoding='utf-8', xml_declaration=True)
+        tree.write(filename, encoding="utf-8", xml_declaration=True)
 
     # def find_places_in_polygon(self, db, polygon: List[Tuple[float, float]]) -> List['PlaceMixin']:
     #     """
@@ -1074,7 +1210,9 @@ class PlaceMixin:
     #     )
     #     return [self.from_dict(row._asdict()) for row in query.all()]
     @classmethod
-    def find_places_in_polygon(cls, db, polygon: List[Tuple[float, float]]) -> List['PlaceMixin']:
+    def find_places_in_polygon(
+        cls, db, polygon: List[Tuple[float, float]]
+    ) -> List["PlaceMixin"]:
         """
         Find all places within a given polygon.
 
@@ -1098,14 +1236,18 @@ class PlaceMixin:
         query = db.session.query(cls).filter(
             func.ST_Contains(
                 func.ST_GeomFromWKB(polygon_wkb, 4326),
-                func.ST_SetSRID(func.ST_MakePoint(table.c.longitude, table.c.latitude), 4326)
+                func.ST_SetSRID(
+                    func.ST_MakePoint(table.c.longitude, table.c.latitude), 4326
+                ),
             )
         )
 
         # Execute the query and return the results
         return query.all()
 
-    def is_within_fence(self, center_lat: float, center_lon: float, radius_km: float) -> bool:
+    def is_within_fence(
+        self, center_lat: float, center_lon: float, radius_km: float
+    ) -> bool:
         """
         Check if the place is within a circular fence.
 
@@ -1121,7 +1263,9 @@ class PlaceMixin:
         return distance <= radius_km
 
     @staticmethod
-    def transform_coordinates(x: float, y: float, from_crs: str, to_crs: str) -> Tuple[float, float]:
+    def transform_coordinates(
+        x: float, y: float, from_crs: str, to_crs: str
+    ) -> Tuple[float, float]:
         """
         Transform coordinates from one CRS to another.
 
@@ -1203,7 +1347,9 @@ class PlaceMixin:
         """
         return map_html
 
-    def generate_leaflet_route_map(self, destination: 'PlaceMixin', zoom: int = 12) -> str:
+    def generate_leaflet_route_map(
+        self, destination: "PlaceMixin", zoom: int = 12
+    ) -> str:
         """
         Generate HTML for a Leaflet map with a route to a destination.
 
@@ -1215,7 +1361,7 @@ class PlaceMixin:
             str: HTML string containing the Leaflet map with route
         """
         route = self.calculate_route_online(destination)
-        route_coords = json.dumps(route['geometry']['coordinates'])
+        route_coords = json.dumps(route["geometry"]["coordinates"])
 
         map_html = f"""
         <div id="map" style="height: 400px;"></div>
@@ -1237,7 +1383,9 @@ class PlaceMixin:
         """
         return map_html
 
-    def generate_openlayers_route_map(self, destination: 'PlaceMixin', zoom: int = 12) -> str:
+    def generate_openlayers_route_map(
+        self, destination: "PlaceMixin", zoom: int = 12
+    ) -> str:
         """
         Generate HTML for an OpenLayers map with a route to a destination.
 
@@ -1249,7 +1397,7 @@ class PlaceMixin:
             str: HTML string containing the OpenLayers map with route
         """
         route = self.calculate_route_online(destination)
-        route_coords = json.dumps(route['geometry']['coordinates'])
+        route_coords = json.dumps(route["geometry"]["coordinates"])
 
         map_html = f"""
         <div id="map" style="height: 400px;"></div>
@@ -1292,7 +1440,9 @@ class PlaceMixin:
         return map_html
 
     @classmethod
-    def generate_multiple_pins_map(cls, places: List['PlaceMixin'], zoom: int = 12) -> str:
+    def generate_multiple_pins_map(
+        cls, places: List["PlaceMixin"], zoom: int = 12
+    ) -> str:
         """
         Generate HTML for a Leaflet map with multiple pins.
 
@@ -1306,10 +1456,12 @@ class PlaceMixin:
         center_lat = sum(place.latitude for place in places) / len(places)
         center_lon = sum(place.longitude for place in places) / len(places)
 
-        markers_js = "\n".join([
-            f"L.marker([{place.latitude}, {place.longitude}]).addTo(map).bindPopup('{place.place_name}');"
-            for place in places
-        ])
+        markers_js = "\n".join(
+            [
+                f"L.marker([{place.latitude}, {place.longitude}]).addTo(map).bindPopup('{place.place_name}');"
+                for place in places
+            ]
+        )
 
         map_html = f"""
         <div id="map" style="height: 400px;"></div>
@@ -1371,10 +1523,10 @@ class PlaceMixin:
         </html>
         """
 
-        with open(os.path.join(directory, 'leaflet_template.html'), 'w') as f:
+        with open(os.path.join(directory, "leaflet_template.html"), "w") as f:
             f.write(leaflet_template)
 
-        with open(os.path.join(directory, 'openlayers_template.html'), 'w') as f:
+        with open(os.path.join(directory, "openlayers_template.html"), "w") as f:
             f.write(openlayers_template)
 
     @staticmethod
@@ -1391,7 +1543,7 @@ class PlaceMixin:
         import subprocess
 
         try:
-            subprocess.run(['wget', '-O', output_path, url], check=True)
+            subprocess.run(["wget", "-O", output_path, url], check=True)
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"Failed to download file: {e}")
 
@@ -1405,26 +1557,29 @@ class PlaceMixin:
         """
         metadata = MetaData()
 
-        Table('nx_geo_geoname', metadata,
-              Column('geonameid', Integer, primary_key=True),
-              Column('name', String(200)),
-              Column('asciiname', String(200)),
-              Column('alternatenames', Text),
-              Column('latitude', Float),
-              Column('longitude', Float),
-              Column('feature_class', String(1)),
-              Column('feature_code', String(10)),
-              Column('country_code', String(2)),
-              Column('cc2', String(200)),
-              Column('admin1_code', String(20)),
-              Column('admin2_code', String(80)),
-              Column('admin3_code', String(20)),
-              Column('admin4_code', String(20)),
-              Column('population', BigInteger),
-              Column('elevation', Integer),
-              Column('dem', Integer),
-              Column('timezone', String(40)),
-              Column('modification_date', Date))
+        Table(
+            "nx_geo_geoname",
+            metadata,
+            Column("geonameid", Integer, primary_key=True),
+            Column("name", String(200)),
+            Column("asciiname", String(200)),
+            Column("alternatenames", Text),
+            Column("latitude", Float),
+            Column("longitude", Float),
+            Column("feature_class", String(1)),
+            Column("feature_code", String(10)),
+            Column("country_code", String(2)),
+            Column("cc2", String(200)),
+            Column("admin1_code", String(20)),
+            Column("admin2_code", String(80)),
+            Column("admin3_code", String(20)),
+            Column("admin4_code", String(20)),
+            Column("population", BigInteger),
+            Column("elevation", Integer),
+            Column("dem", Integer),
+            Column("timezone", String(40)),
+            Column("modification_date", Date),
+        )
 
         # Add other GeoNames tables (country_info, admin1_codes, etc.) here
 
@@ -1444,15 +1599,21 @@ class PlaceMixin:
         with engine.connect() as connection:
             for table_name, file_name in cls.GeoNamesSetup.GEONAMES_FILES.items():
                 file_path = os.path.join(data_dir, file_name or table_name)
-                table = Table(f'nx_geo_{table_name.split(".")[0]}', MetaData(), autoload_with=engine)
+                table = Table(
+                    f'nx_geo_{table_name.split(".")[0]}',
+                    MetaData(),
+                    autoload_with=engine,
+                )
 
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    csv_reader = csv.reader(f, delimiter='\t')
+                with open(file_path, "r", encoding="utf-8") as f:
+                    csv_reader = csv.reader(f, delimiter="\t")
                     columns = [c.key for c in table.columns]
                     connection.execute(table.delete())
-                    connection.execute(table.insert(), [dict(zip(columns, row)) for row in csv_reader])
+                    connection.execute(
+                        table.insert(), [dict(zip(columns, row)) for row in csv_reader]
+                    )
 
-    def geocode(self, db, address: str) -> Optional['PlaceMixin']:
+    def geocode(self, db, address: str) -> Optional["PlaceMixin"]:
         """
         Geocode an address using the GeoNames database.
 
@@ -1463,7 +1624,7 @@ class PlaceMixin:
         Returns:
             Optional[PlaceMixin]: Geocoded place or None if not found
         """
-        NxGeoGeoname = db.Model.metadata.tables['nx_geo_geoname']
+        NxGeoGeoname = db.Model.metadata.tables["nx_geo_geoname"]
         words = address.split()
         query = db.session.query(NxGeoGeoname)
 
@@ -1481,7 +1642,9 @@ class PlaceMixin:
             return self
         return None
 
-    def reverse_geocode(self, db, latitude: float, longitude: float) -> Optional['PlaceMixin']:
+    def reverse_geocode(
+        self, db, latitude: float, longitude: float
+    ) -> Optional["PlaceMixin"]:
         """
         Perform reverse geocoding to find the nearest place to given coordinates.
 
@@ -1493,13 +1656,22 @@ class PlaceMixin:
         Returns:
             Optional[PlaceMixin]: Nearest place or None if not found
         """
-        NxGeoGeoname = db.Model.metadata.tables['nx_geo_geoname']
-        result = db.session.query(NxGeoGeoname).order_by(
-            func.ST_Distance(
-                func.ST_SetSRID(func.ST_MakePoint(longitude, latitude), 4326),
-                func.ST_SetSRID(func.ST_MakePoint(NxGeoGeoname.c.longitude, NxGeoGeoname.c.latitude), 4326)
+        NxGeoGeoname = db.Model.metadata.tables["nx_geo_geoname"]
+        result = (
+            db.session.query(NxGeoGeoname)
+            .order_by(
+                func.ST_Distance(
+                    func.ST_SetSRID(func.ST_MakePoint(longitude, latitude), 4326),
+                    func.ST_SetSRID(
+                        func.ST_MakePoint(
+                            NxGeoGeoname.c.longitude, NxGeoGeoname.c.latitude
+                        ),
+                        4326,
+                    ),
+                )
             )
-        ).first()
+            .first()
+        )
 
         if result:
             self.set_coordinates(result.latitude, result.longitude)
@@ -1511,7 +1683,9 @@ class PlaceMixin:
         return None
 
     @classmethod
-    def find_closest_instances(cls, db, latitude: float, longitude: float, limit: int = 5) -> List['PlaceMixin']:
+    def find_closest_instances(
+        cls, db, latitude: float, longitude: float, limit: int = 5
+    ) -> List["PlaceMixin"]:
         """
         Find the closest instances to given coordinates.
 
@@ -1524,13 +1698,23 @@ class PlaceMixin:
         Returns:
             List[PlaceMixin]: List of closest instances
         """
-        NxGeoGeoname = db.Model.metadata.tables['nx_geo_geoname']
-        results = db.session.query(NxGeoGeoname).order_by(
-            func.ST_Distance(
-                func.ST_SetSRID(func.ST_MakePoint(longitude, latitude), 4326),
-                func.ST_SetSRID(func.ST_MakePoint(NxGeoGeoname.c.longitude, NxGeoGeoname.c.latitude), 4326)
+        NxGeoGeoname = db.Model.metadata.tables["nx_geo_geoname"]
+        results = (
+            db.session.query(NxGeoGeoname)
+            .order_by(
+                func.ST_Distance(
+                    func.ST_SetSRID(func.ST_MakePoint(longitude, latitude), 4326),
+                    func.ST_SetSRID(
+                        func.ST_MakePoint(
+                            NxGeoGeoname.c.longitude, NxGeoGeoname.c.latitude
+                        ),
+                        4326,
+                    ),
+                )
             )
-        ).limit(limit).all()
+            .limit(limit)
+            .all()
+        )
 
         return [cls.from_dict(result._asdict()) for result in results]
 
@@ -1549,7 +1733,7 @@ class PlaceMixin:
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
             data = response.json()
-            return data['results'][0]['elevation']
+            return data["results"][0]["elevation"]
         return None
 
     def get_timezone(self, db) -> Optional[str]:
@@ -1562,12 +1746,13 @@ class PlaceMixin:
         Returns:
             Optional[str]: Timezone string or None if not found
         """
-        NxGeoTimezones = db.Model.metadata.tables['nx_geo_timezones']
-        result = db.session.query(NxGeoTimezones).filter(
-            NxGeoTimezones.c.countrycode == self.country_code
-        ).order_by(
-            func.abs(NxGeoTimezones.c.gmtoffset - self.longitude / 15)
-        ).first()
+        NxGeoTimezones = db.Model.metadata.tables["nx_geo_timezones"]
+        result = (
+            db.session.query(NxGeoTimezones)
+            .filter(NxGeoTimezones.c.countrycode == self.country_code)
+            .order_by(func.abs(NxGeoTimezones.c.gmtoffset - self.longitude / 15))
+            .first()
+        )
 
         return result.timezoneid if result else None
 
@@ -1581,10 +1766,12 @@ class PlaceMixin:
         Returns:
             Optional[Dict[str, Any]]: Dictionary with country information or None if not found
         """
-        NxGeoCountryInfo = db.Model.metadata.tables['nx_geo_country_info']
-        result = db.session.query(NxGeoCountryInfo).filter(
-            NxGeoCountryInfo.c.iso_alpha2 == self.country_code
-        ).first()
+        NxGeoCountryInfo = db.Model.metadata.tables["nx_geo_country_info"]
+        result = (
+            db.session.query(NxGeoCountryInfo)
+            .filter(NxGeoCountryInfo.c.iso_alpha2 == self.country_code)
+            .first()
+        )
 
         return result._asdict() if result else None
 
@@ -1598,23 +1785,34 @@ class PlaceMixin:
         Returns:
             Dict[str, str]: Dictionary with admin1 and admin2 names
         """
-        NxGeoAdmin1Codes = db.Model.metadata.tables['nx_geo_admin1_codes']
-        NxGeoAdmin2Codes = db.Model.metadata.tables['nx_geo_admin2_codes']
+        NxGeoAdmin1Codes = db.Model.metadata.tables["nx_geo_admin1_codes"]
+        NxGeoAdmin2Codes = db.Model.metadata.tables["nx_geo_admin2_codes"]
 
-        admin1 = db.session.query(NxGeoAdmin1Codes).filter(
-            NxGeoAdmin1Codes.c.code == f"{self.country_code}.{self.admin1_code}"
-        ).first()
+        admin1 = (
+            db.session.query(NxGeoAdmin1Codes)
+            .filter(
+                NxGeoAdmin1Codes.c.code == f"{self.country_code}.{self.admin1_code}"
+            )
+            .first()
+        )
 
-        admin2 = db.session.query(NxGeoAdmin2Codes).filter(
-            NxGeoAdmin2Codes.c.code == f"{self.country_code}.{self.admin1_code}.{self.admin2_code}"
-        ).first()
+        admin2 = (
+            db.session.query(NxGeoAdmin2Codes)
+            .filter(
+                NxGeoAdmin2Codes.c.code
+                == f"{self.country_code}.{self.admin1_code}.{self.admin2_code}"
+            )
+            .first()
+        )
 
         return {
             "admin1_name": admin1.name if admin1 else None,
-            "admin2_name": admin2.name if admin2 else None
+            "admin2_name": admin2.name if admin2 else None,
         }
 
-    def get_nearby_places(self, db, radius_km: float, limit: int = 10) -> List['PlaceMixin']:
+    def get_nearby_places(
+        self, db, radius_km: float, limit: int = 10
+    ) -> List["PlaceMixin"]:
         """
         Get nearby places within a specified radius.
 
@@ -1626,19 +1824,39 @@ class PlaceMixin:
         Returns:
             List[PlaceMixin]: List of nearby places
         """
-        NxGeoGeoname = db.Model.metadata.tables['nx_geo_geoname']
-        results = db.session.query(NxGeoGeoname).filter(
-            func.ST_DWithin(
-                func.ST_SetSRID(func.ST_MakePoint(self.longitude, self.latitude), 4326),
-                func.ST_SetSRID(func.ST_MakePoint(NxGeoGeoname.c.longitude, NxGeoGeoname.c.latitude), 4326),
-                radius_km / 111.32  # Convert km to degrees (approximate)
+        NxGeoGeoname = db.Model.metadata.tables["nx_geo_geoname"]
+        results = (
+            db.session.query(NxGeoGeoname)
+            .filter(
+                func.ST_DWithin(
+                    func.ST_SetSRID(
+                        func.ST_MakePoint(self.longitude, self.latitude), 4326
+                    ),
+                    func.ST_SetSRID(
+                        func.ST_MakePoint(
+                            NxGeoGeoname.c.longitude, NxGeoGeoname.c.latitude
+                        ),
+                        4326,
+                    ),
+                    radius_km / 111.32,  # Convert km to degrees (approximate)
+                )
             )
-        ).order_by(
-            func.ST_Distance(
-                func.ST_SetSRID(func.ST_MakePoint(self.longitude, self.latitude), 4326),
-                func.ST_SetSRID(func.ST_MakePoint(NxGeoGeoname.c.longitude, NxGeoGeoname.c.latitude), 4326)
+            .order_by(
+                func.ST_Distance(
+                    func.ST_SetSRID(
+                        func.ST_MakePoint(self.longitude, self.latitude), 4326
+                    ),
+                    func.ST_SetSRID(
+                        func.ST_MakePoint(
+                            NxGeoGeoname.c.longitude, NxGeoGeoname.c.latitude
+                        ),
+                        4326,
+                    ),
+                )
             )
-        ).limit(limit).all()
+            .limit(limit)
+            .all()
+        )
 
         return [self.from_dict(result._asdict()) for result in results]
 
@@ -1652,7 +1870,9 @@ class PlaceMixin:
         Returns:
             Tuple[float, float, float, float]: (min_lat, min_lon, max_lat, max_lon)
         """
-        lat_change = distance_km / 111.32  # 1 degree of latitude is approximately 111.32 km
+        lat_change = (
+            distance_km / 111.32
+        )  # 1 degree of latitude is approximately 111.32 km
         lon_change = distance_km / (111.32 * math.cos(math.radians(self.latitude)))
 
         min_lat = self.latitude - lat_change
@@ -1676,12 +1896,14 @@ class PlaceMixin:
         folium.Marker(
             [self.latitude, self.longitude],
             popup=self.place_name,
-            tooltip=self.place_name
+            tooltip=self.place_name,
         ).add_to(m)
         return m
 
     @classmethod
-    def cluster_places(cls, places: List['PlaceMixin'], max_distance_km: float) -> List[List['PlaceMixin']]:
+    def cluster_places(
+        cls, places: List["PlaceMixin"], max_distance_km: float
+    ) -> List[List["PlaceMixin"]]:
         """
         Cluster places based on their proximity.
 
@@ -1714,7 +1936,7 @@ class PlaceMixin:
         return f"POINT({self.longitude} {self.latitude})"
 
     @classmethod
-    def from_wkt(cls, wkt: str) -> 'PlaceMixin':
+    def from_wkt(cls, wkt: str) -> "PlaceMixin":
         """
         Create a PlaceMixin instance from a Well-Known Text (WKT) string.
 
@@ -1728,6 +1950,7 @@ class PlaceMixin:
             ValueError: If the WKT string is not a valid point
         """
         import re
+
         match = re.match(r"POINT\s*\((-?\d+\.?\d*)\s+(-?\d+\.?\d*)\)", wkt)
         if match:
             lon, lat = map(float, match.groups())
@@ -1744,13 +1967,10 @@ class PlaceMixin:
         Returns:
             Dict[str, Any]: GeoJSON FeatureCollection
         """
-        return {
-            "type": "FeatureCollection",
-            "features": [self.to_geojson()]
-        }
+        return {"type": "FeatureCollection", "features": [self.to_geojson()]}
 
     @staticmethod
-    def plot_places(places: List['PlaceMixin'], filename: str) -> None:
+    def plot_places(places: List["PlaceMixin"], filename: str) -> None:
         """
         Plot multiple places on a map and save it as an image.
 
@@ -1766,9 +1986,9 @@ class PlaceMixin:
         plt.scatter(lons, lats)
         for i, name in enumerate(names):
             plt.annotate(name, (lons[i], lats[i]))
-        plt.xlabel('Longitude')
-        plt.ylabel('Latitude')
-        plt.title('Place Locations')
+        plt.xlabel("Longitude")
+        plt.ylabel("Latitude")
+        plt.title("Place Locations")
         plt.grid(True)
         plt.savefig(filename)
         plt.close()
@@ -1783,14 +2003,18 @@ class PlaceMixin:
         Returns:
             List[str]: List of alternate names
         """
-        NxGeoAlternateNames = db.Model.metadata.tables['nx_geo_alternate_names']
-        results = db.session.query(NxGeoAlternateNames.c.alternate_name).filter(
-            NxGeoAlternateNames.c.geonameid == self.id
-        ).all()
+        NxGeoAlternateNames = db.Model.metadata.tables["nx_geo_alternate_names"]
+        results = (
+            db.session.query(NxGeoAlternateNames.c.alternate_name)
+            .filter(NxGeoAlternateNames.c.geonameid == self.id)
+            .all()
+        )
         return [result.alternate_name for result in results]
 
     @classmethod
-    def find_by_feature_code(cls, db, feature_code: str, limit: int = 10) -> List['PlaceMixin']:
+    def find_by_feature_code(
+        cls, db, feature_code: str, limit: int = 10
+    ) -> List["PlaceMixin"]:
         """
         Find places by feature code.
 
@@ -1802,10 +2026,14 @@ class PlaceMixin:
         Returns:
             List[PlaceMixin]: List of places with the specified feature code
         """
-        NxGeoGeoname = db.Model.metadata.tables['nx_geo_geoname']
-        results = db.session.query(NxGeoGeoname).filter(
-            NxGeoGeoname.c.feature_code == feature_code
-        ).order_by(NxGeoGeoname.c.population.desc()).limit(limit).all()
+        NxGeoGeoname = db.Model.metadata.tables["nx_geo_geoname"]
+        results = (
+            db.session.query(NxGeoGeoname)
+            .filter(NxGeoGeoname.c.feature_code == feature_code)
+            .order_by(NxGeoGeoname.c.population.desc())
+            .limit(limit)
+            .all()
+        )
         return [cls.from_dict(result._asdict()) for result in results]
 
     def to_address_string(self) -> str:
@@ -1819,7 +2047,7 @@ class PlaceMixin:
             self.place_name,
             self.admin2_code,
             self.admin1_code,
-            self.country_code
+            self.country_code,
         ]
         return ", ".join(filter(None, components))
 
@@ -1843,11 +2071,14 @@ class PlaceMixin:
         dlat = lat2 - lat1
         dlon = lon2 - lon1
 
-        a = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+        a = (
+            math.sin(dlat / 2) ** 2
+            + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+        )
         c = 2 * math.asin(math.sqrt(a))
         return R * c
 
-    def bearing_to(self, other: 'PlaceMixin') -> float:
+    def bearing_to(self, other: "PlaceMixin") -> float:
         """
         Calculate the initial bearing from this place to another.
 
@@ -1862,7 +2093,9 @@ class PlaceMixin:
 
         dlon = lon2 - lon1
         y = math.sin(dlon) * math.cos(lat2)
-        x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dlon)
+        x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(
+            lat2
+        ) * math.cos(dlon)
         initial_bearing = math.atan2(y, x)
 
         initial_bearing = math.degrees(initial_bearing)
@@ -1870,7 +2103,7 @@ class PlaceMixin:
 
         return compass_bearing
 
-    def midpoint_to(self, other: 'PlaceMixin') -> 'PlaceMixin':
+    def midpoint_to(self, other: "PlaceMixin") -> "PlaceMixin":
         """
         Calculate the midpoint between this place and another.
 
@@ -1886,18 +2119,22 @@ class PlaceMixin:
         bx = math.cos(lat2) * math.cos(lon2 - lon1)
         by = math.cos(lat2) * math.sin(lon2 - lon1)
 
-        lat3 = math.atan2(math.sin(lat1) + math.sin(lat2),
-                          math.sqrt((math.cos(lat1) + bx) ** 2 + by ** 2))
+        lat3 = math.atan2(
+            math.sin(lat1) + math.sin(lat2),
+            math.sqrt((math.cos(lat1) + bx) ** 2 + by**2),
+        )
         lon3 = lon1 + math.atan2(by, math.cos(lat1) + bx)
 
         lat3, lon3 = map(math.degrees, [lat3, lon3])
 
         midpoint = PlaceMixin()
         midpoint.set_coordinates(lat3, lon3)
-        midpoint.place_name = f"Midpoint between {self.place_name} and {other.place_name}"
+        midpoint.place_name = (
+            f"Midpoint between {self.place_name} and {other.place_name}"
+        )
         return midpoint
 
-    def destination_point(self, bearing: float, distance: float) -> 'PlaceMixin':
+    def destination_point(self, bearing: float, distance: float) -> "PlaceMixin":
         """
         Calculate the destination point given a bearing and distance from this place.
 
@@ -1913,10 +2150,14 @@ class PlaceMixin:
         bearing = math.radians(bearing)
         lat1, lon1 = map(math.radians, [self.latitude, self.longitude])
 
-        lat2 = math.asin(math.sin(lat1) * math.cos(distance / R) +
-                         math.cos(lat1) * math.sin(distance / R) * math.cos(bearing))
-        lon2 = lon1 + math.atan2(math.sin(bearing) * math.sin(distance / R) * math.cos(lat1),
-                                 math.cos(distance / R) - math.sin(lat1) * math.sin(lat2))
+        lat2 = math.asin(
+            math.sin(lat1) * math.cos(distance / R)
+            + math.cos(lat1) * math.sin(distance / R) * math.cos(bearing)
+        )
+        lon2 = lon1 + math.atan2(
+            math.sin(bearing) * math.sin(distance / R) * math.cos(lat1),
+            math.cos(distance / R) - math.sin(lat1) * math.sin(lat2),
+        )
 
         lat2, lon2 = map(math.degrees, [lat2, lon2])
 
@@ -1936,10 +2177,12 @@ class PlaceMixin:
         Returns:
             bool: True if the place is within the specified country, False otherwise
         """
-        NxGeoCountryInfo = db.Model.metadata.tables['nx_geo_country_info']
-        country = db.session.query(NxGeoCountryInfo).filter(
-            NxGeoCountryInfo.c.iso_alpha2 == country_code
-        ).first()
+        NxGeoCountryInfo = db.Model.metadata.tables["nx_geo_country_info"]
+        country = (
+            db.session.query(NxGeoCountryInfo)
+            .filter(NxGeoCountryInfo.c.iso_alpha2 == country_code)
+            .first()
+        )
 
         if not country:
             raise ValueError(f"Invalid country code: {country_code}")
@@ -1956,15 +2199,17 @@ class PlaceMixin:
         Returns:
             Optional[str]: Continent name or None if not found
         """
-        NxGeoCountryInfo = db.Model.metadata.tables['nx_geo_country_info']
-        NxGeoContinents = db.Model.metadata.tables['nx_geo_continents']
+        NxGeoCountryInfo = db.Model.metadata.tables["nx_geo_country_info"]
+        NxGeoContinents = db.Model.metadata.tables["nx_geo_continents"]
 
-        result = db.session.query(NxGeoContinents.c.name).join(
-            NxGeoCountryInfo,
-            NxGeoCountryInfo.c.continent == NxGeoContinents.c.code
-        ).filter(
-            NxGeoCountryInfo.c.iso_alpha2 == self.country_code
-        ).first()
+        result = (
+            db.session.query(NxGeoContinents.c.name)
+            .join(
+                NxGeoCountryInfo, NxGeoCountryInfo.c.continent == NxGeoContinents.c.code
+            )
+            .filter(NxGeoCountryInfo.c.iso_alpha2 == self.country_code)
+            .first()
+        )
 
         return result.name if result else None
 
@@ -1976,6 +2221,7 @@ class PlaceMixin:
             datetime: Current local time at the place
         """
         from datetime import datetime
+
         import pytz
 
         if not self.timezone:
@@ -1984,7 +2230,7 @@ class PlaceMixin:
         local_tz = pytz.timezone(self.timezone)
         return datetime.now(local_tz)
 
-    def format_coordinates(self, format: str = 'dms') -> str:
+    def format_coordinates(self, format: str = "dms") -> str:
         """
         Format the coordinates of the place in various formats.
 
@@ -2008,13 +2254,13 @@ class PlaceMixin:
             m = round((deg - d) * 60, 4)
             return f"{d}°{m}'{pos if coord >= 0 else neg}"
 
-        if format == 'dms':
-            lat = dms_format(self.latitude, 'N', 'S')
-            lon = dms_format(self.longitude, 'E', 'W')
-        elif format == 'dm':
-            lat = dm_format(self.latitude, 'N', 'S')
-            lon = dm_format(self.longitude, 'E', 'W')
-        elif format == 'd':
+        if format == "dms":
+            lat = dms_format(self.latitude, "N", "S")
+            lon = dms_format(self.longitude, "E", "W")
+        elif format == "dm":
+            lat = dm_format(self.latitude, "N", "S")
+            lon = dm_format(self.longitude, "E", "W")
+        elif format == "d":
             lat = f"{self.latitude:.6f}°{'N' if self.latitude >= 0 else 'S'}"
             lon = f"{self.longitude:.6f}°{'E' if self.longitude >= 0 else 'W'}"
         else:
@@ -2045,10 +2291,10 @@ class PlaceMixin:
             "altitude": altitude,
             "azimuth": azimuth,
             "radiation": radiation,
-            "is_day": altitude > 0
+            "is_day": altitude > 0,
         }
 
-    def calculate_area(self, db, admin_level: str = 'country') -> Optional[float]:
+    def calculate_area(self, db, admin_level: str = "country") -> Optional[float]:
         """
         Calculate the area of the administrative region containing the place.
 
@@ -2059,23 +2305,29 @@ class PlaceMixin:
         Returns:
             Optional[float]: Area in square kilometers or None if not available
         """
-        if admin_level == 'country':
-            NxGeoCountryInfo = db.Model.metadata.tables['nx_geo_country_info']
-            result = db.session.query(NxGeoCountryInfo.c.area).filter(
-                NxGeoCountryInfo.c.iso_alpha2 == self.country_code
-            ).first()
+        if admin_level == "country":
+            NxGeoCountryInfo = db.Model.metadata.tables["nx_geo_country_info"]
+            result = (
+                db.session.query(NxGeoCountryInfo.c.area)
+                .filter(NxGeoCountryInfo.c.iso_alpha2 == self.country_code)
+                .first()
+            )
             return result.area if result else None
-        elif admin_level in ['admin1', 'admin2']:
+        elif admin_level in ["admin1", "admin2"]:
             # Note: This assumes you have area information in your admin tables.
             # You may need to adjust this based on your actual database schema.
-            table_name = f'nx_geo_{admin_level}_codes'
+            table_name = f"nx_geo_{admin_level}_codes"
             AdminTable = db.Model.metadata.tables[table_name]
-            result = db.session.query(AdminTable.c.area).filter(
-                AdminTable.c.code == getattr(self, f'{admin_level}_code')
-            ).first()
+            result = (
+                db.session.query(AdminTable.c.area)
+                .filter(AdminTable.c.code == getattr(self, f"{admin_level}_code"))
+                .first()
+            )
             return result.area if result else None
         else:
-            raise ValueError("Invalid admin_level. Use 'country', 'admin1', or 'admin2'")
+            raise ValueError(
+                "Invalid admin_level. Use 'country', 'admin1', or 'admin2'"
+            )
 
     def get_population(self, db) -> Optional[int]:
         """
@@ -2087,14 +2339,16 @@ class PlaceMixin:
         Returns:
             Optional[int]: Population or None if not available
         """
-        NxGeoGeoname = db.Model.metadata.tables['nx_geo_geoname']
-        result = db.session.query(NxGeoGeoname.c.population).filter(
-            NxGeoGeoname.c.geonameid == self.id
-        ).first()
+        NxGeoGeoname = db.Model.metadata.tables["nx_geo_geoname"]
+        result = (
+            db.session.query(NxGeoGeoname.c.population)
+            .filter(NxGeoGeoname.c.geonameid == self.id)
+            .first()
+        )
         return result.population if result else None
 
     @classmethod
-    def find_places_by_name(cls, db, name: str, limit: int = 10) -> List['PlaceMixin']:
+    def find_places_by_name(cls, db, name: str, limit: int = 10) -> List["PlaceMixin"]:
         """
         Find places by name.
 
@@ -2106,10 +2360,14 @@ class PlaceMixin:
         Returns:
             List[PlaceMixin]: List of places matching the name
         """
-        NxGeoGeoname = db.Model.metadata.tables['nx_geo_geoname']
-        results = db.session.query(NxGeoGeoname).filter(
-            NxGeoGeoname.c.name.ilike(f"%{name}%")
-        ).order_by(NxGeoGeoname.c.population.desc()).limit(limit).all()
+        NxGeoGeoname = db.Model.metadata.tables["nx_geo_geoname"]
+        results = (
+            db.session.query(NxGeoGeoname)
+            .filter(NxGeoGeoname.c.name.ilike(f"%{name}%"))
+            .order_by(NxGeoGeoname.c.population.desc())
+            .limit(limit)
+            .all()
+        )
         return [cls.from_dict(result._asdict()) for result in results]
 
     def to_geohash(self, precision: int = 12) -> str:
@@ -2127,7 +2385,7 @@ class PlaceMixin:
         return geohash2.encode(self.latitude, self.longitude, precision=precision)
 
     @classmethod
-    def from_geohash(cls, geohash: str) -> 'PlaceMixin':
+    def from_geohash(cls, geohash: str) -> "PlaceMixin":
         """
         Create a PlaceMixin instance from a geohash.
 
@@ -2159,12 +2417,14 @@ class PlaceMixin:
         response = requests.get(url)
         if response.status_code == 200:
             data = response.json()
-            return data['words']
+            return data["words"]
         else:
-            raise RuntimeError(f"Failed to convert coordinates to What3Words: {response.text}")
+            raise RuntimeError(
+                f"Failed to convert coordinates to What3Words: {response.text}"
+            )
 
     @classmethod
-    def from_what3words(cls, words: str, api_key: str) -> 'PlaceMixin':
+    def from_what3words(cls, words: str, api_key: str) -> "PlaceMixin":
         """
         Create a PlaceMixin instance from a What3Words address.
 
@@ -2180,13 +2440,17 @@ class PlaceMixin:
         if response.status_code == 200:
             data = response.json()
             place = cls()
-            place.set_coordinates(data['coordinates']['lat'], data['coordinates']['lng'])
+            place.set_coordinates(
+                data["coordinates"]["lat"], data["coordinates"]["lng"]
+            )
             place.place_name = f"Location {words}"
             return place
         else:
-            raise RuntimeError(f"Failed to convert What3Words to coordinates: {response.text}")
+            raise RuntimeError(
+                f"Failed to convert What3Words to coordinates: {response.text}"
+            )
 
- def __repr__(self) -> str:
+    def __repr__(self) -> str:
         """
         String representation of the place.
 

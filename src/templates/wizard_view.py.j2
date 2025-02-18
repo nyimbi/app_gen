@@ -164,6 +164,7 @@ class {{ table_name|capitalize }}WizardView(SimpleFormView):
             'base_template': "appbuilder/base.html",
             'widgets': widgets or {},
             'steps_config': self.steps_config,
+            'session_key': self.session_key
         }
 
         return self.render_template(

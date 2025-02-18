@@ -1,0 +1,318 @@
+{% extends 'modelview/base.html' %} {% block content %}
+<div class="advanced-search-container">
+    {# Search Form Header #}
+    <div class="search-header">
+        <h3>
+            <i class="fa fa-search"></i>
+            {{ _('Advanced Search') }}: {{ modelview_name }}
+        </h3>
+        <div class="search-actions">
+            <button type="button" class="btn btn-default" id="clear-search">
+                <i class="fa fa-eraser"></i> {{ _('Clear') }}
+            </button>
+            <button type="button" class="btn btn-default" id="save-search">
+                <i class="fa fa-save"></i> {{ _('Save Search') }}
+            </button>
+            <div class="btn-group">
+                <button
+                    type="button"
+                    class="btn btn-default dropdown-toggle"
+                    data-toggle="dropdown"
+                >
+                    <i class="fa fa-clock-o"></i> {{ _('Saved Searches') }}
+                    <span class="caret"></span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-right saved-searches">
+                    {% for saved_search in saved_searches %}
+                    <li>
+                        <a
+                            href="#"
+                            class="load-saved-search"
+                            data-search="{{ saved_search.criteria|tojson }}"
+                        >
+                            <i class="fa fa-search"></i>
+                            {{ saved_search.name }}
+                            <button
+                                type="button"
+                                class="btn btn-xs btn-danger delete-saved-search"
+                                data-id="{{ saved_search.id }}"
+                            >
+                                <i class="fa fa-trash"></i>
+                            </button>
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    {# Search Builder Form #}
+    <form
+        id="advanced-search-form"
+        method="get"
+        action="{{ url_for('.list') }}"
+    >
+        <div class="search-builder">
+            {# Search Rules Container #}
+            <div class="search-rules" id="search-rules-container">
+                {# Rule Groups #}
+                <div class="rule-group" data-group-id="root">
+                    {# Group Header #}
+                    <div class="group-header">
+                        <select class="form-control group-operator">
+                            <option value="AND">{{ _('Match ALL') }}</option>
+                            <option value="OR">{{ _('Match ANY') }}</option>
+                        </select>
+                        <button type="button" class="btn btn-success add-rule">
+                            <i class="fa fa-plus"></i> {{ _('Add Rule') }}
+                        </button>
+                        <button type="button" class="btn btn-info add-group">
+                            <i class="fa fa-object-group"></i> {{ _('Add Group')
+                            }}
+                        </button>
+                    </div>
+
+                    {# Rules Container #}
+                    <div class="rules-container">
+                        {# Rules will be added here dynamically #}
+                    </div>
+                </div>
+            </div>
+
+            {# Rule Template (hidden) #}
+            <div id="rule-template" class="rule" style="display: none">
+                <select class="form-control rule-field">
+                    {% for field in searchable_columns %}
+                    <option
+                        value="{{ field.name }}"
+                        data-type="{{ field.type }}"
+                        data-operators="{{ field.operators|tojson }}"
+                    >
+                        {{ field.label }}
+                    </option>
+                    {% endfor %}
+                </select>
+
+                <select class="form-control rule-operator">
+                    {# Operators will be populated based on field type #}
+                </select>
+
+                <div class="rule-value-container">
+                    {# Value input will be populated based on field type and
+                    operator #}
+                </div>
+
+                <button type="button" class="btn btn-danger remove-rule">
+                    <i class="fa fa-trash"></i>
+                </button>
+            </div>
+
+            {# Field Type Templates (hidden) #}
+            <div id="field-templates" style="display: none">
+                {# Text Input #}
+                <div class="template" data-type="text">
+                    <input type="text" class="form-control rule-value" />
+                </div>
+
+                {# Number Input #}
+                <div class="template" data-type="number">
+                    <input type="number" class="form-control rule-value" />
+                </div>
+
+                {# Date Input #}
+                <div class="template" data-type="date">
+                    <input
+                        type="text"
+                        class="form-control rule-value datepicker"
+                    />
+                </div>
+
+                {# DateTime Input #}
+                <div class="template" data-type="datetime">
+                    <input
+                        type="text"
+                        class="form-control rule-value datetimepicker"
+                    />
+                </div>
+
+                {# Boolean Input #}
+                <div class="template" data-type="boolean">
+                    <select class="form-control rule-value">
+                        <option value="true">{{ _('Yes') }}</option>
+                        <option value="false">{{ _('No') }}</option>
+                    </select>
+                </div>
+
+                {# Select Input #}
+                <div class="template" data-type="select">
+                    <select class="form-control rule-value">
+                        {# Options will be populated dynamically #}
+                    </select>
+                </div>
+
+                {# Multi-Select Input #}
+                <div class="template" data-type="multi-select">
+                    <select class="form-control rule-value" multiple>
+                        {# Options will be populated dynamically #}
+                    </select>
+                </div>
+
+                {# Range Input #}
+                <div class="template" data-type="range">
+                    <div class="input-group">
+                        <input
+                            type="text"
+                            class="form-control rule-value-from"
+                            placeholder="{{ _('From') }}"
+                        />
+                        <span class="input-group-addon">-</span>
+                        <input
+                            type="text"
+                            class="form-control rule-value-to"
+                            placeholder="{{ _('To') }}"
+                        />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# Search Options #}
+        <div class="search-options">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h4 class="panel-title">{{ _('Search Options') }}</h4>
+                </div>
+                <div class="panel-body">
+                    <div class="form-group">
+                        <label>
+                            <input
+                                type="checkbox"
+                                name="case_sensitive"
+                                value="1"
+                            />
+                            {{ _('Case Sensitive') }}
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input
+                                type="checkbox"
+                                name="search_related"
+                                value="1"
+                            />
+                            {{ _('Search Related Records') }}
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>{{ _('Results per page') }}</label>
+                        <select name="page_size" class="form-control">
+                            <option value="10">10</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# Form Actions #}
+        <div class="search-actions">
+            <button type="submit" class="btn btn-primary">
+                <i class="fa fa-search"></i> {{ _('Search') }}
+            </button>
+            <button type="button" class="btn btn-default" data-dismiss="modal">
+                <i class="fa fa-times"></i> {{ _('Cancel') }}
+            </button>
+        </div>
+    </form>
+
+    {# Save Search Modal #}
+    <div class="modal fade" id="save-search-modal">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">
+                        &times;
+                    </button>
+                    <h4 class="modal-title">{{ _('Save Search') }}</h4>
+                </div>
+                <div class="modal-body">
+                    <form id="save-search-form">
+                        <div class="form-group">
+                            <label>{{ _('Search Name') }}</label>
+                            <input
+                                type="text"
+                                class="form-control"
+                                name="search_name"
+                                required
+                            />
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input
+                                    type="checkbox"
+                                    name="is_default"
+                                    value="1"
+                                />
+                                {{ _('Set as default search') }}
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input
+                                    type="checkbox"
+                                    name="share_with_all"
+                                    value="1"
+                                />
+                                {{ _('Share with all users') }}
+                            </label>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button
+                        type="button"
+                        class="btn btn-primary"
+                        id="save-search-confirm"
+                    >
+                        <i class="fa fa-save"></i> {{ _('Save') }}
+                    </button>
+                    <button
+                        type="button"
+                        class="btn btn-default"
+                        data-dismiss="modal"
+                    >
+                        <i class="fa fa-times"></i> {{ _('Cancel') }}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %} {% block tail_js %} {{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeAdvancedSearch({
+            fields: {{ searchable_columns|tojson }},
+            operators: {{ search_operators|tojson }},
+            savedSearches: {{ saved_searches|tojson }},
+            defaultValues: {{ default_values|tojson }},
+            options: {
+                maxRules: {{ max_rules|default(10) }},
+                maxGroups: {{ max_groups|default(3) }},
+                enableSavedSearches: {{ enable_saved_searches|default(true)|tojson }},
+                caseSensitive: {{ case_sensitive|default(false)|tojson }},
+                searchRelated: {{ search_related|default(true)|tojson }},
+                templates: {
+                    dateFormat: "{{ date_format|default('YYYY-MM-DD') }}",
+                    datetimeFormat: "{{ datetime_format|default('YYYY-MM-DD HH:mm') }}",
+                    currencySymbol: "{{ currency_symbol|default('$') }}"
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

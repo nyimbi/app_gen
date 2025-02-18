@@ -11,225 +11,486 @@ Dependencies:
     - SQLAlchemy
     - Flask-AppBuilder
     - Flask
+    - PostgreSQL
 
 Author: Nyimbi Odero
 Date: 25/08/2024
 Version: 1.0
 """
 
+import logging
+import uuid
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Union
+
+from flask import current_app, g
 from flask_appbuilder import Model
-from sqlalchemy import Column, Integer, ForeignKey, event
-from sqlalchemy.orm import declared_attr, relationship, Query
-from sqlalchemy.ext.declarative import declared_attr
-from flask import g, current_app
 from flask_appbuilder.models.sqla.interface import SQLAInterface
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    event,
+    text,
+)
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.ext.declarative import declared_attr
+from sqlalchemy.ext.hybrid import hybrid_property
+from sqlalchemy.inspection import inspect
+from sqlalchemy.orm import Session, declared_attr, relationship, scoped_session
+
+log = logging.getLogger(__name__)
+
 
 class Tenant(Model):
     """
     Model to represent tenants in the system.
+
+    Attributes:
+        id (UUID): Primary key
+        name (str): Tenant name
+        slug (str): URL-friendly identifier
+        domain (str): Custom domain
+        settings (JSONB): Tenant-specific settings
+        is_active (bool): Tenant status
+        created_at (datetime): Creation timestamp
+        updated_at (datetime): Last update timestamp
+        metadata (JSONB): Custom metadata
+        parent_id (UUID): Parent tenant for hierarchical setups
+        custom_attributes (JSONB): Extensible attributes
     """
-    __tablename__ = 'nx_tenants'
-    id = Column(Integer, primary_key=True)
-    name = Column(String(50), unique=True, nullable=False)
-    # Add any other tenant-specific fields here
+
+    __tablename__ = "nx_tenants"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(100), unique=True, nullable=False, index=True)
+    slug = Column(String(100), unique=True, nullable=False, index=True)
+    domain = Column(String(255), unique=True, nullable=True)
+    settings = Column(JSONB, default=dict, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    metadata = Column(JSONB, default=dict, nullable=False)
+    parent_id = Column(UUID(as_uuid=True), ForeignKey("nx_tenants.id"), nullable=True)
+    custom_attributes = Column(JSONB, default=dict, nullable=False)
+
+    # Relationships
+    parent = relationship("Tenant", remote_side=[id], backref="children")
+
+    __table_args__ = {"postgresql_partition_by": "LIST (is_active)"}
 
     def __repr__(self):
-        return self.name
+        return f"<Tenant {self.name}>"
+
+    @hybrid_property
+    def is_root(self):
+        """Check if tenant is a root tenant (no parent)."""
+        return self.parent_id is None
+
+    @hybrid_property
+    def full_hierarchy(self):
+        """Get full tenant hierarchy path."""
+        if self.is_root:
+            return [self]
+        return self.parent.full_hierarchy + [self]
+
 
 class MultiTenancyMixin:
     """
-    A mixin class for adding multi-tenancy support to SQLAlchemy models.
+    Advanced mixin for multi-tenant data isolation and management.
 
-    This mixin automatically scopes queries to the current tenant and provides
-    utilities for working with multi-tenant data.
+    Features:
+    - Automatic tenant scoping
+    - Hierarchical tenant support
+    - Shared data management
+    - Data migration utilities
+    - Audit logging
+    - Cache management
+    - Bulk operations
+    - Custom permissions
+    - Data validation
+    - Tenant statistics
 
     Class Attributes:
-        __tenant_field__ (str): The name of the tenant field (default: 'tenant_id').
-        __shared_data__ (bool): Whether this model can have data shared across tenants (default: False).
+        __tenant_field__ (str): Tenant field name
+        __shared_data__ (bool): Allow shared data
+        __audit_changes__ (bool): Track changes
+        __cache_enabled__ (bool): Enable caching
+        __tenant_validation__ (bool): Validate tenant operations
     """
 
-    __tenant_field__ = 'tenant_id'
+    __tenant_field__ = "tenant_id"
     __shared_data__ = False
+    __audit_changes__ = True
+    __cache_enabled__ = True
+    __tenant_validation__ = True
 
     @declared_attr
     def tenant_id(cls):
-        return Column(Integer, ForeignKey('nx_tenants.id'), nullable=False)
+        """Tenant foreign key with UUID type."""
+        return Column(
+            UUID(as_uuid=True), ForeignKey("nx_tenants.id"), nullable=False, index=True
+        )
 
     @declared_attr
     def tenant(cls):
-        return relationship('Tenant')
+        """Tenant relationship with validation."""
+        return relationship(
+            "Tenant", lazy="joined", backref=f"{cls.__name__.lower()}_set"
+        )
+
+    @declared_attr
+    def created_at(cls):
+        """Creation timestamp."""
+        return Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    @declared_attr
+    def updated_at(cls):
+        """Update timestamp."""
+        return Column(
+            DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+        )
+
+    @declared_attr
+    def metadata(cls):
+        """Custom metadata storage."""
+        return Column(JSONB, default=dict, nullable=False)
 
     @classmethod
     def __declare_last__(cls):
-        event.listen(cls, 'before_insert', cls._before_insert)
-        event.listen(cls, 'before_update', cls._before_update)
+        """Setup event listeners for tenant operations."""
+        event.listen(cls, "before_insert", cls._before_insert)
+        event.listen(cls, "before_update", cls._before_update)
+        if cls.__audit_changes__:
+            event.listen(cls, "after_update", cls._after_update)
 
     @staticmethod
     def _before_insert(mapper, connection, target):
-        """Automatically set the tenant_id before insert if not already set."""
+        """
+        Pre-insert processing with validation.
+
+        Args:
+            mapper: SQLAlchemy mapper
+            connection: DB connection
+            target: Model instance
+
+        Raises:
+            ValueError: If tenant validation fails
+        """
         if target.tenant_id is None:
             target.tenant_id = MultiTenancyMixin.get_current_tenant_id()
 
-    @staticmethod
-    def _before_update(mapper, connection, target):
-        """Ensure the tenant_id is not changed on update."""
-        state = db.inspect(target)
-        if state.attrs.tenant_id.history.has_changes():
-            raise ValueError("Tenant ID cannot be changed")
+        if target.__tenant_validation__:
+            tenant = Tenant.query.get(target.tenant_id)
+            if not tenant or not tenant.is_active:
+                raise ValueError("Invalid or inactive tenant")
 
     @staticmethod
-    def get_current_tenant_id():
-        """Get the current tenant ID from the application context."""
-        tenant_id = getattr(g, 'tenant_id', None)
+    def _before_update(mapper, connection, target):
+        """
+        Pre-update validation and processing.
+
+        Args:
+            mapper: SQLAlchemy mapper
+            connection: DB connection
+            target: Model instance
+
+        Raises:
+            ValueError: If tenant ID modification attempted
+        """
+        state = inspect(target)
+        if state.attrs.tenant_id.history.has_changes():
+            raise ValueError("Tenant ID cannot be modified")
+
+    @staticmethod
+    def _after_update(mapper, connection, target):
+        """Audit logging for changes."""
+        if target.__audit_changes__:
+            state = inspect(target)
+            changes = {}
+            for attr in state.attrs:
+                hist = attr.history
+                if hist.has_changes():
+                    changes[attr.key] = {
+                        "old": hist.deleted[0] if hist.deleted else None,
+                        "new": hist.added[0] if hist.added else None,
+                    }
+            if changes:
+                # Log changes to audit system
+                log.info(
+                    f"Changes to {target.__class__.__name__}[{target.id}]: {changes}"
+                )
+
+    @staticmethod
+    def get_current_tenant_id() -> UUID:
+        """
+        Get current tenant ID with fallback handling.
+
+        Returns:
+            UUID: Current tenant ID
+
+        Raises:
+            ValueError: If no tenant context
+        """
+        tenant_id = getattr(g, "tenant_id", None)
         if tenant_id is None:
+            if current_app.config.get("ALLOW_NO_TENANT", False):
+                return current_app.config.get("DEFAULT_TENANT_ID")
             raise ValueError("No tenant set for current context")
         return tenant_id
 
     @classmethod
-    def set_current_tenant(cls, tenant_id):
-        """Set the current tenant in the application context."""
+    def set_current_tenant(cls, tenant_id: Union[UUID, str]) -> None:
+        """
+        Set current tenant with validation.
+
+        Args:
+            tenant_id: Tenant identifier
+
+        Raises:
+            ValueError: If tenant invalid
+        """
+        if isinstance(tenant_id, str):
+            tenant_id = UUID(tenant_id)
+
+        if cls.__tenant_validation__:
+            tenant = Tenant.query.get(tenant_id)
+            if not tenant or not tenant.is_active:
+                raise ValueError("Invalid or inactive tenant")
+
         g.tenant_id = tenant_id
 
     @classmethod
     def get_tenant_query(cls, query=None):
         """
-        Scope a query to the current tenant.
+        Create tenant-scoped query with caching.
 
         Args:
-            query (Query, optional): Existing query to build upon. If None, a new query is created.
+            query: Base query to extend
 
         Returns:
-            Query: Query scoped to the current tenant.
+            Query: Scoped query object
         """
         if query is None:
             query = cls.query
 
+        tenant_id = cls.get_current_tenant_id()
+
+        if cls.__cache_enabled__:
+            cache_key = f"tenant_query_{cls.__name__}_{tenant_id}"
+            cached = current_app.cache.get(cache_key)
+            if cached is not None:
+                return cached
+
         if cls.__shared_data__:
-            return query.filter((getattr(cls, cls.__tenant_field__) == cls.get_current_tenant_id()) |
-                                (getattr(cls, cls.__tenant_field__) == None))
+            query = query.filter(
+                (getattr(cls, cls.__tenant_field__) == tenant_id)
+                | (getattr(cls, cls.__tenant_field__) is None)
+            )
         else:
-            return query.filter(getattr(cls, cls.__tenant_field__) == cls.get_current_tenant_id())
+            query = query.filter(getattr(cls, cls.__tenant_field__) == tenant_id)
+
+        if cls.__cache_enabled__:
+            current_app.cache.set(cache_key, query)
+
+        return query
 
     @classmethod
-    def create_scoped_session(cls, tenant_id):
+    def bulk_tenant_operation(
+        cls, operation: str, data: List[Dict], tenant_id: Optional[UUID] = None
+    ) -> List[Any]:
         """
-        Create a database session scoped to a specific tenant.
+        Perform bulk operations within tenant scope.
 
         Args:
-            tenant_id (int): The ID of the tenant to scope the session to.
+            operation: Operation type (create/update/delete)
+            data: Operation data
+            tenant_id: Override tenant ID
 
         Returns:
-            scoped_session: A database session scoped to the specified tenant.
+            List[Any]: Operation results
+
+        Raises:
+            ValueError: For invalid operations
         """
-        from flask_sqlalchemy import SQLAlchemy
+        tenant_id = tenant_id or cls.get_current_tenant_id()
+        session = cls.create_scoped_session(tenant_id)
+
+        try:
+            results = []
+            if operation == "create":
+                instances = [cls(**item) for item in data]
+                session.bulk_save_objects(instances)
+                results = instances
+            elif operation == "update":
+                for item in data:
+                    instance = session.query(cls).get(item.pop("id"))
+                    if instance:
+                        for key, value in item.items():
+                            setattr(instance, key, value)
+                        results.append(instance)
+            elif operation == "delete":
+                ids = [item["id"] for item in data]
+                results = session.query(cls).filter(cls.id.in_(ids)).all()
+                for instance in results:
+                    session.delete(instance)
+            else:
+                raise ValueError(f"Invalid operation: {operation}")
+
+            session.commit()
+            return results
+        except Exception as e:
+            session.rollback()
+            raise e
+        finally:
+            session.close()
+
+    @classmethod
+    def create_scoped_session(cls, tenant_id: UUID) -> scoped_session:
+        """
+        Create tenant-scoped database session.
+
+        Args:
+            tenant_id: Tenant identifier
+
+        Returns:
+            scoped_session: Scoped session instance
+        """
         db = SQLAlchemy(current_app)
         tenant_session = db.create_scoped_session()
-        
-        @event.listens_for(tenant_session, 'before_flush')
+
+        @event.listens_for(tenant_session, "before_flush")
         def before_flush(session, flush_context, instances):
             for instance in session.new.union(session.dirty):
                 if isinstance(instance, MultiTenancyMixin):
                     instance.tenant_id = tenant_id
-        
+
         return tenant_session
 
     @classmethod
-    def copy_to_tenant(cls, instance_id, from_tenant_id, to_tenant_id):
+    def get_tenant_statistics(cls, tenant_id: Optional[UUID] = None) -> Dict:
         """
-        Copy a record from one tenant to another.
+        Get tenant data statistics.
 
         Args:
-            instance_id (int): The ID of the instance to copy.
-            from_tenant_id (int): The source tenant ID.
-            to_tenant_id (int): The destination tenant ID.
+            tenant_id: Tenant to analyze
 
         Returns:
-            Model: The newly created instance in the destination tenant.
+            Dict: Statistics data
         """
-        source_session = cls.create_scoped_session(from_tenant_id)
-        dest_session = cls.create_scoped_session(to_tenant_id)
+        tenant_id = tenant_id or cls.get_current_tenant_id()
+        session = cls.create_scoped_session(tenant_id)
 
         try:
-            source_instance = source_session.query(cls).get(instance_id)
-            if not source_instance:
-                raise ValueError(f"No {cls.__name__} found with id {instance_id} for tenant {from_tenant_id}")
-
-            dest_instance = cls()
-            for col in cls.__table__.columns:
-                if col.name != 'id' and col.name != cls.__tenant_field__:
-                    setattr(dest_instance, col.name, getattr(source_instance, col.name))
-            
-            dest_session.add(dest_instance)
-            dest_session.commit()
-
-            return dest_instance
+            stats = {
+                "total_records": session.query(cls)
+                .filter_by(tenant_id=tenant_id)
+                .count(),
+                "last_updated": session.query(cls.updated_at)
+                .filter_by(tenant_id=tenant_id)
+                .order_by(cls.updated_at.desc())
+                .first(),
+                "metadata_keys": session.query(cls.metadata.keys())
+                .filter_by(tenant_id=tenant_id)
+                .distinct()
+                .all(),
+            }
+            return stats
         finally:
-            source_session.close()
-            dest_session.close()
+            session.close()
 
-    @classmethod
-    def get_shared_data(cls):
+
+class TenantScopedSQLAInterface(SQLAInterface):
+    """
+    Enhanced SQLAInterface with tenant scoping and caching.
+    """
+
+    def query(self, filters=None, order_column="", order_direction=""):
         """
-        Get data that is shared across all tenants.
+        Create tenant-aware query with caching.
+
+        Args:
+            filters: Query filters
+            order_column: Sort column
+            order_direction: Sort direction
 
         Returns:
-            Query: Query for shared data (tenant_id is NULL).
+            Query: Filtered and ordered query
         """
-        if not cls.__shared_data__:
-            raise ValueError(f"{cls.__name__} does not support shared data")
-        return cls.query.filter(getattr(cls, cls.__tenant_field__) == None)
-
-# Extend SQLAInterface to automatically apply tenant scoping
-class TenantScopedSQLAInterface(SQLAInterface):
-    def query(self, filters=None, order_column='', order_direction=''):
         query = super().query(filters, order_column, order_direction)
+
         if issubclass(self.obj, MultiTenancyMixin):
+            cache_key = f"interface_query_{self.obj.__name__}_{filters}"
+
+            if self.obj.__cache_enabled__:
+                cached = current_app.cache.get(cache_key)
+                if cached is not None:
+                    return cached
+
             query = self.obj.get_tenant_query(query)
+
+            if self.obj.__cache_enabled__:
+                current_app.cache.set(cache_key, query)
+
         return query
 
-# Example usage (commented out):
+
 """
-from flask_appbuilder import Model
-from sqlalchemy import Column, Integer, String, ForeignKey
+Usage Example:
+
+from flask_appbuilder import Model, ModelView
+from sqlalchemy import Column, String, Numeric
+from sqlalchemy.dialects.postgresql import UUID
 from mixins.multi_tenancy_mixin import MultiTenancyMixin, TenantScopedSQLAInterface
 
 class Product(MultiTenancyMixin, Model):
     __tablename__ = 'nx_products'
-    id = Column(Integer, primary_key=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(100), nullable=False)
-    price = Column(Integer, nullable=False)
+    price = Column(Numeric(10, 2), nullable=False)
 
-    __shared_data__ = True  # Allow some products to be shared across tenants
+    __shared_data__ = True
+    __audit_changes__ = True
+    __cache_enabled__ = True
 
-# In your Flask-AppBuilder view
 class ProductModelView(ModelView):
     datamodel = TenantScopedSQLAInterface(Product)
+    list_columns = ['name', 'price', 'tenant.name', 'created_at']
+    edit_columns = ['name', 'price']
+    add_columns = ['name', 'price']
+    show_columns = ['name', 'price', 'tenant.name', 'created_at', 'updated_at']
 
-# In your application code:
-
-# Set the current tenant
+# Application Setup
 @app.before_request
 def set_tenant():
-    tenant_id = get_tenant_id_from_request()  # Implement this based on your authentication logic
+    tenant_id = get_tenant_id_from_request()
     MultiTenancyMixin.set_current_tenant(tenant_id)
 
-# Create a new product
-new_product = Product(name="Widget", price=1000)
+# Usage Examples
+# Create product
+new_product = Product(name="Premium Widget", price=999.99)
 db.session.add(new_product)
-db.session.commit()  # This will automatically set the tenant_id
+db.session.commit()
 
-# Query products (automatically scoped to the current tenant)
-products = Product.get_tenant_query().all()
+# Bulk create products
+products_data = [
+    {"name": "Product A", "price": 100},
+    {"name": "Product B", "price": 200}
+]
+Product.bulk_tenant_operation('create', products_data)
 
-# Get shared products
-shared_products = Product.get_shared_data().all()
+# Get tenant statistics
+stats = Product.get_tenant_statistics()
 
-# Copy a product to another tenant
-copied_product = Product.copy_to_tenant(product_id=1, from_tenant_id=1, to_tenant_id=2)
+# Query with tenant scope
+products = Product.get_tenant_query().filter(Product.price > 500).all()
 
-# Using scoped session for operations on behalf of a specific tenant
-with Product.create_scoped_session(tenant_id=3) as session:
-    new_product = Product(name="Tenant 3 Specific Product", price=2000)
-    session.add(new_product)
-    session.commit()
+# Using scoped session
+with Product.create_scoped_session(tenant_id) as session:
+    session.query(Product).filter(Product.price < 1000).all()
 """

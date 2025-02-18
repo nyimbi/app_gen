@@ -1,0 +1,281 @@
+{% extends 'modelview/base.html' %} {% block content %}
+<div class="workflow-view-container">
+    {# Header Section #}
+    <div class="workflow-header">
+        <div class="title-section">
+            <h3>
+                <i class="fa fa-random"></i>
+                {{ _('Workflow') }}: {{ item }}
+            </h3>
+            <div class="current-state">
+                <span class="state-label">{{ _('Current State') }}:</span>
+                <span class="state-badge state-{{ item.state }}">
+                    <i class="fa fa-{{ state_icons[item.state] }}"></i>
+                    {{ state_labels[item.state] }}
+                </span>
+            </div>
+        </div>
+
+        {# Action Buttons #}
+        <div class="workflow-actions">
+            {% for action in available_actions %}
+            <button
+                type="button"
+                class="btn btn-{{ action.style|default('default') }} workflow-action"
+                data-action="{{ action.name }}"
+                {%
+                if
+                not
+                action.enabled
+                %}disabled{%
+                endif
+                %}
+                title="{{ action.tooltip|default('') }}"
+            >
+                <i class="fa fa-{{ action.icon }}"></i>
+                {{ action.label }}
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+
+    {# Workflow Content #}
+    <div class="workflow-content">
+        {# Workflow Diagram #}
+        <div class="workflow-diagram">
+            <div class="diagram-container" id="workflow-diagram">
+                {# Diagram will be rendered via JavaScript #}
+            </div>
+            <div class="diagram-legend">
+                {% for state in workflow_states %}
+                <div class="legend-item">
+                    <span class="state-badge state-{{ state.name }}">
+                        <i class="fa fa-{{ state_icons[state.name] }}"></i>
+                        {{ state_labels[state.name] }}
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        {# State History #}
+        <div class="state-history">
+            <h4>
+                <i class="fa fa-history"></i>
+                {{ _('State History') }}
+            </h4>
+            <div class="timeline">
+                {% for transition in state_history %}
+                <div class="timeline-entry">
+                    <div class="timeline-icon">
+                        <i
+                            class="fa fa-{{ state_icons[transition.to_state] }}"
+                        ></i>
+                    </div>
+                    <div class="timeline-content">
+                        <div class="transition-header">
+                            <span
+                                class="state-badge state-{{ transition.to_state }}"
+                            >
+                                {{ state_labels[transition.to_state] }}
+                            </span>
+                            <span class="transition-date">
+                                {{ transition.created_at|datetime }}
+                            </span>
+                        </div>
+                        <div class="transition-details">
+                            <div class="transition-user">
+                                {{ _('By') }}: {{ transition.user|user_link }}
+                            </div>
+                            {% if transition.comment %}
+                            <div class="transition-comment">
+                                {{ transition.comment }}
+                            </div>
+                            {% endif %} {% if transition.metadata %}
+                            <div class="transition-metadata">
+                                {% for key, value in transition.metadata.items()
+                                %}
+                                <div class="metadata-item">
+                                    <span class="metadata-key">{{ key }}:</span>
+                                    <span class="metadata-value"
+                                        >{{ value }}</span
+                                    >
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        {# State Details #}
+        <div class="state-details">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h4 class="panel-title">
+                        {{ _('Current State Details') }}
+                    </h4>
+                </div>
+                <div class="panel-body">
+                    {# State Metadata #}
+                    <div class="metadata-section">
+                        <h5>{{ _('Metadata') }}</h5>
+                        <div class="metadata-grid">
+                            {% for key, value in current_state_metadata.items()
+                            %}
+                            <div class="metadata-item">
+                                <div class="metadata-key">{{ key }}</div>
+                                <div class="metadata-value">{{ value }}</div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    {# State Permissions #}
+                    <div class="permissions-section">
+                        <h5>{{ _('Permissions') }}</h5>
+                        <div class="permissions-list">
+                            {% for permission in current_state_permissions %}
+                            <div class="permission-item">
+                                <i class="fa fa-{{ permission.icon }}"></i>
+                                {{ permission.label }}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    {# State Validation #} {% if current_state_validation %}
+                    <div class="validation-section">
+                        <h5>{{ _('Validation Rules') }}</h5>
+                        <div class="validation-list">
+                            {% for rule in current_state_validation %}
+                            <div
+                                class="validation-item {% if rule.passed %}passed{% else %}failed{% endif %}"
+                            >
+                                <i
+                                    class="fa fa-{{ 'check' if rule.passed else 'times' }}"
+                                ></i>
+                                {{ rule.description }}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Workflow Action Modal #}
+<div class="modal fade" id="workflow-action-modal">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    &times;
+                </button>
+                <h4 class="modal-title">{{ _('Perform Action') }}</h4>
+            </div>
+            <div class="modal-body">
+                <form id="workflow-action-form">
+                    {# Action Fields #}
+                    <div class="action-fields">
+                        {# Fields will be loaded dynamically based on action #}
+                    </div>
+
+                    {# Comment Field #}
+                    <div class="form-group">
+                        <label>{{ _('Comment') }}</label>
+                        <textarea
+                            class="form-control"
+                            name="comment"
+                            rows="3"
+                        ></textarea>
+                    </div>
+
+                    {# Additional Options #}
+                    <div class="action-options">
+                        <div class="checkbox">
+                            <label>
+                                <input
+                                    type="checkbox"
+                                    name="notify_users"
+                                    checked
+                                />
+                                {{ _('Notify relevant users') }}
+                            </label>
+                        </div>
+                        <div class="checkbox">
+                            <label>
+                                <input type="checkbox" name="skip_validation" />
+                                {{ _('Skip validation') }}
+                            </label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button
+                    type="button"
+                    class="btn btn-primary"
+                    id="perform-action"
+                >
+                    {{ _('Perform Action') }}
+                </button>
+                <button
+                    type="button"
+                    class="btn btn-default"
+                    data-dismiss="modal"
+                >
+                    {{ _('Cancel') }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# State Preview Modal #}
+<div class="modal fade" id="state-preview-modal">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    &times;
+                </button>
+                <h4 class="modal-title">{{ _('State Preview') }}</h4>
+            </div>
+            <div class="modal-body">
+                <div class="preview-content">
+                    {# Preview content will be loaded dynamically #}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block tail_js %} {{ super() }}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dagre-d3/0.6.4/dagre-d3.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeWorkflowView({
+            states: {{ workflow_states|tojson }},
+            transitions: {{ workflow_transitions|tojson }},
+            currentState: "{{ item.state }}",
+            actionUrl: "{{ url_for('.workflow_action') }}",
+            previewUrl: "{{ url_for('.preview_state') }}",
+            refreshUrl: "{{ url_for('.refresh_workflow') }}",
+            csrf_token: "{{ csrf_token() }}",
+            translations: {
+                actionError: "{{ _('Error performing action') }}",
+                validationError: "{{ _('Validation failed') }}",
+                confirmAction: "{{ _('Are you sure you want to perform this action?') }}",
+                stateChangeSuccess: "{{ _('State changed successfully') }}"
+            }
+        });
+    });
+</script>
+{% endblock %}

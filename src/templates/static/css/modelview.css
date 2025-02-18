@@ -1,0 +1,104 @@
+/* Fieldset styling */
+.form-fieldset {
+    margin-bottom: 20px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.fieldset-header {
+    padding: 10px 15px;
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #ddd;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+}
+
+.fieldset-header i {
+    margin-right: 10px;
+}
+
+.fieldset-title {
+    flex-grow: 1;
+    font-weight: 600;
+}
+
+.fieldset-content {
+    padding: 15px;
+    transition: all 0.3s ease-in-out;
+}
+
+.fieldset-content.collapsed {
+    display: none;
+}
+
+/* JSON editor styling */
+.json-editor {
+    height: 400px;
+    margin-bottom: 10px;
+    border: 1px solid #ddd;
+}
+
+/* Form styling */
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.control-label {
+    font-weight: 500;
+    color: #495057;
+}
+
+.help-block {
+    font-size: 0.875em;
+    color: #6c757d;
+    margin-top: 0.25rem;
+}
+
+.error-message {
+    color: #dc3545;
+}
+
+/* List view styling */
+.list-header {
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.filter-box {
+    margin-left: auto;
+}
+
+.column-header {
+    position: relative;
+}
+
+.sort-link {
+    display: block;
+    color: inherit;
+    text-decoration: none;
+}
+
+.sort-link i {
+    margin-left: 5px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .list-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .filter-box {
+        margin: 10px 0;
+    }
+
+    .form-inline .form-group {
+        margin-bottom: 10px;
+    }
+}

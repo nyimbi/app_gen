@@ -19,18 +19,21 @@ Date: 25/08/2024
 Version: 1.0
 """
 
+import pickle
+from datetime import datetime, timedelta
+from functools import wraps
+
 from flask import current_app
+from flask_appbuilder.models.mixins import AuditMixin
 from sqlalchemy import event
 from sqlalchemy.orm import Query
-from flask_appbuilder.models.mixins import AuditMixin
-import pickle
-from functools import wraps
-from datetime import datetime, timedelta
+
 
 class CachedQuery(Query):
     """
     Custom query class that integrates caching functionality.
     """
+
     def __init__(self, *args, **kwargs):
         super(CachedQuery, self).__init__(*args, **kwargs)
         self._cache_key = None
@@ -54,7 +57,9 @@ class CachedQuery(Query):
     def _get_cache_key(self):
         """Generate a cache key if not provided."""
         if self._cache_key is None:
-            query_string = str(self.statement.compile(compile_kwargs={"literal_binds": True}))
+            query_string = str(
+                self.statement.compile(compile_kwargs={"literal_binds": True})
+            )
             self._cache_key = f"query_{hash(query_string)}"
         return self._cache_key
 
@@ -63,7 +68,7 @@ class CachedQuery(Query):
         if self._cache_key is None:
             return super(CachedQuery, self).__iter__()
 
-        cache = current_app.extensions['cache']
+        cache = current_app.extensions["cache"]
         key = self._get_cache_key()
         result = cache.get(key)
 
@@ -74,6 +79,7 @@ class CachedQuery(Query):
             result = pickle.loads(result)
 
         return iter(result)
+
 
 class CacheMixin(AuditMixin):
     """
@@ -93,13 +99,13 @@ class CacheMixin(AuditMixin):
     @classmethod
     def __declare_last__(cls):
         """Set up event listeners for cache invalidation."""
-        event.listen(cls, 'after_update', cls._invalidate_cache)
-        event.listen(cls, 'after_delete', cls._invalidate_cache)
+        event.listen(cls, "after_update", cls._invalidate_cache)
+        event.listen(cls, "after_delete", cls._invalidate_cache)
 
     @classmethod
     def _invalidate_cache(cls, mapper, connection, target):
         """Invalidate the cache for the updated/deleted instance."""
-        cache = current_app.extensions['cache']
+        cache = current_app.extensions["cache"]
         cache.delete(cls._get_instance_cache_key(target.id))
 
     @classmethod
@@ -115,7 +121,7 @@ class CacheMixin(AuditMixin):
         Args:
             instance: The model instance to cache.
         """
-        cache = current_app.extensions['cache']
+        cache = current_app.extensions["cache"]
         key = cls._get_instance_cache_key(instance.id)
         cache.set(key, pickle.dumps(instance), timeout=cls.__cache_timeout__)
 
@@ -130,7 +136,7 @@ class CacheMixin(AuditMixin):
         Returns:
             The cached instance if found, None otherwise.
         """
-        cache = current_app.extensions['cache']
+        cache = current_app.extensions["cache"]
         key = cls._get_instance_cache_key(instance_id)
         cached_data = cache.get(key)
         if cached_data:
@@ -145,7 +151,7 @@ class CacheMixin(AuditMixin):
         Args:
             instances (list): List of model instances to cache.
         """
-        cache = current_app.extensions['cache']
+        cache = current_app.extensions["cache"]
         with cache.pipeline() as pipe:
             for instance in instances:
                 key = cls._get_instance_cache_key(instance.id)
@@ -172,10 +178,11 @@ class CacheMixin(AuditMixin):
         Returns:
             function: Decorated method with caching.
         """
+
         def decorator(func):
             @wraps(func)
             def wrapper(self, *args, **kwargs):
-                cache = current_app.extensions['cache']
+                cache = current_app.extensions["cache"]
                 key = f"{self.__class__.__name__}:{self.id}:{func.__name__}:{args}:{kwargs}"
                 result = cache.get(key)
                 if result is None:
@@ -184,7 +191,9 @@ class CacheMixin(AuditMixin):
                 else:
                     result = pickle.loads(result)
                 return result
+
             return wrapper
+
         return decorator
 
     def refresh_cache(self):
@@ -194,9 +203,10 @@ class CacheMixin(AuditMixin):
     @classmethod
     def clear_cache(cls):
         """Clear all cached data for this model."""
-        cache = current_app.extensions['cache']
+        cache = current_app.extensions["cache"]
         cache.delete_memoized(cls.get_cached)
         cache.delete_memoized(cls.cached_query)
+
 
 # Example usage (commented out):
 """
