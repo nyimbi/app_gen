@@ -1,3 +1,10 @@
+"""
+Author: Nyimbi Odero
+Copyright: Nyimbi Odero, 2024
+License: MIT
+"""
+
+
 from typing import Any, Dict, List, Optional, Union
 from dataclasses import dataclass
 from jinja2 import Template
@@ -87,7 +94,8 @@ class AutocompleteWidget(BS3TextFieldWidget):
         ```
     """
 
-    template = Template("""
+    template = Template(
+        """
         <div class="autocomplete-wrapper {{ wrapper_class }}"
              role="combobox"
              aria-expanded="false"
@@ -116,7 +124,8 @@ class AutocompleteWidget(BS3TextFieldWidget):
                 role="listbox"
                 style="display:none"></ul>
         </div>
-    """)
+    """
+    )
 
     def __init__(self, **kwargs):
         """
@@ -663,7 +672,9 @@ class AutocompleteWidget(BS3TextFieldWidget):
                             this.showLoading();
 
                             try {{
-                                const response = await fetch(`{self.config.remote_url}?q=${encodeURIComponent(term)}`, {{
+                                const response = await fetch(`{
+            self.config.remote_url
+        }?q=${encodeURIComponent(term)}`, {{
                                     method: '{self.config.remote_method}',
                                     headers: {json.dumps(self.config.custom_headers)},
                                     signal: (currentRequest = new AbortController()).signal
@@ -822,8 +833,7 @@ class AutocompleteWidget(BS3TextFieldWidget):
                         for (const category of data) {{
                             if (!category?.category || !Array.isArray(category.items)) continue;
 
-                            processed.push({
-                                label: category.category,
+                            processed.push({label: category.category,
                                 isCategory: true
                             });
 
@@ -856,7 +866,9 @@ class AutocompleteWidget(BS3TextFieldWidget):
                             }} else {{
                                 element.className = 'autocomplete-item';
                                 element.setAttribute('role', 'option');
-                                element.setAttribute('id', `${this.config.field_id}-option-${index}`);
+                                element.setAttribute('id', `${
+            this.config.field_id
+        }-option-${index}`);
                                 element.dataset.value = result.value;
 
                                 if (this.config.highlight) {{
@@ -879,7 +891,9 @@ class AutocompleteWidget(BS3TextFieldWidget):
                         if (this.config.multiple) {{
                             const values = this.getValues();
                             if (values.length >= this.config.max_items) {{
-                                this.showError(this.config.messages.max_items.replace('{max}', this.config.max_items));
+                                this.showError(this.config.messages.max_items.replace('{
+            max
+        }', this.config.max_items));
                                 return;
                             }}
                             values.push(value);
@@ -1009,7 +1023,9 @@ class AutocompleteWidget(BS3TextFieldWidget):
                 }}
 
                 // Initialize the autocomplete manager with the configuration
-                window.autocompleteManager = new AutocompleteManager({json.dumps(config)});
+                window.autocompleteManager = new AutocompleteManager({
+            json.dumps(config)
+        });
             }})();
         </script>
         """
@@ -1093,6 +1109,12 @@ class AutocompleteWidget(BS3TextFieldWidget):
             if self.config.max_items and len(self.data) > self.config.max_items:
                 raise ValidationError(
                     self.messages.max_items.format(max=self.config.max_items)
+                )
+
+        if self.config.validate_pattern and not isinstance(self.data, (list, tuple)):
+            pattern = re.compile(self.config.validate_pattern)
+            if not pattern.match(str(self.data)):
+                raise ValidationError("Value does not match the required pattern")
                 )
 
         if self.config.validate_pattern and not isinstance(self.data, (list, tuple)):
