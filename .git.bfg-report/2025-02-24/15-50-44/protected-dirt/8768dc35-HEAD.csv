@@ -1,0 +1,5 @@
+497416e470f514e32f99135727668da8c76d2490,DELETE,regular-file,old/src/tmp.txt,6534161,
+b604f21d1c2b415245a375db30fd6b746e84927e,DELETE,regular-file,ref/apg_test copy/agent_data_insert.sql,1466571,
+8d4a96e33cf3cccbb014ded2188515fa049dbcef,DELETE,regular-file,ref/apg_test copy/pos_data_insert.sql,1410036,
+b604f21d1c2b415245a375db30fd6b746e84927e,DELETE,regular-file,ref/apg_test/agent_data_insert.sql,1466571,
+8d4a96e33cf3cccbb014ded2188515fa049dbcef,DELETE,regular-file,ref/apg_test/pos_data_insert.sql,1410036,

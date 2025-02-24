@@ -1,0 +1,18 @@
+fa4dfd7b6207025ac1bd51ad55846b62eee11c26 2657380 A rigorous methodology for developing GUI-based DSL formal tools.pdf
+a8b07fd3a9a3b7329739ff9428a4c28104524b48 6493847 Debasish Ghosh - DSLs in Action-Manning Publications (2010).pdf
+28281a574354c886d5bd6c29ca2a748070fc01cd 2850545 METEOR-S Web Service Annotation Framework.pdf
+25f37c7e6dfbd36ef4c6f599411dc44d38f6c060 2082422 Methods and Techniques for the Design and Implementation of Domain-Specific Languages.pdf
+1a2b9e777237a4f4506d0968ccc4825f824d12a9 2345750 Microservices_The_Journey_So_Far_and_Challenges_Ahead (1).pdf
+1a2b9e777237a4f4506d0968ccc4825f824d12a9 2345750 Microservices_The_Journey_So_Far_and_Challenges_Ahead.pdf
+de0deecefdd267e8ea072ff784e60c67e28e3a3c 3513104 Reverse Engineering Language Product Lines from Existing DSL Variants.pdf
+949d2a5dac110093f947892e72b42dd9c48e928a 3649643 Towards Supporting SPL Engineering in Low-Code Platforms using a DSL Approach.pdf
+46e152385e0d9c3cc1d71965b262e2e13f903e05 3772375 Using a Dynamic Domain-Specific Modeling Language for the Model-D.pdf
+d701053dbac52a3e794897efb11b868147617db3 2476160 admin.gif
+b604f21d1c2b415245a375db30fd6b746e84927e 1466571 agent_data_insert.sql
+2060a0ab93d6e49b06db5b1ed0747a358ee1026c 2181515 chunk-vendors.1e3fee1f.css
+c82b9018f119dee0460347dcb16bec92d0fe17d5 2432067 chunk-vendors.f6313396.js
+8ce036c465d86ec292e0fc5025556f442cbb4f60 1211309 generated-page.png
+47a2a41f725180e8fb9b6c7d761a900bd61ebd6d 1286720 gosu
+aa7f26da3001500779f3d0e878a12b2a3e6ef1ef 1888593 home.gif
+8d4a96e33cf3cccbb014ded2188515fa049dbcef 1410036 pos_data_insert.sql
+497416e470f514e32f99135727668da8c76d2490 6534161 tmp.txt
