@@ -9,13 +9,17 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="beef659a-f4de-45e7-80c5-ef056e8b7ba6" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/src/templates/chart.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/templates/chart_view_old.py.j2" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/templates/chart_widget_old.html" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/cody_history.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/cody_history.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/n_src/db_utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/n_src/db_utils.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/n_src/gen_models.py" beforeDir="false" afterPath="$PROJECT_DIR$/n_src/gen_models.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/n_src/gen_views.py" beforeDir="false" afterPath="$PROJECT_DIR$/n_src/gen_views.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/n_src/oheaders.py" beforeDir="false" afterPath="$PROJECT_DIR$/n_src/oheaders.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/n_src/utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/n_src/utils.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/src/requirements.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/templates/chart_view.py.j2" beforeDir="false" afterPath="$PROJECT_DIR$/src/templates/chart_view.py.j2" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/templates/chart_widget.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/templates/init_template.py.j2" beforeDir="false" afterPath="$PROJECT_DIR$/src/templates/init_template.py.j2" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/templates/wizard_view.py.j2" beforeDir="false" afterPath="$PROJECT_DIR$/src/templates/wizard_view.py.j2" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -86,7 +90,7 @@
       <recent name="$PROJECT_DIR$/src/scripts" />
     </key>
   </component>
-  <component name="RunManager" selected="Python.base_mixin">
+  <component name="RunManager" selected="Python.refactor">
     <configuration name="base_mixin" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="appgen" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -100,6 +104,27 @@
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/n_src/base_mixin.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="refactor" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="appgen" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/src/mixins" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/mixins/refactor.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
@@ -152,6 +177,7 @@
     </configuration>
     <recent_temporary>
       <list>
+        <item itemvalue="Python.refactor" />
         <item itemvalue="Python.base_mixin" />
         <item itemvalue="Python.test_MG" />
       </list>
@@ -170,16 +196,5 @@
   </component>
   <component name="VcsManagerConfiguration">
     <option name="ADD_EXTERNAL_FILES_SILENTLY" value="true" />
-  </component>
-  <component name="XDebuggerManager">
-    <breakpoint-manager>
-      <breakpoints>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/src/models.py</url>
-          <line>3363</line>
-          <option name="timeStamp" value="1" />
-        </line-breakpoint>
-      </breakpoints>
-    </breakpoint-manager>
   </component>
 </project>

@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+import requests
 from datetime import datetime
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Set, Union
@@ -407,14 +408,12 @@ class RowLevelSecurityMixin:
         self._audit_log("delete", item)
 
     def _audit_log(self, action: str, item: Any) -> None:
-        """Enhanced audit logging with change tracking"""
         if not self.enable_audit:
             return
 
         try:
-            # Get changed fields
             changes = {}
-            if action == "update":
+            if action in ("update", "delete"):  # Handle delete changes as well
                 for attr in inspect(item).attrs:
                     hist = attr.history
                     if hist.has_changes():
@@ -422,6 +421,8 @@ class RowLevelSecurityMixin:
                             "old": hist.deleted[0] if hist.deleted else None,
                             "new": hist.added[0] if hist.added else None,
                         }
+                    elif action == "delete" and hist.deleted:  # Capture deleted values
+                        changes[attr.key] = {"old": hist.deleted[0], "new": None}
 
             log_entry = {
                 "action": action,
@@ -435,10 +436,8 @@ class RowLevelSecurityMixin:
                 "user_agent": request.user_agent.string if request else None,
             }
 
-            # Insert audit log
             self.datamodel.session.execute(rls_audit_log.insert(), [log_entry])
 
-            # Notify security webhooks
             if self.enable_analytics:
                 self._notify_security_webhooks(log_entry)
 
@@ -448,14 +447,19 @@ class RowLevelSecurityMixin:
                 raise
 
     def _notify_security_webhooks(self, log_entry: Dict[str, Any]) -> None:
-        """Notify security webhooks of events"""
         try:
             webhooks = current_app.config.get("SECURITY_WEBHOOKS", [])
             for webhook in webhooks:
                 try:
-                    requests.post(webhook["url"], json=log_entry, timeout=5)
-                except Exception as e:
-                    logger.error(f"Webhook notification error: {str(e)}")
+                    requests.post(
+                        webhook["url"], json=log_entry, timeout=5
+                    )  # Ensure requests is installed
+                except (
+                    requests.exceptions.RequestException
+                ) as e:  # Catch request exceptions
+                    logger.error(
+                        f"Webhook notification error: {str(e)} for URL: {webhook.get('url', 'Unknown')}"
+                    )  # Include URL in error message
         except Exception as e:
             logger.error(f"Security webhook error: {str(e)}")
 

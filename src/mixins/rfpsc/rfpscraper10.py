@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+#
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
@@ -8,10 +10,12 @@ import hashlib
 import json
 import logging
 import io
+import httpx
 
 # Document processing libraries
 import PyPDF2
-import pytesseract  # for OCR on images (requires Tesseract installed)
+# import datasketch
+# import pytesseract  # for OCR on images (requires Tesseract installed)
 from PIL import Image
 
 # Data normalization and validation
@@ -24,7 +28,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 # SQLAlchemy for persistence
 from sqlalchemy import create_engine, Column, Integer, String, Date, Boolean, Text, Float
-from sqlalchemy.ext.declarative import declarative_base
+# from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 # URL parsing and BFS queue
@@ -36,7 +41,7 @@ from prefect import flow, task, get_run_logger
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ----------------------------- CONFIGURATION -----------------------------
-DATABASE_URL = "postgresql://user:password@localhost/rfp_database"  # update credentials
+DATABASE_URL = "postgresql:///rfp_db"  # update credentials
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/91.0.4472.124 Safari/537.36'
 REQUEST_DELAY = 2            # delay between requests
 MAX_RETRIES = 3
@@ -61,25 +66,70 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(mes
 # ----------------------------- SQLAlchemy SETUP -----------------------------
 Base = declarative_base()
 
+
+"""
+This module defines the SQLAlchemy model for the RFP (Request for Proposal) table.
+
+The RFP model represents a tender or procurement opportunity with various fields capturing
+essential information such as the title, description, organization, important dates, location,
+attachments, and metadata.
+
+Attributes:
+    id (Integer): Primary key for the RFP record.
+    tender_id (String): Unique identifier for the tender, if available.
+    title (String): Title or name of the RFP.
+    description (Text): Detailed description of the RFP.
+    scope (Text): Scope or objectives of the RFP.
+    organization (String): Name of the organization issuing the RFP.
+    contact_info (Text): Contact information for the RFP.
+    eligibility_criteria (Text): Eligibility criteria for bidders or applicants.
+    procurement_method (String): Procurement method or type (e.g., open tender, restricted tender).
+    submission_instructions (Text): Instructions for submitting proposals or bids.
+    issue_date (Date): Date when the RFP was issued or published.
+    prebid_date (Date): Date for pre-bid meetings or clarifications, if applicable.
+    evaluation_date (Date): Date for proposal evaluation or bid opening, if available.
+    award_date (Date): Expected date for contract award, if provided.
+    contract_commencement_date (Date): Expected start date for the awarded contract.
+    contract_duration (String): Duration or term of the awarded contract.
+    expiry_date (Date): Deadline or expiry date for submitting proposals or bids.
+    estimated_contract_value (Float): Estimated value or budget for the contract, if provided.
+    legal_details (Text): Legal terms, conditions, or requirements related to the RFP.
+    sector (String): Industry sector or domain relevant to the RFP.
+    subnational_location (String): Specific region, state, or locality relevant to the RFP.
+    donor_info (Text): Information about donors or funding sources, if applicable.
+    funding_program (String): Name of the funding program or initiative related to the RFP.
+    strategic_context (Text): Strategic context, background, or rationale for the RFP.
+    application_process (Text): Application process or steps for interested parties.
+    security_bond_required (Boolean): Indicates if a security bond or deposit is required.
+    country (String): Country where the RFP is issued or relevant.
+    location (String): Location or geographical area relevant to the RFP.
+    activity (String): Type of activity or service required by the RFP.
+    source_url (String): URL or source from where the RFP information was obtained.
+    content_hash (String): Hash or digest of the RFP content for deduplication purposes.
+    is_worth_pursuing (Boolean): Indicates if the RFP is deemed worth pursuing based on evaluation.
+    documents (Text): JSON-encoded list of documents or attachments related to the RFP.
+    extra_metadata (Text): JSON-encoded metadata or additional information about the RFP.
+"""
+
 class RFP(Base):
     __tablename__ = 'rfps'
     id = Column(Integer, primary_key=True)
     tender_id = Column(String, unique=True, nullable=True)
-    title = Column(String)
-    description = Column(Text)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=False)
     scope = Column(Text, nullable=True)
-    organization = Column(String)
+    organization = Column(String, nullable=False)
     contact_info = Column(Text, nullable=True)
     eligibility_criteria = Column(Text, nullable=True)
     procurement_method = Column(String, nullable=True)
     submission_instructions = Column(Text, nullable=True)
-    issue_date = Column(Date)
+    issue_date = Column(Date, nullable=False)
     prebid_date = Column(Date, nullable=True)
     evaluation_date = Column(Date, nullable=True)
     award_date = Column(Date, nullable=True)
     contract_commencement_date = Column(Date, nullable=True)
     contract_duration = Column(String, nullable=True)
-    expiry_date = Column(Date)
+    expiry_date = Column(Date, nullable=False)
     estimated_contract_value = Column(Float, nullable=True)
     legal_details = Column(Text, nullable=True)
     sector = Column(String, nullable=True)
@@ -88,15 +138,18 @@ class RFP(Base):
     funding_program = Column(String, nullable=True)
     strategic_context = Column(Text, nullable=True)
     application_process = Column(Text, nullable=True)
-    security_bond_required = Column(Boolean)
-    country = Column(String)
-    location = Column(String)
-    activity = Column(String)
-    source_url = Column(String, unique=True)
-    content_hash = Column(String, unique=True)
-    is_worth_pursuing = Column(Boolean)
-    documents = Column(Text)  # JSON encoded list
-    metadata = Column(Text)   # JSON encoded meta info
+    security_bond_required = Column(Boolean, nullable=False, default=False)
+    country = Column(String, nullable=False)
+    location = Column(String, nullable=False)
+    activity = Column(String, nullable=False)
+    source_url = Column(String, unique=True, nullable=False)
+    content_hash = Column(String, unique=True, nullable=False)
+    is_worth_pursuing = Column(Boolean, nullable=False, default=False)
+    documents = Column(Text, nullable=True)  # JSON encoded list
+    extra_metadata = Column(Text, nullable=True)   # JSON encoded meta info
+
+    def __repr__(self):
+        return f"RFP(id={self.id}, title='{self.title}', organization='{self.organization}', country='{self.country}')"
 
 engine = create_engine(DATABASE_URL)
 Base.metadata.create_all(engine)
@@ -136,21 +189,81 @@ class TenderModel(BaseModel):
     content_hash: str
     is_worth_pursuing: bool
     documents: List[str] = Field(default_factory=list)
-    metadata: dict = Field(default_factory=dict)
+    extra_metadata: dict = Field(default_factory=dict)
 
 # ----------------------------- DEDUPLICATION UTILITIES -----------------------------
 def get_all_rfp_texts():
+    """
+    Retrieves the descriptions of all RFP records stored in the database.
+
+    Returns:
+        list: A list of all RFP descriptions as strings. If no records are found or an error occurs, an empty list is returned.
+
+    """
     session = Session()
     try:
+        # Query the database for all RFP descriptions
         records = session.query(RFP.description).all()
+
+        # Create a list of non-empty descriptions
         texts = [record[0] for record in records if record[0]]
+
         return texts
     except Exception as e:
-        logging.error(f"Error retrieving texts: {str(e)}")
+        # Log any exceptions that occur during the query
+        logging.error(f"Error retrieving RFP texts: {str(e)}")
         return []
     finally:
+        # Ensure the database session is closed after the query
         session.close()
 
+
+
+# def is_similar_duplicate(new_text, threshold=DUPLICATE_SIM_THRESHOLD):
+#     """
+#     Checks if the given new_text is a near-duplicate of any existing RFP text in the database.
+
+#     This function uses MinHash LSH (Locality-Sensitive Hashing) for efficient near-duplicate detection.
+#     It computes MinHash sketches for the new text and existing texts, and then uses LSH to identify
+#     potential near-duplicates based on the Jaccard similarity threshold.
+
+#     # 1. The function first retrieves all existing RFP texts from the database using `get_all_rfp_texts()`.
+#     # 2. A `MinHashLSH` instance is created with a configurable number of permutations (128 in this case).
+#     # 3. For each existing text, a MinHash sketch is computed, and the text is inserted into the LSH data structure, along with its MinHash sketch.
+#     # 4. A MinHash sketch is also computed for the new text using the same number of permutations.
+#     # 5. The `lsh.query()` method is used to find the nearest neighbors of the new text's MinHash sketch based on the specified Jaccard similarity threshold.
+#     # 6. If any nearest neighbors are found, it means a near-duplicate exists, and the function returns `True`. Otherwise, it returns `False`.
+
+#     Args:
+#         new_text (str): The new text to check for duplicates.
+#         threshold (float): The minimum Jaccard similarity threshold for considering texts as near-duplicates.
+
+#     Returns:
+#         bool: True if a near-duplicate is found, False otherwise.
+#     """
+#     existing_texts = get_all_rfp_texts()
+#     if not existing_texts:
+#         return False
+
+#     # Create a MinHash LSH instance with a specific number of permutations
+#     lsh = datasketch.MinHashLSH(num_perm=128)
+
+#     # Add existing texts to the LSH
+#     for text in existing_texts:
+#         minhash = datasketch.MinHash(num_perm=128)
+#         for token in text.split():
+#             minhash.update(token.encode('utf-8'))
+#         lsh.insert(text, minhash)
+
+#     # Compute MinHash for the new text
+#     new_minhash = datasketch.MinHash(num_perm=128)
+#     for token in new_text.split():
+#         new_minhash.update(token.encode('utf-8'))
+
+#     # Get the nearest neighbors based on the Jaccard similarity threshold
+#     nearest_neighbors = lsh.query(new_minhash, threshold=threshold)
+
+#     return bool(nearest_neighbors)
 def is_similar_duplicate(new_text, threshold=DUPLICATE_SIM_THRESHOLD):
     existing_texts = get_all_rfp_texts()
     if not existing_texts:
@@ -160,15 +273,20 @@ def is_similar_duplicate(new_text, threshold=DUPLICATE_SIM_THRESHOLD):
     cosine_sim = cosine_similarity(vectors[-1], vectors[:-1])
     return cosine_sim.max() > threshold
 
+# (Placeholder) Additional graph–based clustering could be added here using networkx.
+
 # ----------------------------- EXPONENTIAL BACKOFF -----------------------------
 def fetch_with_retries(url, headers, max_retries=MAX_RETRIES):
     for attempt in range(max_retries):
         try:
-            response = requests.get(url, headers=headers, timeout=30)
+            with httpx.Client(headers=headers, timeout=30.0) as client:
+                response = client.get(url)
             if response.status_code == 200:
-                return response
+                return response.text
             else:
                 logging.error(f"HTTP error {response.status_code} for {url}")
+        except httpx.HTTPError as e:
+            logging.error(f"Request error for {url}: {str(e)}")
         except Exception as e:
             logging.error(f"Request error for {url}: {str(e)}")
         delay = BASE_BACKOFF * (2 ** attempt) + random.uniform(0, 1)
@@ -201,6 +319,7 @@ def ocr_image(image_path: str) -> str:
     try:
         img = Image.open(image_path)
         text = pytesseract.image_to_string(img)
+        # text = ''
         return text.strip()
     except Exception as e:
         logging.error(f"OCR error for image {image_path}: {str(e)}")
@@ -362,12 +481,20 @@ def choose_extraction_method(domain: str, content: str) -> str:
         return "general"
 
 # ----------------------------- FALLBACK LINK EXTRACTION -----------------------------
-def extract_links_bs4(content: str, base_url: str) -> list:
+def extract_links_bs4(content: str, base_url: str, allowed_domains=None, allowed_extensions=None) -> list:
     soup = BeautifulSoup(content, 'html.parser')
     links = []
+    base_domain = urlparse(base_url).netloc
     for a in soup.find_all("a", href=True):
-        full_url = urljoin(base_url, a['href'])
-        links.append(full_url)
+        href = a['href']
+        if not href.startswith(('http://', 'https://')):
+            href = urljoin(base_url, href)
+        parsed_url = urlparse(href)
+        if allowed_domains and parsed_url.netloc not in allowed_domains:
+            continue
+        if allowed_extensions and parsed_url.path.split('.')[-1] not in allowed_extensions:
+            continue
+        links.append(href)
     return links
 
 # ----------------------------- DATA STORAGE -----------------------------
@@ -412,7 +539,7 @@ def store_rfp(data: dict):
             content_hash=tender.content_hash,
             is_worth_pursuing=tender.is_worth_pursuing,
             documents=json.dumps(tender.documents),
-            metadata=json.dumps(tender.metadata)
+            extra_metadata=json.dumps(tender.metadata)
         )
         session.add(rfp)
         session.commit()
@@ -424,21 +551,60 @@ def store_rfp(data: dict):
         session.close()
 
 # ----------------------------- TENDER EVALUATION -----------------------------
+# def evaluate_tender(tender_data: dict) -> bool:
+#     try:
+#         expiry = tender_data.get('expiry_date')
+#         if isinstance(expiry, str):
+#             expiry = datetime.strptime(expiry, "%Y-%m-%d").date()
+#         if expiry < datetime.now().date():
+#             return False
+#     except Exception as e:
+#         logging.warning(f"Error parsing expiry date: {str(e)}")
+#         return False
+#     if tender_data.get('location') not in ["Target Location A", "Target Location B"]:
+#         return False
+#     if tender_data.get('activity') not in ["Software Development", "IT Consulting"]:
+#         return False
+#     return True
+
 def evaluate_tender(tender_data: dict) -> bool:
-    try:
-        expiry = tender_data.get('expiry_date')
-        if isinstance(expiry, str):
-            expiry = datetime.strptime(expiry, "%Y-%m-%d").date()
-        if expiry < datetime.now().date():
-            return False
-    except Exception as e:
-        logging.warning(f"Error parsing expiry date: {str(e)}")
+    """
+    Uses an LLM call to evaluate whether the extracted tender information is rational and internally consistent.
+    Critical criteria include:
+      - Required fields (title, description, organization) must be present.
+      - The expiry date should be after the issue date and ideally in the future.
+      - Estimated contract value (if provided) should be a positive number.
+    Returns True if the LLM judges the tender data as plausible, otherwise False.
+    """
+    # Build a prompt containing the tender fields.
+    prompt = f"""
+You are an expert in evaluating procurement documents. Review the following extracted tender data and decide whether it is internally consistent and plausible.
+Pay attention to these aspects:
+1. The Title, Description, and Organization must be provided.
+2. The Issue Date and Expiry Date should be valid dates, with the Expiry Date occurring after the Issue Date.
+3. If an Estimated Contract Value is provided, it should be a positive number.
+4. The overall content should be coherent and logically consistent.
+Here is the tender data:
+Title: {tender_data.get("title", "N/A")}
+Description: {tender_data.get("description", "N/A")}
+Organization: {tender_data.get("organization", "N/A")}
+Issue Date: {tender_data.get("issue_date", "N/A")}
+Expiry Date: {tender_data.get("expiry_date", "N/A")}
+Estimated Contract Value: {tender_data.get("estimated_contract_value", "N/A")}
+Procurement Method: {tender_data.get("procurement_method", "N/A")}
+Legal Details: {tender_data.get("legal_details", "N/A")}
+
+Based on the above, answer with a single word:
+"True" if the tender information is plausible and consistent,
+"False" if it is not.
+Answer:
+"""
+    # Call the LLM using the quality_scoring model.
+    response = call_llm(prompt, model=LLM_MODELS["quality_scoring"])
+    if response and response.strip().lower().startswith("true"):
+        return True
+    else:
         return False
-    if tender_data.get('location') not in ["Target Location A", "Target Location B"]:
-        return False
-    if tender_data.get('activity') not in ["Software Development", "IT Consulting"]:
-        return False
-    return True
 
 # ----------------------------- DISCOVERY OF TARGET SITES -----------------------------
 def discover_target_sites() -> list:
@@ -601,7 +767,7 @@ def store_rfp(data: dict):
             content_hash=tender.content_hash,
             is_worth_pursuing=tender.is_worth_pursuing,
             documents=json.dumps(tender.documents),
-            metadata=json.dumps(tender.metadata)
+            extra_metadata=json.dumps(tender.metadata)
         )
         session.add(rfp)
         session.commit()
@@ -723,6 +889,20 @@ def process_inference(url: str, inference: dict, content_hash: str, meta: dict, 
 
 @task
 def scrape_site(config: dict):
+    """
+    Scrapes a target website for RFP/tender opportunities.
+
+    This function performs a breadth-first search (BFS) crawl of the target website,
+    processing each page and extracting relevant information using the provided processing tasks.
+    It enqueues new links found on navigational pages and stores extracted tender data in the database.
+
+    Args:
+        config (dict): A dictionary containing the following keys:
+            - "country" (str): The country associated with the target website.
+            - "base_url" (str): The base URL of the target website.
+            - "allow_external" (bool, optional): Whether to follow external links. Defaults to False.
+
+    """
     logger = get_run_logger()
     country = config["country"]
     base_url = config["base_url"]
@@ -730,21 +910,31 @@ def scrape_site(config: dict):
     domain = urlparse(base_url).netloc
     visited = set()
     queue = deque([base_url])
+
     while queue:
         current_url = queue.popleft()
         if current_url in visited:
             continue
         visited.add(current_url)
         logger.info(f"Processing {current_url}")
+
+        # Process the current page
         result = process_page(current_url, country, allow_external=allow_external)
         if not result:
             continue
         inference, content_hash, meta, content = result
+
+        # Process the inference from the current page
         outcome = process_inference(current_url, inference, content_hash, meta, country, domain, allow_external=allow_external)
+
+        # Enqueue new links found on navigational pages
         if outcome and isinstance(outcome, dict) and outcome.get("enqueue"):
             for link in outcome["enqueue"]:
-                if urlparse(link).netloc == domain or allow_external:
+                parsed_link = urlparse(link)
+                if parsed_link.netloc == domain or allow_external:
                     queue.append(link)
+
+        # Delay between requests to avoid overwhelming the target website
         time.sleep(REQUEST_DELAY)
 
 # ----------------------------- MAIN FLOW -----------------------------

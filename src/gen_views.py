@@ -18,9 +18,40 @@ from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.orm import relationship
 from jinja2 import Environment, FileSystemLoader
 import black
+import isort
 from oheaders import VIEW_IMPORTS
+from autoimport import fix_files
 import pylint.lint
 from flask_babel import lazy_gettext as _
+
+
+def to_pascal_case(text: str) -> str:
+ """
+ Convert a string to PascalCase.
+
+ Args:
+     text (str): Input string (can be snake_case, kebab-case, or space separated)
+
+ Returns:
+     str: PascalCase string
+
+ Examples:
+     >>> to_pascal_case('hello_world')
+     'HelloWorld'
+     >>> to_pascal_case('api-endpoint')
+     'ApiEndpoint'
+     >>> to_pascal_case('first name')
+     'FirstName'
+ """
+ if not text:
+     return text
+
+ # Replace special characters with spaces
+ text = re.sub(r'[_-]', ' ', text)
+
+ # Split into words, capitalize each word, and join
+ return ''.join(word.capitalize() for word in text.split())
+
 
 
 class ViewGenerator:
@@ -491,6 +522,8 @@ class ViewGenerator:
         # Format the file using black
         path = Path(filepath)
         print('PRINT',path)
+        fix_files([filepath])
+        isort.file(filepath)
         black.format_file_in_place(path, fast=False, mode=black.FileMode())
 
         # Lint the file using pylint
