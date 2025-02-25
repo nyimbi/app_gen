@@ -527,11 +527,314 @@ class {{ table_name|capitalize }}ModelView(ModelView):
                 if value is not None:
                     self._check_unique_constraint(field_name, value, is_edit)
 
+
+    def _validate_field_type(self, field_name: str, value: Any) -> None:
+        """
+        Validate that a field value matches its expected type.
+
+        Args:
+            field_name: Name of the field to validate
+            value: Value to validate
+
+        Raises:
+            ValueError: If validation fails
+        """
+        field_config = self._get_field_config(field_name)
+        field_type = field_config.get('type', 'string')
+
+        try:
+            if field_type == 'integer':
+                if not isinstance(value, (int, float)) or not float(value).is_integer():
+                    raise ValueError(f"{field_name} must be an integer")
+
+            elif field_type == 'float':
+                if not isinstance(value, (int, float)):
+                    raise ValueError(f"{field_name} must be a number")
+
+            elif field_type == 'boolean':
+                if not isinstance(value, bool) and value not in (0, 1, '0', '1', 'true', 'false', 'yes', 'no'):
+                    raise ValueError(f"{field_name} must be a boolean value")
+
+            elif field_type == 'date':
+                if not isinstance(value, (date, datetime)):
+                    parse(str(value))  # Will raise ValueError if invalid
+
+            elif field_type == 'datetime':
+                if not isinstance(value, datetime):
+                    parse(str(value))  # Will raise ValueError if invalid
+
+            elif field_type == 'json':
+                if isinstance(value, str):
+                    json.loads(value)  # Will raise JSONDecodeError if invalid
+                elif not isinstance(value, (dict, list)):
+                    raise ValueError(f"{field_name} must be a valid JSON object")
+
+            elif field_type == 'email':
+                if not isinstance(value, str) or '@' not in value:
+                    raise ValueError(f"{field_name} must be a valid email address")
+
+            elif field_type == 'url':
+                if not isinstance(value, str) or not value.startswith(('http://', 'https://')):
+                    raise ValueError(f"{field_name} must be a valid URL")
+
+            elif field_type == 'phone':
+                if not isinstance(value, str) or not self._validate_phone_number(value):
+                    raise ValueError(f"{field_name} must be a valid phone number")
+
+            elif field_type == 'currency':
+                if not isinstance(value, (int, float, str)) or not self._validate_currency(value):
+                    raise ValueError(f"{field_name} must be a valid currency amount")
+
+            elif field_type == 'color':
+                if not isinstance(value, str) or not self._validate_color(value):
+                    raise ValueError(f"{field_name} must be a valid color code")
+
+            # Add custom type validators if defined in field config
+            custom_validator = field_config.get('validator')
+            if custom_validator:
+                if isinstance(custom_validator, str):
+                    validator_method = getattr(self, custom_validator, None)
+                    if validator_method:
+                        validator_method(field_name, value)
+                else:
+                    custom_validator(field_name, value)
+
+        except (ValueError, TypeError, json.JSONDecodeError) as e:
+            raise ValueError(f"Invalid value for {field_name}: {str(e)}")
+
+    def _validate_phone_number(self, value: str) -> bool:
+        """
+        Validate phone number format.
+        Basic implementation - can be enhanced based on requirements.
+        """
+        # Remove common separators and spaces
+        cleaned = ''.join(c for c in value if c.isdigit() or c in '+-')
+        # Check for minimum length and basic format
+        return len(cleaned) >= 10 and cleaned.replace('+', '').isdigit()
+
+    def _validate_currency(self, value: Any) -> bool:
+        """
+        Validate currency amount.
+        Accepts numeric values and strings that can be converted to float.
+        """
+        try:
+            float_val = float(str(value).replace(',', ''))
+            return float_val >= 0
+        except ValueError:
+            return False
+
+    def _validate_color(self, value: str) -> bool:
+        """
+        Validate color code.
+        Accepts hex colors (#RRGGBB or #RGB) and basic color names.
+        """
+        # Basic color names
+        basic_colors = {'red', 'blue', 'green', 'yellow', 'black', 'white', 'purple',
+                    'orange', 'brown', 'gray', 'pink'}
+
+        # Check for basic color names
+        if value.lower() in basic_colors:
+            return True
+
+        # Check for hex color codes
+        if value.startswith('#'):
+            hex_value = value[1:]
+            return (len(hex_value) in (3, 6) and
+                    all(c in '0123456789ABCDEFabcdef' for c in hex_value))
+
+        return False
+
+
     def _validate_custom_rules(self, form: Any) -> None:
         """Validate custom business rules"""
         for validator in self.validators_columns.get(form.name, []):
             validator(form)
 
+
+    def _check_unique_constraint(self, field_name: str, value: Any, is_edit: bool = False) -> None:
+        """
+        Check if a field value violates unique constraints.
+
+        Args:
+            field_name: Name of the field to check
+            value: Value to check for uniqueness
+            is_edit: Whether this is an edit operation
+
+        Raises:
+            ValueError: If value violates unique constraint
+        """
+        query = self.datamodel.session.query(self.datamodel.obj)
+        query = query.filter(getattr(self.datamodel.obj, field_name) == value)
+
+        if is_edit and hasattr(self, 'item'):
+            query = query.filter(self.datamodel.obj.id != self.item.id)
+
+        if query.first() is not None:
+            raise ValueError(f"Value '{value}' already exists for {field_name}")
+
+    def _check_delete_constraints(self, item: Any) -> None:
+        """
+        Check if an item can be safely deleted.
+
+        Args:
+            item: Item to check
+
+        Raises:
+            ValueError: If item cannot be deleted
+        """
+        # Check for related records
+        for rel in self.datamodel.get_related_interface_keys():
+            related_model = self._get_related_model(rel)
+            if related_model:
+                count = self.datamodel.session.query(related_model)\
+                    .filter_by(**{self.datamodel.get_related_fk(rel): item.id})\
+                    .count()
+                if count > 0:
+                    raise ValueError(
+                        f"Cannot delete: Found {count} related {rel} records"
+                    )
+
+        # Check custom delete constraints
+        if hasattr(item, 'check_delete_constraints'):
+            item.check_delete_constraints()
+
+        # Check workflow state if applicable
+        if hasattr(item, 'state') and self.has_workflow:
+            if not self._can_delete_in_state(item.state):
+                raise ValueError(
+                    f"Cannot delete item in state: {item.state}"
+                )
+
+    def _can_delete_in_state(self, state: str) -> bool:
+        """
+        Check if deletion is allowed in current workflow state.
+
+        Args:
+            state: Current workflow state
+
+        Returns:
+            bool: Whether deletion is allowed
+        """
+        if not hasattr(self, 'workflow'):
+            return True
+
+        state_config = next(
+            (s for s in self.workflow.states if s.name == state),
+            None
+        )
+        if state_config:
+            return state_config.metadata.get('allow_delete', True)
+        return True
+
+    def _archive_version(self, item: Any) -> None:
+        """
+        Archive the current version of an item before deletion.
+
+        Args:
+            item: Item to archive
+        """
+        if not self.has_versioning:
+            return
+
+        try:
+            version_data = {
+                'item_type': self.datamodel.obj.__name__,
+                'item_id': item.id,
+                'version': item.version if hasattr(item, 'version') else 1,
+                'data': self._serialize_item(item),
+                'deleted_at': datetime.now(),
+                'deleted_by_id': self._get_user_id()
+            }
+
+            archive = ArchivedVersion(**version_data)
+            self.datamodel.session.add(archive)
+            self.datamodel.session.commit()
+
+        except Exception as e:
+            log.error(f"Error archiving version: {str(e)}")
+
+    def _get_version_class(self) -> Any:
+        """
+        Get the version model class for versioning.
+
+        Returns:
+            Model class for versions
+        """
+        if not hasattr(self, '_version_class'):
+            class_name = f"{self.datamodel.obj.__name__}Version"
+            self._version_class = type(class_name, (VersionMixin, self.datamodel.obj), {
+                '__tablename__': f'{self.datamodel.obj.__tablename__}_versions'
+            })
+        return self._version_class
+
+    def _update_audit_fields(self, form: Any) -> None:
+        """
+        Update audit fields on the form instance.
+
+        Args:
+            form: Form instance to update
+        """
+        now = datetime.now()
+        user_id = self._get_user_id()
+
+        if hasattr(form, 'created_at') and not form.created_at.data:
+            form.created_at.data = now
+
+        if hasattr(form, 'created_by_id') and not form.created_by_id.data:
+            form.created_by_id.data = user_id
+
+        if hasattr(form, 'updated_at'):
+            form.updated_at.data = now
+
+        if hasattr(form, 'updated_by_id'):
+            form.updated_by_id.data = user_id
+
+    def _validate_workflow_transition(self, item: Any) -> None:
+        """
+        Validate workflow state transition.
+
+        Args:
+            item: Item being transitioned
+
+        Raises:
+            ValueError: If transition is invalid
+        """
+        if not hasattr(item, 'state') or not self.has_workflow:
+            return
+
+        old_state = item._original_state if hasattr(item, '_original_state') else None
+        new_state = item.state
+
+        if old_state == new_state:
+            return
+
+        # Find valid transition
+        transition = next(
+            (t for t in self.workflow.transitions
+            if t.source == old_state and t.dest == new_state),
+            None
+        )
+
+        if not transition:
+            raise ValueError(
+                f"Invalid state transition: {old_state} -> {new_state}"
+            )
+
+        # Check conditions
+        if transition.conditions:
+            for condition in transition.conditions:
+                if not condition(item, g.user):
+                    raise ValueError(
+                        f"Transition conditions not met: {old_state} -> {new_state}"
+                    )
+
+        # Check permissions
+        if transition.required_roles:
+            if not any(role in self._get_user_roles()
+                    for role in transition.required_roles):
+                raise ValueError(
+                    "You don't have permission for this transition"
+                )
 
     # CRUD Operations
     @handle_errors
