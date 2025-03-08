@@ -1,0 +1,52 @@
+yaml
+version: '3.8'
+
+# This section defines the services needed by my_project.
+services:
+  # Service configuration name must be unique within an application context (e.g., app)
+  webapp:
+    image: nginx:latest   # Using Nginx as a placeholder for example purposes; replace with your actual service's Docker image
+    ports:
+      - "80:80"            # Exposing port 80 on the host to map it internally from container.
+                                    (Adjust this mapping based upon how you want traffic routed)
+    
+    volumes:
+      - webapp_data:/usr/share/nginx/html   # Persistent storage for Nginx served content; replace with relevant data directories
+                                      
+    networks: 
+      default:
+
+  database:
+    image: postgres:latest           # Using PostgreSQL as an example DB service.
+                                    (Replace this with your actual container's Docker image)
+    
+    environment:                     # Environment variables to configure the Postgres instance. Replace these values based on needs for secure connection and initial setup
+            POSTGRES_DB=my_project_db  # Database name - change accordingly if different in production settings
+            POSTGRES_USER=postgres     # Default username; typically 'root' or similar, but should be changed as per security practices.
+            POSTGRES_PASSWORD=<PASSWORD>   # Password to access the database. Should ideally come from a secure source (e.g., environment variables)
+    
+    volumes:
+      - db_data:/var/lib/postgresql/data
+                                      
+    networks: 
+      default:
+
+  worker1:
+    image: python:3.8-slim                        # Example service running Python; replace with your actual container's Docker image.
+                                    (# Replace 'python' and tag as needed for the appropriate language/container to run a different application)
+    
+    volumes:
+      - code:/app                                   # Volume mapping this directory onto /code/app
+                                      
+    networks: 
+      default:
+
+volumes:                           # Persistent storage definitions, managed by docker-compose directly.
+  webapp_data:
+  db_data:
+
+networks:                         # Defines the isolated network for inter-service communication. Use 'bridge' or custom networks as needed.
+
+# Additional security configurations and best practices should be considered here,
+# such as using secure passwords/environment variables, setting up resource limits (CPU/memory),
+# implementing health checks to monitor service statuses.

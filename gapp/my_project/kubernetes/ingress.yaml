@@ -1,0 +1,21 @@
+# ingress.yaml
+
+apiVersion: networking.k8s.io/v1  # Ingress resource API version is v1.
+kind: Ingress                   # Specifies the kind of object to create (Ingress).
+metadata:
+ name: my-project-ingress       # Name for this specific Ingress configuration. Can be customized as per your project naming conventions.
+
+# Annotation used by ingress controller like nginx or traefik
+annotations:
+  kubernetes.io/ingress.class: "nginx"   # Specify the desired Kubernetes Ingress Controller (e.g., Nginx, Traefik)
+
+spec:
+
+    rules:
+      - host: myproject.example.com       # Hostname to use for this specific ingress rule. Replace with your domain.
+        http:
+          paths:
+            - path: /                       # Path used as a wildcard (/ matches any requests)
+              backendRefs:
+                name: web-service-name  # Name of the service (web) that will handle incoming traffic
+# Note: If you don't already have an Ingress controller installed, use something like Nginx or Traefik.

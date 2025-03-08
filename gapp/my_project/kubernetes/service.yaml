@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-project-service
+  namespace: default # Change 'default' to your project's namespace if necessary.
+  labels:
+    app: my_project # Optional label - adjust as needed per project requirements.
+
+spec:
+  selector:
+    app: my_project # Ensure that this matches the pod's label selector for proper routing. Adjust accordingly based on actual deployment configuration
+  ports:
+    - protocol: TCP
+      port: 80        # The service will expose your application at its own standard HTTP port.
+      targetPort: 8080 # Port where containers listen; adjust to match application's listening port within pods.

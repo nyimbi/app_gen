@@ -1,0 +1,91 @@
+yaml
+name: CI Test Workflow
+
+# This YAML configuration defines a Continuous Integration (CI) test workflow using GitHub Actions.
+#
+# Trigger the tests on every push to any branch or when pull requests are made against 'main' repository.
+
+on:
+  # Triggers the workflows under this file in addition to your repository's default rules
+  push:
+    branches: [ "feature/*", "*" ]  # Run workflow for pushes to all feature and other branches, except main.
+  pull_request:
+    types: [opened, synchronize]
+    branches: [main]
+
+jobs:
+  build-and-test:
+    name: Build & Test Workflow
+    
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+        # Checks-out your repository under $GITHUB_WORKSPACE so the job can access it.
+
+      - name: Set up JDK (Java Development Kit)
+        uses: actions/setup-java@v1
+        with:
+          java-version: '11'  # Adjust this to match your Java version requirements
+
+      - name: Cache Maven packages
+        uses: actions/cache@v2
+        env:
+          cache-name: cache-maven-${{ runner.os }}-bin
+        with:
+          path: ${{ github.workspace }}/.m2
+          key: ${{ runner.os }}-build-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-build-
+
+      - name: Cache Gradle packages (optional)
+        uses: actions/cache@v2
+        env:
+          cache-name: cache-gradle-bin-${{ matrix.java_version }}${{ runner.os }}
+        with:
+          path: ~/.gradle/caches/modules/${{matrix.modules}}/
+          key: ${{ runner.os }}-build-${{ matrix.parallelization_size }}--${{ matrix.module_name }}_${{ matrix.maven_jar }}/${{ hashFiles('*') }}
+
+      - name: Build project (optional)
+        run: mvn clean install
+        # Run Maven build. Customize this if your Java package uses Gradle.
+  
+      - name: Test using JUnit and Pytest tests 1st phase
+        id: jvm-tests
+        env:
+          MAVEN_CACHE_FOLDER_NAME: cache-maven-${{ runner.os }}-bin
+
+      - name: Execute Python Tests in GitHub Actions (optional)
+        uses: actions/checkout@v2
+        
+        # Check out the code into $GITHUB_WORKSPACE under a directory named "test-code"
+
+        run: |
+          python3 test_code/test_script.py  # Replace with your actual testing script
+          
+      - name: Upload Artifacts to GitHub (optional)
+        if: failure() && steps.jvm-tests.outcome == 'failure'
+        uses: actions/upload-artifact@v2
+        with:
+          path: |
+            build/reports
+
+# Set up matrix strategy for parallelization and/or different Java versions.
+jobs.build-and-test.include:
+
+  - name: Build & Test Workflow (JUnit Tests)
+    if: ${{ startsWith(github.event.head_commit.message, 'Junit tests') }} 
+      # Run workflow only when the commit message contains "junit-tests"
+
+    strategy:
+      fail-fast: false
+
+    matrix:
+      java_version: [11]
+
+  - name: Build & Test Workflow (Pytest Tests)
+    if: ${{ startsWith(github.event.head_commit.message, 'pytest tests') }} 
+      # Run workflow only when the commit message contains "pytest-tests"
+
+    strategy:
+      fail-fast: false

@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-project-configmap # Name of the config map, should match resource naming conventions.
+  labels:
+    app: my_project # Labels can be used to organize and manage resources in Kubernetes. 
+  namespace: default # Namespace where this configuration is created; change as necessary for your environment.
+
+data:
+  MY_PROJECT_ENV_VAR_1: "value1" # Replace with actual value or a placeholder indicating it needs manual entry.
+  MY_PROJECT_ENV_VAR_2: "value2"
+  # Add additional key-value pairs to configure more variables. 
+# Note that sensitive data should not be stored directly in this ConfigMap if they will eventually get passed as environment variable values.

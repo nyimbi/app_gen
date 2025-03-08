@@ -1,0 +1,68 @@
+apiVersion: apps/v1 # Specifies version of API being used.
+kind: Deployment # Defines this file content's purpose (Deployment).
+metadata:
+  name: my-project-deployment   # Name assigned to the deployment. This should be unique within your namespace/project context.
+  labels:                     # Labels for identifying and grouping resources in Kubernetes
+    app.kubernetes.io/name: 'my_project'       # Standard label used by many tools, applications etc., that helps with management tasks such as autoscaling or scheduling across different environments (e.g. pods).
+    releaseVersion: v1               # Optional custom labels; useful to differentiate between versions of your application.
+  annotations:
+    description: "Kubernetes deployment configuration for my_project."   # Custom annotation used primarily by developers and tools like Helm, Kubebuilder etc., not managed directly via Kubernetes API but can help with metadata organization or managing resource states across CI/CD pipelines. 
+
+spec:
+  replicas: 3                        # Number of pod instances to run.
+  selector:                         # Defines criteria for selecting Pods belonging to this deployment
+    matchLabels:                     # Standard label selectors used within the Deployment spec, which helps in grouping/pinning application resources together (e.g., with autoscaling).
+      app.kubernetes.io/name: 'my_project'
+      releaseVersion: v1
+
+  template:
+    metadata:                        # Metadata and labels for individual Pods created by this deployment
+      labels:                         # Standard label selectors used within the Deployment spec, which helps in grouping/pinning application resources together (e.g., with autoscaling).
+        app.kubernetes.io/name: 'my_project'
+        releaseVersion: v1
+
+    spec:
+      containers:                    # Defines container details for individual Pods created by this deployment
+        - name: my-project-container   # Standard label selectors used within the Deployment spec, which helps in grouping/pinning application resources together (e.g., with autoscaling).
+          image: 'my_project/image:v1'  # Container Image Reference. You should replace this value to your actual container image.
+          ports:
+            - name: http
+              port: 8080                # Standard label selectors used within the Deployment spec, which helps in grouping/pinning application resources together (e.g., with autoscaling).
+          livenessProbe:
+            httpGet:
+              path: /healthz                  # Path to health check endpoint. You should replace this value according to your application's configuration.
+              port: '8080'
+            initialDelaySeconds: 3           # Standard label selectors used within the Deployment spec, which helps in grouping/pinning application resources together (e.g., with autoscaling).
+          readinessProbe:
+            httpGet:
+              path: /readyz                  # Path to ready check endpoint. You should replace this value according to your application's configuration.
+              port: '8080'
+            initialDelaySeconds: 3           # Standard label selectors used within the Deployment spec, which helps in grouping/pinning application resources together (e.g., with autoscaling).
+          resourceRequests:
+            memory: "128Mi"                 # Standard label selectors used within the Deployment spec, which helps in determining optimal scaling requirements.
+            cpu: '100m'                     # Standard label selectors used within the Deployment spec, which can help determine best practices for cost optimization based on historical usage data (e.g., with autoscaling).
+        - name: my-project-sidecar-container    # Sidecar Container Reference. You should replace this value to your actual sidecar container image.
+          envFrom:
+            - secretRef:
+                key: DB_CONNECTION_STRING
+              configMapRef:
+                name: database-config  # Standard label selectors used within the Deployment spec, which helps in grouping/pinning application resources together (e.g., with autoscaling).
+        restartPolicy: Always                  # Restart Policy for individual Pods created by this deployment. You can choose between 'Always', 'OnFailure' and 'Never'.
+      affinity:
+        podAntiAffinity:                      # Define preferred scheduling behavior to avoid running multiple replicas on the same node.
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: my_project
+              topologyKey: kubernetes.io/hostname
+
+  strategy:                        # Defines Deployment's rolling update configuration for updating Pods created by this deployment (e.g., with zero-downtime deployments).
+    type: RollingUpdate                     # Standard label selectors used within the Deployment spec, which helps in grouping/pinning application resources together (e.g., with autoscaling).
+
+  revisionHistoryLimit:               # Set maximum number of previous ReplicaSets to retain for rolling update history. You can choose between '0' and '5'.
+    maxSurge:                         # Standard label selectors used within the Deployment spec, which helps in grouping/pinning application resources together (e.g., with autoscaling).
+      parallelism: "2"                 # Set maximum number of Pods to create before completing rollout.
+      batchSize:                        # Standard label selectors used within the Deployment spec, which can help determine best practices for cost optimization based on historical usage data (e.g., with autoscaling).
+
+  updateStrategy:
+    type: RollingUpdate                     # Standard label selectors used within the Deployment spec, which helps in grouping/pinning application resources together (e.g., with autoscaling).

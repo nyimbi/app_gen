@@ -1,0 +1,65 @@
+{
+  "structure": {
+    "root": "project_root",
+    "directories": [
+      "src",
+      "tests"
+    ]
+  },
+  "files": [
+    {
+      "path": "src/main.py",
+      "components": ["functions"],
+      "imports": ["from user_management import authenticate_user", "from task_management import create_task, read_tasks, update_task, delete_task"],
+      "description": "Main entry point for the application. Orchestrates user and task management services."
+    },
+    {
+      "path": "src/models/user.py",
+      "components": [{"name": "User", "type": "class", "description": "Represents a user with authentication details"}],
+      "imports": [],
+      "description": "Contains the User class for managing user data and operations."
+    },
+    {
+      "path": "src/models/task.py",
+      "components": [{"name": "Task", "type": "class", "description": "Stores task data and operations related to tasks"}],
+      "imports": [],
+      "description": "Contains the Task class for managing task data and operations."
+    },
+    {
+      "path": "src/services/auth_service.py",
+      "components": [{"name": "authenticate_user", "type": "function", "description": "Verifies the credentials of a user"}, {"name": "Authenticator", "type": "class", "description": "Handles user authentication logic"}],
+      "imports": ["from models.user import User"],
+      "description": "Contains functions and classes for handling user authentication."
+    },
+    {
+      "path": "src/services/task_service.py",
+      "components": [{"name": "create_task", "type": "function", "description": "Creates a new task for the authenticated user"}, {"name": "read_tasks", "type": "function", "description": "Lists all tasks of an authenticated user"}, {"name": "update_task", "type": "function", "description": "Updates details of a specific task"}, {"name": "delete_task", "type": "function", "description": "Deletes a specified task"}],
+      "imports": ["from models.task import Task"],
+      "description": "Contains functions for managing tasks."
+    },
+    {
+      "path": "tests/test_user_management.py",
+      "components": [{"name": "test_user_creation", "type": "function", "description": "Test the creation of a new user"}],
+      "imports": ["from src.models.user import User"],
+      "description": "Contains unit tests for user management."
+    },
+    {
+      "path": "tests/test_task_management.py",
+      "components": [{"name": "test_task_creation", "type": "function", "description": "Test the creation of a task for an authenticated user"}],
+      "imports": ["from src.models.task import Task"],
+      "description": "Contains unit tests for task management."
+    },
+    {
+      "path": "tests/test_authentication.py",
+      "components": [{"name": "test_authentication_flow", "type": "function", "description": "Test the full authentication flow from login to logout"}],
+      "imports": ["from src.services.auth_service import authenticate_user"],
+      "description": "Contains integration tests for the authentication process."
+    },
+    {
+      "path": "requirements.txt",
+      "components": [],
+      "imports": [],
+      "description": "Lists all dependencies required by the project."
+    }
+  ]
+}

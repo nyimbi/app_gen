@@ -1,0 +1,39 @@
+yaml
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-push-containers:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check out repository code from GitHub
+        uses: actions/checkout@v2
+      
+      # Build the Docker image and push it to a container registry (e.g., ECR, Docker Hub)
+      - name: Set up QEMU for architecture emulation if needed
+        uses: docker/setup-qemu-action@v1
+
+      - name: Log in to Amazon Elastic Container Registry (ECR) or other container repository as required by your project.
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          echo "${DOCKER_PASSWORD}" | docker login --username ${DOCKER_USERNAME} --password-stdin
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          file: ./Dockerfile  # Assuming there is a Dockerfile in the project root directory.
+          platforms: linux/amd64,linux/arm/v6,linux/arm/v7,docker/beta,podman/containerd,,windows/servercore-ltsc2022
+          tags: my_project:${{ github.sha }}
+          
+      - name: Run unit tests (if any)
+        run: |
+          docker-compose up --build app # Assuming you have a `docker-compose.yml` for your service.
